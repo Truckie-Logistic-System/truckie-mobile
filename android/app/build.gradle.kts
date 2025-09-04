@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.truckie.capstone_mobile"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973" // Cập nhật phiên bản NDK
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
