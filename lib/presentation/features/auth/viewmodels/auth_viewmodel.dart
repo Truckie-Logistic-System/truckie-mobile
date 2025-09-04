@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../domain/entities/role.dart';
 import '../../../../domain/entities/user.dart';
 import '../../../../domain/usecases/auth/login_usecase.dart';
 import '../../../../domain/usecases/auth/logout_usecase.dart';
@@ -18,7 +19,10 @@ class AuthViewModel extends ChangeNotifier {
     required LoginUseCase loginUseCase,
     required LogoutUseCase logoutUseCase,
   }) : _loginUseCase = loginUseCase,
-       _logoutUseCase = logoutUseCase;
+       _logoutUseCase = logoutUseCase {
+    // Kiểm tra trạng thái đăng nhập khi khởi tạo
+    checkAuthStatus();
+  }
 
   AuthStatus get status => _status;
   User? get user => _user;
@@ -71,9 +75,43 @@ class AuthViewModel extends ChangeNotifier {
     );
   }
 
-  void checkAuthStatus() {
-    // TODO: Kiểm tra trạng thái đăng nhập từ local storage
-    _status = AuthStatus.unauthenticated;
+  Future<void> checkAuthStatus() async {
+    _status = AuthStatus.loading;
+    notifyListeners();
+
+    try {
+      // Giả lập dữ liệu người dùng cho mục đích demo
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Tạo dữ liệu người dùng mẫu
+      final role = Role(
+        id: 'R002',
+        roleName: 'Tài xế',
+        description: 'Tài xế giao hàng',
+        isActive: true,
+      );
+
+      _user = User(
+        id: 'TX001',
+        username: 'driver1',
+        fullName: 'Nguyễn Văn A',
+        email: 'driver1@truckie.com',
+        phoneNumber: '0987654321',
+        gender: true,
+        dateOfBirth: '1990-01-01',
+        imageUrl: '',
+        status: 'Đang hoạt động',
+        role: role,
+        authToken: 'sample_auth_token',
+        refreshToken: 'sample_refresh_token',
+      );
+
+      _status = AuthStatus.authenticated;
+    } catch (e) {
+      _status = AuthStatus.unauthenticated;
+      _errorMessage = 'Không thể lấy thông tin người dùng';
+    }
+
     notifyListeners();
   }
 }

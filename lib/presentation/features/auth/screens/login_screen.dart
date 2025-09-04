@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/service_locator.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/theme/app_text_styles.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -26,27 +28,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildUsernameField(),
-                  const SizedBox(height: 16),
-                  _buildPasswordField(),
-                  const SizedBox(height: 8),
-                  _buildForgotPassword(),
-                  const SizedBox(height: 24),
-                  _buildLoginButton(),
-                ],
+    return ChangeNotifierProvider(
+      create: (_) => getIt<AuthViewModel>(),
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 32),
+                    _buildUsernameField(),
+                    const SizedBox(height: 16),
+                    _buildPasswordField(),
+                    const SizedBox(height: 8),
+                    _buildForgotPassword(),
+                    const SizedBox(height: 24),
+                    _buildLoginButton(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -127,7 +132,13 @@ class _LoginScreenState extends State<LoginScreen> {
       alignment: Alignment.centerRight,
       child: TextButton(
         onPressed: () {
-          // TODO: Xử lý quên mật khẩu
+          // Quên mật khẩu được xử lý bởi admin
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Vui lòng liên hệ admin để được hỗ trợ'),
+              backgroundColor: AppColors.info,
+            ),
+          );
         },
         child: Text(
           'Quên mật khẩu?',
@@ -138,51 +149,48 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLoginButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _handleLogin,
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-      ),
-      child: _isLoading
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-          : const Text('Đăng nhập', style: TextStyle(fontSize: 16)),
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, _) {
+        final isLoading = authViewModel.status == AuthStatus.loading;
+
+        return ElevatedButton(
+          onPressed: isLoading ? null : () => _handleLogin(authViewModel),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: isLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Text('Đăng nhập', style: TextStyle(fontSize: 16)),
+        );
+      },
     );
   }
 
-  void _handleLogin() async {
+  void _handleLogin(AuthViewModel authViewModel) async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+      final username = _usernameController.text.trim();
+      final password = _passwordController.text.trim();
 
-      try {
-        // Giả lập đăng nhập thành công
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
+      final success = await authViewModel.login(username, password);
 
-        // TODO: Thay thế bằng logic đăng nhập thực tế
+      if (!mounted) return;
+
+      if (success) {
         Navigator.pushReplacementNamed(context, '/');
-      } catch (e) {
-        // Xử lý lỗi đăng nhập
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đăng nhập thất bại. Vui lòng thử lại.'),
+          SnackBar(
+            content: Text(authViewModel.errorMessage),
             backgroundColor: AppColors.error,
           ),
         );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
       }
     }
   }

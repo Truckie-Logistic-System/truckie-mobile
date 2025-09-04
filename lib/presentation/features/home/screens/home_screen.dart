@@ -11,6 +11,8 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Truckie Driver'),
+        centerTitle: true,
+        automaticallyImplyLeading: false, // Loại bỏ nút back
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),
@@ -36,25 +38,6 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'Đơn hàng',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Tài khoản'),
-        ],
-        onTap: (index) {
-          // TODO: Xử lý chuyển tab
-          if (index == 1) {
-            Navigator.pushNamed(context, '/orders');
-          }
-        },
       ),
     );
   }
