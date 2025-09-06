@@ -1,12 +1,14 @@
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../data/datasources/auth_data_source.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/auth/login_usecase.dart';
 import '../../domain/usecases/auth/logout_usecase.dart';
+import '../../domain/usecases/auth/refresh_token_usecase.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import 'api_service.dart';
 
@@ -18,12 +20,23 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<SharedPreferences>(sharedPreferences);
   getIt.registerLazySingleton<http.Client>(() => http.Client());
 
+  // Kiểm tra kết nối tới API
+  final apiUrl = 'http://10.0.2.2:8080/api/v1';
+  debugPrint('Initializing API service with URL: $apiUrl');
+
+  try {
+    final response = await http.get(Uri.parse('$apiUrl/health'));
+    debugPrint(
+      'API health check response: ${response.statusCode} - ${response.body}',
+    );
+  } catch (e) {
+    debugPrint('API health check failed: ${e.toString()}');
+    debugPrint('Continuing with setup anyway...');
+  }
+
   // Core
   getIt.registerLazySingleton<ApiService>(
-    () => ApiService(
-      baseUrl: 'http://10.0.2.2:8080/api/v1',
-      client: getIt<http.Client>(),
-    ),
+    () => ApiService(baseUrl: apiUrl, client: getIt<http.Client>()),
   );
 
   // Data sources
@@ -46,12 +59,16 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<LogoutUseCase>(
     () => LogoutUseCase(getIt<AuthRepository>()),
   );
+  getIt.registerLazySingleton<RefreshTokenUseCase>(
+    () => RefreshTokenUseCase(getIt<AuthRepository>()),
+  );
 
   // ViewModels
   getIt.registerFactory<AuthViewModel>(
     () => AuthViewModel(
       loginUseCase: getIt<LoginUseCase>(),
       logoutUseCase: getIt<LogoutUseCase>(),
+      refreshTokenUseCase: getIt<RefreshTokenUseCase>(),
     ),
   );
 }

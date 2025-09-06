@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart';
 
 import '../entities/user.dart';
+import '../entities/token_response.dart';
 import '../../core/errors/failures.dart';
 
 abstract class AuthRepository {
@@ -15,4 +16,7 @@ abstract class AuthRepository {
 
   /// Lấy thông tin người dùng hiện tại
   Future<Either<Failure, User>> getCurrentUser();
+
+  /// Làm mới token
+  Future<Either<Failure, TokenResponse>> refreshToken();
 }

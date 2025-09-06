@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/errors/exceptions.dart';
 import '../../core/services/api_service.dart';
 import '../../domain/entities/auth_response.dart';
+import '../../domain/entities/token_response.dart';
 import '../../domain/entities/user.dart';
 
 abstract class AuthDataSource {
@@ -24,6 +26,9 @@ abstract class AuthDataSource {
 
   /// Xóa thông tin người dùng
   Future<void> clearUserInfo();
+
+  /// Refresh token
+  Future<TokenResponse> refreshToken(String refreshToken);
 }
 
 class AuthDataSourceImpl implements AuthDataSource {
@@ -38,18 +43,25 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<User> login(String username, String password) async {
     try {
+      debugPrint('Attempting login for user: $username');
+
+      // Đảm bảo endpoint đúng theo API
       final response = await apiService.post('/auths', {
         'username': username,
         'password': password,
       });
 
+      debugPrint('Login response received: $response');
+
       if (!response['success']) {
+        debugPrint('Login failed: ${response['message']}');
         throw ServerException(
           message: response['message'] ?? 'Đăng nhập thất bại',
           statusCode: response['statusCode'] ?? 400,
         );
       }
 
+      debugPrint('Login successful, processing user data');
       final authResponse = AuthResponse.fromJson(response['data']);
       final user = User(
         id: authResponse.user.id,
@@ -69,10 +81,61 @@ class AuthDataSourceImpl implements AuthDataSource {
       await saveUserInfo(user);
       return user;
     } catch (e) {
+      debugPrint('Login exception: ${e.toString()}');
       if (e is ServerException) {
         throw e;
       }
       throw ServerException(message: 'Đăng nhập thất bại: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<TokenResponse> refreshToken(String refreshToken) async {
+    try {
+      debugPrint('Attempting to refresh token');
+
+      final response = await apiService.post('/auths/token/refresh', {
+        'refreshToken': refreshToken,
+      });
+
+      debugPrint('Refresh token response received: $response');
+
+      if (!response['success']) {
+        debugPrint('Refresh token failed: ${response['message']}');
+        throw ServerException(
+          message: response['message'] ?? 'Làm mới token thất bại',
+          statusCode: response['statusCode'] ?? 400,
+        );
+      }
+
+      final tokenResponse = TokenResponse.fromJson(response['data']);
+
+      // Cập nhật token trong SharedPreferences
+      await sharedPreferences.setString(
+        'auth_token',
+        tokenResponse.accessToken,
+      );
+      await sharedPreferences.setString(
+        'refresh_token',
+        tokenResponse.refreshToken,
+      );
+
+      // Cập nhật token trong thông tin người dùng
+      final userJson = sharedPreferences.getString('user_info');
+      if (userJson != null) {
+        final userMap = json.decode(userJson) as Map<String, dynamic>;
+        userMap['authToken'] = tokenResponse.accessToken;
+        userMap['refreshToken'] = tokenResponse.refreshToken;
+        await sharedPreferences.setString('user_info', json.encode(userMap));
+      }
+
+      return tokenResponse;
+    } catch (e) {
+      debugPrint('Refresh token exception: ${e.toString()}');
+      if (e is ServerException) {
+        throw e;
+      }
+      throw ServerException(message: 'Làm mới token thất bại: ${e.toString()}');
     }
   }
 
