@@ -19,4 +19,12 @@ abstract class AuthRepository {
 
   /// Làm mới token
   Future<Either<Failure, TokenResponse>> refreshToken();
+
+  /// Đổi mật khẩu
+  Future<Either<Failure, bool>> changePassword(
+    String username,
+    String oldPassword,
+    String newPassword,
+    String confirmNewPassword,
+  );
 }

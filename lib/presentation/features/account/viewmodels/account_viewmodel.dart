@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../domain/entities/driver.dart';
+import '../../../../domain/usecases/auth/change_password_usecase.dart';
 import '../../../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../../../domain/usecases/auth/update_driver_info_usecase.dart';
 
@@ -13,11 +14,15 @@ enum AccountStatus {
   updating,
   updateSuccess,
   updateError,
+  changingPassword,
+  passwordChanged,
+  passwordError,
 }
 
 class AccountViewModel extends ChangeNotifier {
   final GetDriverInfoUseCase _getDriverInfoUseCase;
   final UpdateDriverInfoUseCase _updateDriverInfoUseCase;
+  final ChangePasswordUseCase? _changePasswordUseCase;
 
   AccountStatus _status = AccountStatus.initial;
   Driver? _driver;
@@ -26,8 +31,10 @@ class AccountViewModel extends ChangeNotifier {
   AccountViewModel({
     required GetDriverInfoUseCase getDriverInfoUseCase,
     required UpdateDriverInfoUseCase updateDriverInfoUseCase,
+    ChangePasswordUseCase? changePasswordUseCase,
   }) : _getDriverInfoUseCase = getDriverInfoUseCase,
-       _updateDriverInfoUseCase = updateDriverInfoUseCase;
+       _updateDriverInfoUseCase = updateDriverInfoUseCase,
+       _changePasswordUseCase = changePasswordUseCase;
 
   AccountStatus get status => _status;
   Driver? get driver => _driver;
@@ -100,6 +107,55 @@ class AccountViewModel extends ChangeNotifier {
         // Reset status after a short delay to allow UI to show success state
         Future.delayed(const Duration(seconds: 1), () {
           if (_status == AccountStatus.updateSuccess) {
+            _status = AccountStatus.loaded;
+            notifyListeners();
+          }
+        });
+
+        notifyListeners();
+        return true;
+      },
+    );
+  }
+
+  Future<bool> changePassword({
+    required String username,
+    required String oldPassword,
+    required String newPassword,
+    required String confirmNewPassword,
+  }) async {
+    if (_changePasswordUseCase == null) {
+      _status = AccountStatus.passwordError;
+      _errorMessage = 'Chức năng đổi mật khẩu chưa được khởi tạo';
+      notifyListeners();
+      return false;
+    }
+
+    _status = AccountStatus.changingPassword;
+    notifyListeners();
+
+    final result = await _changePasswordUseCase!(
+      ChangePasswordParams(
+        username: username,
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+        confirmNewPassword: confirmNewPassword,
+      ),
+    );
+
+    return result.fold(
+      (failure) {
+        _status = AccountStatus.passwordError;
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (success) {
+        _status = AccountStatus.passwordChanged;
+
+        // Reset status after a short delay to allow UI to show success state
+        Future.delayed(const Duration(seconds: 1), () {
+          if (_status == AccountStatus.passwordChanged) {
             _status = AccountStatus.loaded;
             notifyListeners();
           }

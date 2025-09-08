@@ -29,6 +29,14 @@ abstract class AuthDataSource {
 
   /// Refresh token
   Future<TokenResponse> refreshToken(String refreshToken);
+
+  /// Đổi mật khẩu
+  Future<bool> changePassword(
+    String username,
+    String oldPassword,
+    String newPassword,
+    String confirmNewPassword,
+  );
 }
 
 class AuthDataSourceImpl implements AuthDataSource {
@@ -136,6 +144,43 @@ class AuthDataSourceImpl implements AuthDataSource {
         throw e;
       }
       throw ServerException(message: 'Làm mới token thất bại');
+    }
+  }
+
+  @override
+  Future<bool> changePassword(
+    String username,
+    String oldPassword,
+    String newPassword,
+    String confirmNewPassword,
+  ) async {
+    try {
+      debugPrint('Attempting to change password for user: $username');
+
+      final response = await apiService.put('/auths/change-password', {
+        'username': username,
+        'oldPassword': oldPassword,
+        'newPassword': newPassword,
+        'confirmNewPassword': confirmNewPassword,
+      });
+
+      debugPrint('Change password response received: $response');
+
+      if (!response['success']) {
+        debugPrint('Change password failed: ${response['message']}');
+        throw ServerException(
+          message: response['message'] ?? 'Đổi mật khẩu thất bại',
+          statusCode: response['statusCode'] ?? 400,
+        );
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Change password exception: ${e.toString()}');
+      if (e is ServerException) {
+        throw e;
+      }
+      throw ServerException(message: 'Đổi mật khẩu thất bại');
     }
   }
 

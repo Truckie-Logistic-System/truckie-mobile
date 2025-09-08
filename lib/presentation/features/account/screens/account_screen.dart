@@ -11,6 +11,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/account_viewmodel.dart';
+import 'change_password_screen.dart';
 import 'edit_driver_info_screen.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -74,10 +75,12 @@ class AccountScreen extends StatelessWidget {
                     children: [
                       _buildUserHeader(user),
                       const SizedBox(height: 24),
-                      _buildUserInfo(user),
+                      _buildUserInfo(context, user),
                       const SizedBox(height: 24),
                       _buildDriverInfo(context, driver),
                       const SizedBox(height: 32),
+                      _buildAccountActions(context),
+                      const SizedBox(height: 24),
                       _buildLogoutButton(context, authViewModel),
                     ],
                   ),
@@ -133,7 +136,9 @@ class AccountScreen extends StatelessWidget {
                     children: [
                       _buildUserHeader(user),
                       const SizedBox(height: 24),
-                      _buildUserInfo(user),
+                      _buildUserInfo(context, user),
+                      const SizedBox(height: 24),
+                      _buildAccountActions(context),
                       const SizedBox(height: 24),
                       _buildDriverInfo(context, driver),
                       const SizedBox(height: 32),
@@ -150,7 +155,9 @@ class AccountScreen extends StatelessWidget {
                     children: [
                       _buildUserHeader(user),
                       const SizedBox(height: 24),
-                      _buildUserInfo(user),
+                      _buildUserInfo(context, user),
+                      const SizedBox(height: 24),
+                      _buildAccountActions(context),
                       const SizedBox(height: 24),
                       // Skeleton for driver info while waiting
                       Column(
@@ -292,6 +299,26 @@ class AccountScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // Account actions skeleton
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SkeletonLoader(height: 24, width: 150),
+                  const SizedBox(height: 16),
+                  const SkeletonLoader(height: 50),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Driver info skeleton
           Card(
             elevation: 2,
@@ -383,7 +410,7 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUserInfo(User user) {
+  Widget _buildUserInfo(BuildContext context, User user) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -411,6 +438,43 @@ class AccountScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountActions(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Quản lý tài khoản',
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.password, color: AppColors.primary),
+              title: const Text('Đổi mật khẩu'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              contentPadding: EdgeInsets.zero,
+              onTap: () => _navigateToChangePassword(context),
+            ),
+            // Có thể thêm các chức năng khác ở đây trong tương lai
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToChangePassword(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
     );
   }
 

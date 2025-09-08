@@ -9,6 +9,7 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../data/repositories/driver_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/driver_repository.dart';
+import '../../domain/usecases/auth/change_password_usecase.dart';
 import '../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../domain/usecases/auth/login_usecase.dart';
 import '../../domain/usecases/auth/logout_usecase.dart';
@@ -87,6 +88,10 @@ Future<void> setupServiceLocator() async {
     () => UpdateDriverInfoUseCase(getIt<DriverRepository>()),
   );
 
+  getIt.registerLazySingleton<ChangePasswordUseCase>(
+    () => ChangePasswordUseCase(getIt<AuthRepository>()),
+  );
+
   // View models
   getIt.registerFactory<AuthViewModel>(
     () => AuthViewModel(
@@ -101,6 +106,7 @@ Future<void> setupServiceLocator() async {
     () => AccountViewModel(
       getDriverInfoUseCase: getIt<GetDriverInfoUseCase>(),
       updateDriverInfoUseCase: getIt<UpdateDriverInfoUseCase>(),
+      changePasswordUseCase: getIt<ChangePasswordUseCase>(),
     ),
   );
 }
