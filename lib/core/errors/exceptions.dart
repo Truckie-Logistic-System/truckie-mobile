@@ -5,7 +5,7 @@ class ServerException implements Exception {
   ServerException({this.message = 'Lỗi máy chủ', this.statusCode = 500});
 
   @override
-  String toString() => 'ServerException: $message (Status: $statusCode)';
+  String toString() => message;
 }
 
 class CacheException implements Exception {
@@ -14,7 +14,7 @@ class CacheException implements Exception {
   CacheException({this.message = 'Lỗi dữ liệu cục bộ'});
 
   @override
-  String toString() => 'CacheException: $message';
+  String toString() => message;
 }
 
 class NetworkException implements Exception {
@@ -23,7 +23,7 @@ class NetworkException implements Exception {
   NetworkException({this.message = 'Lỗi kết nối mạng'});
 
   @override
-  String toString() => 'NetworkException: $message';
+  String toString() => message;
 }
 
 class UnauthorizedException implements Exception {
@@ -32,5 +32,5 @@ class UnauthorizedException implements Exception {
   UnauthorizedException({this.message = 'Không có quyền truy cập'});
 
   @override
-  String toString() => 'UnauthorizedException: $message';
+  String toString() => message;
 }

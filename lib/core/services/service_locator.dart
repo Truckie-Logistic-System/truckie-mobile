@@ -4,11 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../data/datasources/auth_data_source.dart';
+import '../../data/datasources/driver_data_source.dart';
 import '../../data/repositories/auth_repository_impl.dart';
+import '../../data/repositories/driver_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/driver_repository.dart';
+import '../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../domain/usecases/auth/login_usecase.dart';
 import '../../domain/usecases/auth/logout_usecase.dart';
 import '../../domain/usecases/auth/refresh_token_usecase.dart';
+import '../../domain/usecases/auth/update_driver_info_usecase.dart';
+import '../../presentation/features/account/viewmodels/account_viewmodel.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import 'api_service.dart';
 
@@ -47,28 +53,54 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
+  getIt.registerLazySingleton<DriverDataSource>(
+    () => DriverDataSourceImpl(apiService: getIt<ApiService>()),
+  );
+
   // Repositories
   getIt.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(dataSource: getIt<AuthDataSource>()),
+  );
+
+  getIt.registerLazySingleton<DriverRepository>(
+    () => DriverRepositoryImpl(dataSource: getIt<DriverDataSource>()),
   );
 
   // Use cases
   getIt.registerLazySingleton<LoginUseCase>(
     () => LoginUseCase(getIt<AuthRepository>()),
   );
+
   getIt.registerLazySingleton<LogoutUseCase>(
     () => LogoutUseCase(getIt<AuthRepository>()),
   );
+
   getIt.registerLazySingleton<RefreshTokenUseCase>(
     () => RefreshTokenUseCase(getIt<AuthRepository>()),
   );
 
-  // ViewModels
+  getIt.registerLazySingleton<GetDriverInfoUseCase>(
+    () => GetDriverInfoUseCase(getIt<DriverRepository>()),
+  );
+
+  getIt.registerLazySingleton<UpdateDriverInfoUseCase>(
+    () => UpdateDriverInfoUseCase(getIt<DriverRepository>()),
+  );
+
+  // View models
   getIt.registerFactory<AuthViewModel>(
     () => AuthViewModel(
       loginUseCase: getIt<LoginUseCase>(),
       logoutUseCase: getIt<LogoutUseCase>(),
       refreshTokenUseCase: getIt<RefreshTokenUseCase>(),
+      getDriverInfoUseCase: getIt<GetDriverInfoUseCase>(),
+    ),
+  );
+
+  getIt.registerFactory<AccountViewModel>(
+    () => AccountViewModel(
+      getDriverInfoUseCase: getIt<GetDriverInfoUseCase>(),
+      updateDriverInfoUseCase: getIt<UpdateDriverInfoUseCase>(),
     ),
   );
 }

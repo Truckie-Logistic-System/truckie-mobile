@@ -85,7 +85,7 @@ class AuthDataSourceImpl implements AuthDataSource {
       if (e is ServerException) {
         throw e;
       }
-      throw ServerException(message: 'Đăng nhập thất bại: ${e.toString()}');
+      throw ServerException(message: 'Đăng nhập thất bại');
     }
   }
 
@@ -135,7 +135,7 @@ class AuthDataSourceImpl implements AuthDataSource {
       if (e is ServerException) {
         throw e;
       }
-      throw ServerException(message: 'Làm mới token thất bại: ${e.toString()}');
+      throw ServerException(message: 'Làm mới token thất bại');
     }
   }
 

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/service_locator.dart';
+import '../../../../presentation/common_widgets/skeleton_loader.dart';
+import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/theme/app_text_styles.dart';
 
@@ -8,41 +12,71 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Truckie Driver'),
-        centerTitle: true,
-        automaticallyImplyLeading: false, // Loại bỏ nút back
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // TODO: Hiển thị thông báo
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDriverInfo(),
-              const SizedBox(height: 24),
-              _buildStatistics(),
-              const SizedBox(height: 24),
-              _buildCurrentDelivery(context),
-              const SizedBox(height: 24),
-              _buildRecentOrders(context),
-            ],
-          ),
+    return ChangeNotifierProvider(
+      create: (_) => getIt<AuthViewModel>(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Truckie Driver'),
+          centerTitle: true,
+          automaticallyImplyLeading: false, // Loại bỏ nút back
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications),
+              onPressed: () {
+                // TODO: Hiển thị thông báo
+              },
+            ),
+          ],
+        ),
+        body: Consumer<AuthViewModel>(
+          builder: (context, authViewModel, _) {
+            final user = authViewModel.user;
+            final driver = authViewModel.driver;
+
+            // Always show content, use skeleton loaders when data is not available
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Driver info with skeleton loading
+                    if (user == null || driver == null)
+                      const DriverInfoSkeletonCard()
+                    else
+                      _buildDriverInfo(user, driver),
+                    const SizedBox(height: 24),
+
+                    // Statistics with skeleton loading
+                    if (user == null || driver == null)
+                      const StatisticsSkeletonCard()
+                    else
+                      _buildStatistics(),
+                    const SizedBox(height: 24),
+
+                    // Current delivery with skeleton loading
+                    if (user == null || driver == null)
+                      const DeliverySkeletonCard()
+                    else
+                      _buildCurrentDelivery(context),
+                    const SizedBox(height: 24),
+
+                    // Recent orders with skeleton loading
+                    if (user == null || driver == null)
+                      const OrdersSkeletonList(itemCount: 2)
+                    else
+                      _buildRecentOrders(context),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildDriverInfo() {
+  Widget _buildDriverInfo(user, driver) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -53,20 +87,39 @@ class HomeScreen extends StatelessWidget {
             CircleAvatar(
               radius: 30,
               backgroundColor: AppColors.primary.withOpacity(0.2),
-              child: const Icon(
-                Icons.person,
-                size: 30,
-                color: AppColors.primary,
-              ),
+              child: user.imageUrl.isNotEmpty && user.imageUrl != "string"
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(30),
+                      child: Image.network(
+                        user.imageUrl,
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.person,
+                              size: 30,
+                              color: AppColors.primary,
+                            ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      size: 30,
+                      color: AppColors.primary,
+                    ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Nguyễn Văn A', style: AppTextStyles.titleLarge),
+                  Text(user.fullName, style: AppTextStyles.titleLarge),
                   const SizedBox(height: 4),
-                  Text('Tài xế ID: TX001', style: AppTextStyles.bodyMedium),
+                  Text(
+                    'Tài xế ID: ${user.id.length > 8 ? user.id.substring(0, 8) : user.id}',
+                    style: AppTextStyles.bodyMedium,
+                  ),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -74,13 +127,17 @@ class HomeScreen extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.2),
+                      color: user.status == 'ACTIVE'
+                          ? AppColors.success.withOpacity(0.2)
+                          : AppColors.warning.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Text(
-                      'Đang hoạt động',
+                    child: Text(
+                      user.status == 'ACTIVE' ? 'Đang hoạt động' : user.status,
                       style: TextStyle(
-                        color: AppColors.success,
+                        color: user.status == 'ACTIVE'
+                            ? AppColors.success
+                            : AppColors.warning,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),

@@ -178,17 +178,40 @@ class _LoginScreenState extends State<LoginScreen> {
       final username = _usernameController.text.trim();
       final password = _passwordController.text.trim();
 
-      final success = await authViewModel.login(username, password);
+      // Start login process
+      final loginFuture = authViewModel.login(username, password);
+
+      // Set a timeout for better UX
+      bool hasTimedOut = false;
+
+      // Wait for a short time to see if API responds quickly
+      await Future.delayed(const Duration(milliseconds: 800), () {
+        // If we're still loading after timeout, navigate immediately
+        if (authViewModel.status == AuthStatus.loading && !hasTimedOut) {
+          hasTimedOut = true;
+          Navigator.pushReplacementNamed(context, '/main');
+        }
+      });
+
+      // Wait for the login to complete
+      final success = await loginFuture;
 
       if (!mounted) return;
 
-      if (success) {
-        Navigator.pushReplacementNamed(context, '/');
-      } else {
+      // If we haven't navigated yet due to timeout
+      if (success && !hasTimedOut) {
+        // Navigate to main screen with data already loaded
+        Navigator.pushReplacementNamed(context, '/main');
+      } else if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authViewModel.errorMessage),
+            content: Text(
+              authViewModel.errorMessage,
+              style: const TextStyle(color: Colors.white),
+            ),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.fixed,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

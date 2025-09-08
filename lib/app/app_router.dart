@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../domain/entities/driver.dart';
 import '../presentation/features/account/screens/account_screen.dart';
+import '../presentation/features/account/screens/edit_driver_info_screen.dart';
 import '../presentation/features/auth/screens/login_screen.dart';
 import '../presentation/features/delivery/screens/active_delivery_screen.dart';
 import '../presentation/features/delivery/screens/delivery_map_screen.dart';
@@ -13,6 +15,8 @@ class AppRouter {
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case '/':
+        return MaterialPageRoute(builder: (_) => const MainScreen());
+      case '/main':
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case '/login':
         return MaterialPageRoute(builder: (_) => const LoginScreen());
@@ -27,6 +31,11 @@ class AppRouter {
         final deliveryId = settings.arguments as String;
         return MaterialPageRoute(
           builder: (_) => DeliveryMapScreen(deliveryId: deliveryId),
+        );
+      case '/edit-driver-info':
+        final driver = settings.arguments as Driver;
+        return MaterialPageRoute(
+          builder: (_) => EditDriverInfoScreen(driver: driver),
         );
       default:
         return MaterialPageRoute(

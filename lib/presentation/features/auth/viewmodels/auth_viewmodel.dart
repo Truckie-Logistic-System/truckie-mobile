@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
+import '../../../../domain/entities/driver.dart';
 import '../../../../domain/entities/role.dart';
 import '../../../../domain/entities/user.dart';
+import '../../../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../../../domain/usecases/auth/login_usecase.dart';
 import '../../../../domain/usecases/auth/logout_usecase.dart';
 import '../../../../domain/usecases/auth/refresh_token_usecase.dart';
@@ -12,9 +16,11 @@ class AuthViewModel extends ChangeNotifier {
   final LoginUseCase _loginUseCase;
   final LogoutUseCase _logoutUseCase;
   final RefreshTokenUseCase _refreshTokenUseCase;
+  final GetDriverInfoUseCase? _getDriverInfoUseCase;
 
   AuthStatus _status = AuthStatus.initial;
-  User? _user;
+  User? _user = null;
+  Driver? _driver = null;
   String _errorMessage = '';
   bool _isRefreshing = false;
 
@@ -22,15 +28,18 @@ class AuthViewModel extends ChangeNotifier {
     required LoginUseCase loginUseCase,
     required LogoutUseCase logoutUseCase,
     required RefreshTokenUseCase refreshTokenUseCase,
+    GetDriverInfoUseCase? getDriverInfoUseCase,
   }) : _loginUseCase = loginUseCase,
        _logoutUseCase = logoutUseCase,
-       _refreshTokenUseCase = refreshTokenUseCase {
+       _refreshTokenUseCase = refreshTokenUseCase,
+       _getDriverInfoUseCase = getDriverInfoUseCase {
     // Kiểm tra trạng thái đăng nhập khi khởi tạo
     checkAuthStatus();
   }
 
   AuthStatus get status => _status;
   User? get user => _user;
+  Driver? get driver => _driver;
   String get errorMessage => _errorMessage;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isRefreshing => _isRefreshing;
@@ -50,18 +59,46 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
       },
-      (user) {
-        _status = AuthStatus.authenticated;
+      (user) async {
         _user = user;
+        // Keep loading status until driver info is fetched
+        notifyListeners();
+
+        // Fetch driver information if available
+        if (_getDriverInfoUseCase != null && user.role.roleName == 'DRIVER') {
+          await _fetchDriverInfo(user.id);
+        }
+
+        // Now set authenticated status
+        _status = AuthStatus.authenticated;
         notifyListeners();
         return true;
       },
     );
   }
 
+  Future<void> _fetchDriverInfo(String userId) async {
+    if (_getDriverInfoUseCase == null) return;
+
+    final result = await _getDriverInfoUseCase!(
+      GetDriverInfoParams(userId: userId),
+    );
+
+    result.fold(
+      (failure) {
+        debugPrint('Failed to fetch driver info: ${failure.message}');
+      },
+      (driver) {
+        _driver = driver;
+        notifyListeners();
+      },
+    );
+  }
+
   Future<bool> logout() async {
-    _status = AuthStatus.loading;
-    notifyListeners();
+    // Không đặt trạng thái loading để tránh hiển thị thông báo trung gian
+    // _status = AuthStatus.loading;
+    // notifyListeners();
 
     final result = await _logoutUseCase(NoParams());
 
@@ -73,8 +110,10 @@ class AuthViewModel extends ChangeNotifier {
         return false;
       },
       (_) {
-        _status = AuthStatus.unauthenticated;
+        // Reset data
         _user = null;
+        _driver = null;
+        _status = AuthStatus.unauthenticated;
         notifyListeners();
         return true;
       },
@@ -130,34 +169,34 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Giả lập dữ liệu người dùng cho mục đích demo
-      await Future.delayed(const Duration(seconds: 1));
+      // Check if user is logged in by retrieving stored token
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      final userJson = prefs.getString('user_info');
 
-      // Tạo dữ liệu người dùng mẫu
-      final role = Role(
-        id: 'R002',
-        roleName: 'Tài xế',
-        description: 'Tài xế giao hàng',
-        isActive: true,
-      );
+      if (token == null || token.isEmpty || userJson == null) {
+        _status = AuthStatus.unauthenticated;
+        notifyListeners();
+        return;
+      }
 
-      _user = User(
-        id: 'TX001',
-        username: 'driver1',
-        fullName: 'Nguyễn Văn A',
-        email: 'driver1@truckie.com',
-        phoneNumber: '0987654321',
-        gender: true,
-        dateOfBirth: '1990-01-01',
-        imageUrl: '',
-        status: 'Đang hoạt động',
-        role: role,
-        authToken: 'sample_auth_token',
-        refreshToken: 'sample_refresh_token',
-      );
+      // Parse stored user info
+      try {
+        final userMap = json.decode(userJson);
+        _user = User.fromJson(userMap);
+        _status = AuthStatus.authenticated;
 
-      _status = AuthStatus.authenticated;
+        // Fetch driver information if user is a driver
+        if (_getDriverInfoUseCase != null && _user!.role.roleName == 'DRIVER') {
+          await _fetchDriverInfo(_user!.id);
+        }
+      } catch (e) {
+        debugPrint('Error parsing stored user info: $e');
+        _status = AuthStatus.unauthenticated;
+        await _clearUserData();
+      }
     } catch (e) {
+      debugPrint('Error checking auth status: $e');
       _status = AuthStatus.unauthenticated;
       _errorMessage = 'Không thể lấy thông tin người dùng';
     }
@@ -165,8 +204,21 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _clearUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('user_info');
+  }
+
   // Xử lý lỗi token hết hạn
   Future<bool> handleTokenExpired() async {
     return await refreshToken();
+  }
+
+  // Update driver info in the view model (not calling API)
+  void updateDriverInfo(Driver updatedDriver) {
+    _driver = updatedDriver;
+    notifyListeners();
   }
 }

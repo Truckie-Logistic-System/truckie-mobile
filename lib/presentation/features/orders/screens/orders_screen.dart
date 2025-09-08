@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/service_locator.dart';
+import '../../../../presentation/common_widgets/skeleton_loader.dart';
+import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/theme/app_text_styles.dart';
 
@@ -8,23 +12,37 @@ class OrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Danh sách đơn hàng'),
-        centerTitle: true,
-        automaticallyImplyLeading: false, // Loại bỏ nút back
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildFilterSection(),
-              const SizedBox(height: 16),
-              Expanded(child: _buildOrdersList()),
-            ],
-          ),
+    return ChangeNotifierProvider(
+      create: (_) => getIt<AuthViewModel>(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Danh sách đơn hàng'),
+          centerTitle: true,
+          automaticallyImplyLeading: false, // Loại bỏ nút back
+        ),
+        body: Consumer<AuthViewModel>(
+          builder: (context, authViewModel, _) {
+            final user = authViewModel.user;
+            final driver = authViewModel.driver;
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFilterSection(),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: user == null || driver == null
+                          ? const OrdersSkeletonList(itemCount: 5)
+                          : _buildOrdersList(),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

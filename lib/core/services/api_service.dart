@@ -235,19 +235,19 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return json.decode(response.body);
     } else if (response.statusCode == 401) {
-      String errorMessage = 'Unauthorized';
+      String errorMessage = 'Không có quyền truy cập';
       try {
         final responseData = json.decode(response.body);
-        errorMessage = responseData['message'] ?? 'Unauthorized';
+        errorMessage = responseData['message'] ?? 'Không có quyền truy cập';
       } catch (e) {
         // Ignore JSON parsing errors
       }
       throw UnauthorizedException(message: errorMessage);
     } else {
-      String errorMessage = response.body;
+      String errorMessage = 'Đã xảy ra lỗi';
       try {
         final responseData = json.decode(response.body);
-        errorMessage = responseData['message'] ?? response.body;
+        errorMessage = responseData['message'] ?? 'Đã xảy ra lỗi';
       } catch (e) {
         // Ignore JSON parsing errors
       }
