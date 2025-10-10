@@ -5,6 +5,7 @@ import '../../../../domain/entities/driver.dart';
 import '../../../../domain/usecases/auth/change_password_usecase.dart';
 import '../../../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../../../domain/usecases/auth/update_driver_info_usecase.dart';
+import '../../../common_widgets/base_viewmodel.dart';
 
 enum AccountStatus {
   initial,
@@ -19,7 +20,7 @@ enum AccountStatus {
   passwordError,
 }
 
-class AccountViewModel extends ChangeNotifier {
+class AccountViewModel extends BaseViewModel {
   final GetDriverInfoUseCase _getDriverInfoUseCase;
   final UpdateDriverInfoUseCase _updateDriverInfoUseCase;
   final ChangePasswordUseCase? _changePasswordUseCase;
@@ -41,15 +42,27 @@ class AccountViewModel extends ChangeNotifier {
   String get errorMessage => _errorMessage;
 
   Future<void> getDriverInfo(String userId) async {
+    if (_status == AccountStatus.loading) return; // Tránh gọi nhiều lần
+
     _status = AccountStatus.loading;
     notifyListeners();
 
     final result = await _getDriverInfoUseCase(const GetDriverInfoParams());
 
     result.fold(
-      (failure) {
+      (failure) async {
         _status = AccountStatus.error;
         _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          debugPrint('Token refreshed, retrying to get driver info...');
+          await getDriverInfo(userId);
+          return;
+        }
+
         notifyListeners();
       },
       (driver) {
@@ -92,9 +105,27 @@ class AccountViewModel extends ChangeNotifier {
     );
 
     return result.fold(
-      (failure) {
+      (failure) async {
         _status = AccountStatus.updateError;
         _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          return updateDriverInfo(
+            driverId: driverId,
+            identityNumber: identityNumber,
+            driverLicenseNumber: driverLicenseNumber,
+            cardSerialNumber: cardSerialNumber,
+            placeOfIssue: placeOfIssue,
+            dateOfIssue: dateOfIssue,
+            dateOfExpiry: dateOfExpiry,
+            licenseClass: licenseClass,
+            dateOfPassing: dateOfPassing,
+          );
+        }
+
         notifyListeners();
         return false;
       },
@@ -142,9 +173,22 @@ class AccountViewModel extends ChangeNotifier {
     );
 
     return result.fold(
-      (failure) {
+      (failure) async {
         _status = AccountStatus.passwordError;
         _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          return changePassword(
+            username: username,
+            oldPassword: oldPassword,
+            newPassword: newPassword,
+            confirmNewPassword: confirmNewPassword,
+          );
+        }
+
         notifyListeners();
         return false;
       },

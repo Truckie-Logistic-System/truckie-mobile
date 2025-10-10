@@ -6,6 +6,8 @@ import 'app/app.dart';
 import 'app/app_routes.dart';
 import 'core/services/hot_reload_helper.dart';
 import 'core/services/index.dart';
+import 'core/services/vietmap_service.dart';
+import 'presentation/common_widgets/vietmap/vietmap_viewmodel.dart';
 import 'presentation/features/auth/index.dart';
 
 void main() async {
@@ -17,6 +19,9 @@ void main() async {
 
   // Khởi tạo service locator
   await setupServiceLocator();
+
+  // Đặt navigatorKey cho AuthViewModel
+  AuthViewModel.setNavigatorKey(navigatorKey);
 
   // Đăng ký callback khi refresh token thất bại
   ApiService.setTokenRefreshFailedCallback(() {
@@ -52,6 +57,18 @@ class MyApp extends StatelessWidget {
               create: (_) => getIt<AuthViewModel>(),
               // Don't dispose the ViewModel when the provider is disposed
               // This prevents errors during hot reload
+              lazy: false,
+            ),
+            // Provide VietMapService
+            Provider<VietMapService>(
+              create: (_) => getIt<VietMapService>(),
+              lazy: false,
+            ),
+            // Provide VietMapViewModel
+            ChangeNotifierProvider<VietMapViewModel>(
+              create: (context) => VietMapViewModel(
+                vietMapService: context.read<VietMapService>(),
+              ),
               lazy: false,
             ),
           ],

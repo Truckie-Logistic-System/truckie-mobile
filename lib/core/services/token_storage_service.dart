@@ -14,22 +14,22 @@ class TokenStorageService {
   static const String _refreshTokenKey = 'refresh_token';
 
   TokenStorageService({FlutterSecureStorage? secureStorage})
-      : _secureStorage = secureStorage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(
-                encryptedSharedPreferences: true,
-              ),
-            );
+    : _secureStorage =
+          secureStorage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          );
 
   /// Lấy access token từ memory
   String? getAccessToken() {
+    debugPrint('Getting access token: ${_accessToken?.substring(0, 15)}...');
     return _accessToken;
   }
 
   /// Lưu access token vào memory
   Future<void> saveAccessToken(String token) async {
     _accessToken = token;
-    debugPrint('Access token saved to memory');
+    debugPrint('Access token saved to memory: ${token.substring(0, 15)}...');
   }
 
   /// Xóa access token khỏi memory

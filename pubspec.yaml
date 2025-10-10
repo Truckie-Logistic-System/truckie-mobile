@@ -67,6 +67,7 @@ dependencies:
   flutter_lints: ^6.0.0
   decimal: ^2.3.3
   image_picker: ^1.0.7
+  vietmap_flutter_plugin: ^0.4.0
 
 dev_dependencies:
   flutter_test:

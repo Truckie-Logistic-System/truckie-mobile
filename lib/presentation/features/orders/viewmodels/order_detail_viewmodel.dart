@@ -9,12 +9,13 @@ import '../../../../domain/entities/order_detail.dart';
 import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/usecases/orders/get_order_details_usecase.dart';
 import '../../../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';
+import '../../../common_widgets/base_viewmodel.dart';
 
 enum OrderDetailState { initial, loading, loaded, error }
 
 enum StartDeliveryState { initial, loading, success, error }
 
-class OrderDetailViewModel extends ChangeNotifier {
+class OrderDetailViewModel extends BaseViewModel {
   final GetOrderDetailsUseCase _getOrderDetailsUseCase;
   final CreateVehicleFuelConsumptionUseCase
   _createVehicleFuelConsumptionUseCase;
@@ -48,15 +49,27 @@ class OrderDetailViewModel extends ChangeNotifier {
            createVehicleFuelConsumptionUseCase;
 
   Future<void> getOrderDetails(String orderId) async {
+    if (_state == OrderDetailState.loading) return; // Tránh gọi nhiều lần
+
     _state = OrderDetailState.loading;
     notifyListeners();
 
     final result = await _getOrderDetailsUseCase(orderId);
 
     result.fold(
-      (failure) {
+      (failure) async {
         _state = OrderDetailState.error;
         _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          debugPrint('Token refreshed, retrying to get order details...');
+          await getOrderDetails(orderId);
+          return;
+        }
+
         notifyListeners();
       },
       (orderWithDetails) {
@@ -166,9 +179,20 @@ class OrderDetailViewModel extends ChangeNotifier {
     );
 
     return result.fold(
-      (failure) {
+      (failure) async {
         _startDeliveryState = StartDeliveryState.error;
         _startDeliveryErrorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          return startDelivery(
+            odometerReading: odometerReading,
+            odometerImage: odometerImage,
+          );
+        }
+
         notifyListeners();
         return false;
       },

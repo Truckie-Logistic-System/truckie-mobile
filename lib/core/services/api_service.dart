@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../errors/exceptions.dart';
+import 'service_locator.dart';
 import 'token_storage_service.dart';
+import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 
 // Callback khi refresh token thất bại
 typedef OnTokenRefreshFailedCallback = void Function();
@@ -37,18 +39,72 @@ class ApiService {
     final token = tokenStorageService.getAccessToken();
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
+      debugPrint('Using token in headers: ${token.substring(0, 15)}...');
+    } else {
+      debugPrint('No token available for headers');
+
+      // Thử refresh token nếu không có token
+      final refreshed = await _refreshToken();
+      if (refreshed) {
+        // Lấy token mới sau khi refresh
+        final newToken = tokenStorageService.getAccessToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $newToken';
+          debugPrint(
+            'Using new token after refresh: ${newToken.substring(0, 15)}...',
+          );
+        }
+      }
     }
 
     return headers;
   }
 
+  // Kiểm tra token trước khi gọi API
+  Future<bool> _ensureValidToken() async {
+    final token = tokenStorageService.getAccessToken();
+
+    // Nếu không có token, thử refresh
+    if (token == null || token.isEmpty) {
+      debugPrint('No token available, attempting to refresh...');
+      return await _refreshToken();
+    }
+
+    // Nếu có token, kiểm tra xem có phải token mới nhất không
+    try {
+      final authViewModel = getIt<AuthViewModel>();
+      if (authViewModel.user != null &&
+          authViewModel.user!.authToken != token) {
+        debugPrint(
+          'Token mismatch between memory and AuthViewModel, updating...',
+        );
+        await tokenStorageService.saveAccessToken(
+          authViewModel.user!.authToken,
+        );
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error checking token: $e');
+    }
+
+    return true;
+  }
+
   Future<dynamic> get(String endpoint) async {
+    // Đảm bảo token hợp lệ trước khi gọi API
+    await _ensureValidToken();
+
     try {
       final headers = await _getHeaders();
 
       // Debug log
       debugPrint('GET Request: $baseUrl$endpoint');
       debugPrint('Headers: $headers');
+
+      // Kiểm tra xem có token không
+      if (!headers.containsKey('Authorization')) {
+        debugPrint('WARNING: No Authorization header for request to $endpoint');
+      }
 
       final response = await client.get(
         Uri.parse('$baseUrl$endpoint'),
@@ -61,32 +117,43 @@ class ApiService {
       return _processResponse(response, endpoint);
     } on UnauthorizedException catch (e) {
       // Xử lý token hết hạn
-      if (e.message.contains('expired') && !_isRefreshing) {
-        debugPrint('Token expired, attempting to refresh...');
+      if (!_isRefreshing) {
+        debugPrint(
+          'Unauthorized error for $endpoint, attempting to refresh token...',
+        );
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
+          debugPrint('Token refreshed, retrying request to $endpoint');
           return get(endpoint);
         } else {
           // Nếu refresh token thất bại, gọi callback
+          debugPrint('Token refresh failed, handling failure for $endpoint');
           _handleTokenRefreshFailed();
         }
+      } else {
+        debugPrint(
+          'Already refreshing token, cannot handle unauthorized error for $endpoint',
+        );
       }
       rethrow;
     } catch (e) {
-      debugPrint('GET Error: ${e.toString()}');
+      debugPrint('GET Error for $endpoint: ${e.toString()}');
       throw ServerException(message: e.toString());
     }
   }
 
   Future<dynamic> post(String endpoint, dynamic body) async {
+    // Đảm bảo token hợp lệ trước khi gọi API
+    await _ensureValidToken();
+
     try {
       final headers = await _getHeaders();
 
       // Debug log
       debugPrint('POST Request: $baseUrl$endpoint');
       debugPrint('Headers: $headers');
-      debugPrint('Body: ${json.encode(body)}');
+      debugPrint('Body: $body');
 
       final response = await client.post(
         Uri.parse('$baseUrl$endpoint'),
@@ -100,10 +167,8 @@ class ApiService {
       return _processResponse(response, endpoint);
     } on UnauthorizedException catch (e) {
       // Xử lý token hết hạn
-      if (e.message.contains('expired') &&
-          !_isRefreshing &&
-          endpoint != '/auths/mobile/token/refresh') {
-        debugPrint('Token expired, attempting to refresh...');
+      if (!_isRefreshing) {
+        debugPrint('Unauthorized error, attempting to refresh token...');
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -121,13 +186,16 @@ class ApiService {
   }
 
   Future<dynamic> put(String endpoint, dynamic body) async {
+    // Đảm bảo token hợp lệ trước khi gọi API
+    await _ensureValidToken();
+
     try {
       final headers = await _getHeaders();
 
       // Debug log
       debugPrint('PUT Request: $baseUrl$endpoint');
       debugPrint('Headers: $headers');
-      debugPrint('Body: ${json.encode(body)}');
+      debugPrint('Body: $body');
 
       final response = await client.put(
         Uri.parse('$baseUrl$endpoint'),
@@ -141,8 +209,8 @@ class ApiService {
       return _processResponse(response, endpoint);
     } on UnauthorizedException catch (e) {
       // Xử lý token hết hạn
-      if (e.message.contains('expired') && !_isRefreshing) {
-        debugPrint('Token expired, attempting to refresh...');
+      if (!_isRefreshing) {
+        debugPrint('Unauthorized error, attempting to refresh token...');
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -160,6 +228,9 @@ class ApiService {
   }
 
   Future<dynamic> delete(String endpoint) async {
+    // Đảm bảo token hợp lệ trước khi gọi API
+    await _ensureValidToken();
+
     try {
       final headers = await _getHeaders();
 
@@ -178,8 +249,8 @@ class ApiService {
       return _processResponse(response, endpoint);
     } on UnauthorizedException catch (e) {
       // Xử lý token hết hạn
-      if (e.message.contains('expired') && !_isRefreshing) {
-        debugPrint('Token expired, attempting to refresh...');
+      if (!_isRefreshing) {
+        debugPrint('Unauthorized error, attempting to refresh token...');
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -201,18 +272,19 @@ class ApiService {
 
     _isRefreshing = true;
     try {
-      debugPrint('Refreshing token...');
-
       // Lấy refresh token từ secure storage
       final refreshToken = await tokenStorageService.getRefreshToken();
       if (refreshToken == null || refreshToken.isEmpty) {
         debugPrint('No refresh token available');
         _isRefreshing = false;
-        await _clearUserData();
+        await tokenStorageService.clearAllTokens();
         return false;
       }
 
-      // Gọi API mobile refresh token
+      debugPrint(
+        'Refreshing token with refresh token: ${refreshToken.substring(0, 15)}...',
+      );
+
       final response = await client.post(
         Uri.parse('$baseUrl/auths/mobile/token/refresh'),
         headers: {'Content-Type': 'application/json'},
@@ -223,44 +295,68 @@ class ApiService {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = json.decode(response.body);
-
         if (responseData['success'] == true && responseData['data'] != null) {
-          final accessToken = responseData['data']['accessToken'];
+          final newAccessToken = responseData['data']['accessToken'];
+          debugPrint(
+            'New access token received: ${newAccessToken.substring(0, 15)}...',
+          );
 
-          // Lưu access token mới vào memory
-          await tokenStorageService.saveAccessToken(accessToken);
+          // Lưu token mới
+          await tokenStorageService.saveAccessToken(newAccessToken);
 
-          debugPrint('Token refreshed successfully');
+          // Kiểm tra xem token đã được lưu chưa
+          final savedToken = tokenStorageService.getAccessToken();
+          if (savedToken != newAccessToken) {
+            debugPrint(
+              'WARNING: Token mismatch after saving! This is a critical error.',
+            );
+          }
+
+          // Thông báo cho AuthViewModel về token mới
+          try {
+            final authViewModel = getIt<AuthViewModel>();
+            await authViewModel.handleTokenRefreshed(newAccessToken);
+            debugPrint('AuthViewModel updated with new token');
+          } catch (e) {
+            debugPrint('Error updating AuthViewModel: $e');
+          }
+
           _isRefreshing = false;
           return true;
         }
       }
 
-      debugPrint('Failed to refresh token');
+      debugPrint(
+        'Token refresh failed with status code: ${response.statusCode}',
+      );
       _isRefreshing = false;
-
-      // Xóa dữ liệu người dùng khi refresh token thất bại
-      await _clearUserData();
-
+      await tokenStorageService.clearAllTokens();
       return false;
     } catch (e) {
-      debugPrint('Error refreshing token: ${e.toString()}');
+      debugPrint('Error refreshing token: $e');
       _isRefreshing = false;
-
-      // Xóa dữ liệu người dùng khi refresh token thất bại
-      await _clearUserData();
-
+      await tokenStorageService.clearAllTokens();
       return false;
     }
   }
 
   // Xóa dữ liệu người dùng khi refresh token thất bại
   Future<void> _clearUserData() async {
-    await tokenStorageService.clearAllTokens();
+    try {
+      await tokenStorageService.clearAllTokens();
+    } catch (e) {
+      debugPrint('Error clearing user data: $e');
+    }
   }
 
   // Gọi callback khi refresh token thất bại
   void _handleTokenRefreshFailed() {
+    debugPrint('Token refresh failed, handling failure');
+
+    // Xóa dữ liệu người dùng
+    _clearUserData();
+
+    // Gọi callback nếu được đăng ký
     if (onTokenRefreshFailed != null) {
       onTokenRefreshFailed!();
     }

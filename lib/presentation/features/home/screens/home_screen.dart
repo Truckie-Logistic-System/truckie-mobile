@@ -11,13 +11,43 @@ import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../widgets/index.dart';
 
 /// Màn hình trang chủ của ứng dụng
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final AuthViewModel _authViewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _authViewModel = getIt<AuthViewModel>();
+
+    // Đảm bảo token được refresh khi vào màn hình
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_authViewModel.status == AuthStatus.authenticated) {
+        _authViewModel.forceRefreshToken();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Tải lại thông tin tài xế khi màn hình được hiển thị lại
+    if (_authViewModel.status == AuthStatus.authenticated) {
+      _authViewModel.refreshDriverInfo();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => getIt<AuthViewModel>(),
+    return ChangeNotifierProvider.value(
+      value: _authViewModel,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Truckie Driver'),

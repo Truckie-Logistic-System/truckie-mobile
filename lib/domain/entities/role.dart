@@ -22,6 +22,15 @@ class Role extends Equatable {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'roleName': roleName,
+      'description': description,
+      'isActive': isActive,
+    };
+  }
+
   @override
   List<Object?> get props => [id, roleName, description, isActive];
 }

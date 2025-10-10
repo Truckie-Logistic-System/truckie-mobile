@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../data/datasources/api_client.dart';
 import '../../data/datasources/auth_data_source.dart';
@@ -33,6 +33,7 @@ import '../../presentation/features/orders/viewmodels/order_list_viewmodel.dart'
 import '../../presentation/features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
 import 'api_service.dart';
 import 'token_storage_service.dart';
+import 'vietmap_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -43,7 +44,10 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<http.Client>(() => http.Client());
 
   // Token storage service
-  getIt.registerLazySingleton<TokenStorageService>(() => TokenStorageService());
+  debugPrint('Registering TokenStorageService...');
+  final tokenStorageService = TokenStorageService();
+  getIt.registerSingleton<TokenStorageService>(tokenStorageService);
+  debugPrint('TokenStorageService registered successfully');
 
   // Kiểm tra kết nối tới API
   final apiUrl = 'http://10.0.2.2:8080/api/v1';
@@ -60,18 +64,24 @@ Future<void> setupServiceLocator() async {
   }
 
   // Core
-  getIt.registerLazySingleton<ApiService>(
-    () => ApiService(
-      baseUrl: apiUrl,
-      client: getIt<http.Client>(),
-      tokenStorageService: getIt<TokenStorageService>(),
-    ),
+  debugPrint('Registering ApiService...');
+  final apiService = ApiService(
+    baseUrl: apiUrl,
+    client: getIt<http.Client>(),
+    tokenStorageService: tokenStorageService,
   );
+  getIt.registerSingleton<ApiService>(apiService);
+  debugPrint('ApiService registered successfully');
 
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(baseUrl: apiUrl));
 
+  // Register VietMapService
+  getIt.registerLazySingleton<VietMapService>(
+    () => VietMapService(apiService: getIt<ApiService>()),
+  );
+
   // Data sources
-  getIt.registerLazySingleton<AuthDataSource>(
+  getIt.registerLazySingleton<AuthDataSourceImpl>(
     () => AuthDataSourceImpl(
       apiService: getIt<ApiService>(),
       sharedPreferences: getIt<SharedPreferences>(),
@@ -79,17 +89,17 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  getIt.registerLazySingleton<DriverDataSource>(
+  getIt.registerLazySingleton<DriverDataSourceImpl>(
     () => DriverDataSourceImpl(apiService: getIt<ApiService>()),
   );
 
   // Repositories
   getIt.registerLazySingleton<AuthRepository>(
-    () => AuthRepositoryImpl(dataSource: getIt<AuthDataSource>()),
+    () => AuthRepositoryImpl(dataSource: getIt<AuthDataSourceImpl>()),
   );
 
   getIt.registerLazySingleton<DriverRepository>(
-    () => DriverRepositoryImpl(dataSource: getIt<DriverDataSource>()),
+    () => DriverRepositoryImpl(dataSource: getIt<DriverDataSourceImpl>()),
   );
 
   getIt.registerLazySingleton<LoadingDocumentationRepository>(

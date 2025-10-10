@@ -36,11 +36,28 @@ class _OrderListScreenState extends State<OrderListScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tải lại dữ liệu khi màn hình được hiển thị lại
+    _loadOrders();
+  }
+
   Future<void> _loadOrders() async {
-    await Provider.of<OrderListViewModel>(
-      context,
-      listen: false,
-    ).getDriverOrders();
+    try {
+      await Provider.of<OrderListViewModel>(
+        context,
+        listen: false,
+      ).getDriverOrders();
+    } catch (e) {
+      debugPrint('Error loading orders: $e');
+      // Nếu có lỗi, thử lại sau 1 giây
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          _loadOrders();
+        }
+      });
+    }
   }
 
   @override
@@ -174,21 +191,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  Widget _buildErrorView(String message) {
+  Widget _buildErrorView(String errorMessage) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          const Icon(Icons.error_outline, color: Colors.red, size: 60),
           const SizedBox(height: 16),
-          Text('Đã xảy ra lỗi', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+          const Text(
+            'Đã xảy ra lỗi',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(errorMessage, textAlign: TextAlign.center),
+          ),
+          const SizedBox(height: 16),
           ElevatedButton(onPressed: _loadOrders, child: const Text('Thử lại')),
         ],
       ),

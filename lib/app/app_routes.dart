@@ -14,10 +14,12 @@ import '../presentation/features/main/screens/main_screen.dart';
 import '../presentation/features/orders/screens/order_detail_screen.dart';
 import '../presentation/features/orders/screens/orders_screen.dart';
 import '../presentation/features/orders/screens/pre_delivery_documentation_screen.dart';
+import '../presentation/features/splash/screens/splash_screen.dart';
 
 class AppRoutes {
   // Route names
   static const String root = '/';
+  static const String splash = '/splash';
   static const String login = '/login';
   static const String main = '/main';
   static const String editDriverInfo = '/edit-driver-info';
@@ -31,6 +33,11 @@ class AppRoutes {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case root:
+      case splash:
+        return MaterialPageRoute(
+          builder: (_) => const ResponsiveWrapper(child: SplashScreen()),
+        );
+
       case main:
         return MaterialPageRoute(
           builder: (_) => const ResponsiveWrapper(child: MainScreen()),

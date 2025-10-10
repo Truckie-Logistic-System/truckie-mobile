@@ -1,133 +1,99 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../errors/exceptions.dart';
+
 import 'api_service.dart';
 
 class VietMapService {
   final ApiService _apiService;
-  static const String _cacheKey = 'vietmap_style_cache';
+  static const String _cacheKey = 'vietmap_mobile_styles';
   static const Duration _cacheDuration = Duration(days: 7); // Cache 7 ngày
-  static String? _cachedStyle;
-  static DateTime? _cacheTimestamp;
+  String? _cachedStyle;
+  DateTime? _cacheTimestamp;
 
   VietMapService({required ApiService apiService}) : _apiService = apiService;
 
   Future<String> getMobileStyles() async {
+    // Kiểm tra cache trong memory
+    if (_cachedStyle != null && _cacheTimestamp != null) {
+      final now = DateTime.now();
+      if (now.difference(_cacheTimestamp!) < _cacheDuration) {
+        debugPrint('Using in-memory cached map style');
+        return _cachedStyle!;
+      }
+    }
+
+    // Kiểm tra cache trong SharedPreferences
     try {
-      // Kiểm tra cache trong memory trước
-      if (_cachedStyle != null && _cacheTimestamp != null) {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString(_cacheKey);
+
+      if (cachedData != null) {
+        final Map<String, dynamic> data = json.decode(cachedData);
+        final timestamp = DateTime.parse(data['timestamp']);
         final now = DateTime.now();
-        if (now.difference(_cacheTimestamp!) < _cacheDuration) {
-          debugPrint('Using in-memory cached VietMap style');
+
+        if (now.difference(timestamp) < _cacheDuration) {
+          debugPrint('Using SharedPreferences cached map style');
+          _cachedStyle = data['style'];
+          _cacheTimestamp = timestamp;
           return _cachedStyle!;
         }
       }
+    } catch (e) {
+      debugPrint('Error reading cache: $e');
+    }
 
-      // Kiểm tra cache trong SharedPreferences
-      final cachedData = await _getCachedStyle();
-      if (cachedData != null) {
-        // Lưu vào memory cache
-        _cachedStyle = cachedData;
-        _cacheTimestamp = DateTime.now();
-        debugPrint('Using persistent cached VietMap style');
-        return cachedData;
-      }
-
-      // Nếu không có cache, gọi API
-      debugPrint('Fetching VietMap style from API');
+    // Nếu không có cache hoặc cache đã hết hạn, gọi API
+    try {
+      debugPrint('Fetching map style from API');
       final response = await _apiService.get('/vietmap/mobile-styles');
 
-      // Kiểm tra response có đúng định dạng style map không
-      if (response is Map &&
-          response['version'] != null &&
-          response['sources'] != null &&
-          response['layers'] != null) {
-        // Lưu vào cache
-        final styleString = jsonEncode(response);
-        await _cacheStyle(styleString);
-        return styleString;
-      }
+      // API trả về style trực tiếp, không cần kiểm tra statusCode
+      if (response != null) {
+        String styleString;
 
-      // Nếu không phải style map trực tiếp, kiểm tra xem có trong data không
-      if (response is Map &&
-          response['success'] == true &&
-          response['data'] != null) {
-        final data = response['data'];
-        if (data is Map &&
-            data['version'] != null &&
-            data['sources'] != null &&
-            data['layers'] != null) {
-          // Lưu vào cache
-          final styleString = jsonEncode(data);
-          await _cacheStyle(styleString);
-          return styleString;
-        }
-      }
-
-      // Nếu không tìm thấy style map hợp lệ
-      throw ServerException(
-        message: 'Không thể lấy được style map: Định dạng không hợp lệ',
-      );
-    } catch (e) {
-      debugPrint('Error fetching VietMap styles: ${e.toString()}');
-
-      // Nếu có lỗi, thử lấy từ cache
-      final cachedData = await _getCachedStyle();
-      if (cachedData != null) {
-        debugPrint('Using cached VietMap style after API error');
-        return cachedData;
-      }
-
-      throw ServerException(message: 'Lỗi khi lấy style map: ${e.toString()}');
-    }
-  }
-
-  Future<void> _cacheStyle(String styleString) async {
-    try {
-      // Lưu vào memory cache
-      _cachedStyle = styleString;
-      _cacheTimestamp = DateTime.now();
-
-      // Lưu vào SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final cacheData = {
-        'style': styleString,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
-      await prefs.setString(_cacheKey, jsonEncode(cacheData));
-      debugPrint('VietMap style cached successfully');
-    } catch (e) {
-      debugPrint('Error caching VietMap style: $e');
-    }
-  }
-
-  Future<String?> _getCachedStyle() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheJson = prefs.getString(_cacheKey);
-
-      if (cacheJson != null) {
-        final cacheData = jsonDecode(cacheJson) as Map<String, dynamic>;
-        final timestamp = DateTime.fromMillisecondsSinceEpoch(
-          cacheData['timestamp'] as int,
-        );
-        final now = DateTime.now();
-
-        // Kiểm tra thời gian cache
-        if (now.difference(timestamp) < _cacheDuration) {
-          return cacheData['style'] as String;
+        // Kiểm tra xem response có phải là Map với data không
+        if (response is Map && response.containsKey('data')) {
+          styleString = json.encode(response['data']);
         } else {
-          // Cache đã hết hạn
-          debugPrint('VietMap style cache expired');
-          await prefs.remove(_cacheKey);
+          // Nếu response đã là style trực tiếp
+          styleString = json.encode(response);
         }
+
+        // Lưu vào cache memory
+        _cachedStyle = styleString;
+        _cacheTimestamp = DateTime.now();
+
+        // Lưu vào SharedPreferences
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cacheData = {
+            'style': styleString,
+            'timestamp': _cacheTimestamp!.toIso8601String(),
+          };
+          await prefs.setString(_cacheKey, json.encode(cacheData));
+          debugPrint('Map style cached successfully');
+        } catch (e) {
+          debugPrint('Error caching map style: $e');
+        }
+
+        return styleString;
+      } else {
+        throw Exception('Failed to load map style: response is null');
+      }
+    } catch (e) {
+      debugPrint('Error fetching map style: $e');
+
+      // Nếu có lỗi và có cache cũ, sử dụng cache cũ
+      if (_cachedStyle != null) {
+        debugPrint('Using outdated cached map style due to API error');
+        return _cachedStyle!;
       }
 
-      return null;
-    } catch (e) {
-      debugPrint('Error reading VietMap style cache: $e');
-      return null;
+      // Nếu không có cache, throw exception
+      rethrow;
     }
   }
 

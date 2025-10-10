@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/services/service_locator.dart';
 import '../../../../domain/entities/order.dart';
 import '../../../../domain/usecases/orders/get_driver_orders_usecase.dart';
+import '../../../common_widgets/base_viewmodel.dart';
 
 enum OrderListState { initial, loading, loaded, error }
 
-class OrderListViewModel extends ChangeNotifier {
+class OrderListViewModel extends BaseViewModel {
   final GetDriverOrdersUseCase _getDriverOrdersUseCase;
 
   OrderListState _state = OrderListState.initial;
@@ -20,15 +22,27 @@ class OrderListViewModel extends ChangeNotifier {
     : _getDriverOrdersUseCase = getDriverOrdersUseCase;
 
   Future<void> getDriverOrders() async {
+    if (_state == OrderListState.loading) return; // Tránh gọi nhiều lần
+
     _state = OrderListState.loading;
     notifyListeners();
 
     final result = await _getDriverOrdersUseCase();
 
     result.fold(
-      (failure) {
+      (failure) async {
         _state = OrderListState.error;
         _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          debugPrint('Token refreshed, retrying to get orders...');
+          await getDriverOrders();
+          return;
+        }
+
         notifyListeners();
       },
       (orders) {

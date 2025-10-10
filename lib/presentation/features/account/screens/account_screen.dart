@@ -34,6 +34,28 @@ class _AccountScreenState extends State<AccountScreen> {
     super.initState();
     _authViewModel = getIt<AuthViewModel>();
     _accountViewModel = getIt<AccountViewModel>();
+
+    // Đảm bảo token được refresh khi vào màn hình
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_authViewModel.status == AuthStatus.authenticated) {
+        _authViewModel.forceRefreshToken().then((success) {
+          if (success && _authViewModel.user != null) {
+            _accountViewModel.getDriverInfo(_authViewModel.user!.id);
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Tải lại dữ liệu khi màn hình được hiển thị lại
+    if (_authViewModel.status == AuthStatus.authenticated &&
+        _authViewModel.user != null) {
+      _accountViewModel.getDriverInfo(_authViewModel.user!.id);
+    }
   }
 
   @override
