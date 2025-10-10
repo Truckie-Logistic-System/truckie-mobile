@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/errors/exceptions.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/token_storage_service.dart';
 import '../../domain/entities/auth_response.dart';
 import '../../domain/entities/token_response.dart';
 import '../../domain/entities/user.dart';
@@ -42,10 +43,12 @@ abstract class AuthDataSource {
 class AuthDataSourceImpl implements AuthDataSource {
   final ApiService apiService;
   final SharedPreferences sharedPreferences;
+  final TokenStorageService tokenStorageService;
 
   AuthDataSourceImpl({
     required this.apiService,
     required this.sharedPreferences,
+    required this.tokenStorageService,
   });
 
   @override
@@ -53,8 +56,8 @@ class AuthDataSourceImpl implements AuthDataSource {
     try {
       debugPrint('Attempting login for user: $username');
 
-      // Đảm bảo endpoint đúng theo API
-      final response = await apiService.post('/auths', {
+      // Sử dụng endpoint mobile
+      final response = await apiService.post('/auths/mobile', {
         'username': username,
         'password': password,
       });
@@ -71,6 +74,11 @@ class AuthDataSourceImpl implements AuthDataSource {
 
       debugPrint('Login successful, processing user data');
       final authResponse = AuthResponse.fromJson(response['data']);
+      
+      // Lưu tokens
+      await tokenStorageService.saveAccessToken(authResponse.authToken);
+      await tokenStorageService.saveRefreshToken(authResponse.refreshToken);
+      
       final user = User(
         id: authResponse.user.id,
         username: authResponse.user.username,
@@ -101,7 +109,19 @@ class AuthDataSourceImpl implements AuthDataSource {
     try {
       debugPrint('Attempting to refresh token');
 
-      final response = await apiService.post('/auths/token/refresh', {});
+      // Lấy refresh token từ secure storage
+      final refreshToken = await tokenStorageService.getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        throw ServerException(
+          message: 'Không tìm thấy refresh token',
+          statusCode: 401,
+        );
+      }
+
+      // Sử dụng endpoint mobile
+      final response = await apiService.post('/auths/mobile/token/refresh', {
+        'refreshToken': refreshToken,
+      });
 
       debugPrint('Refresh token response received: $response');
 
@@ -115,11 +135,8 @@ class AuthDataSourceImpl implements AuthDataSource {
 
       final tokenResponse = TokenResponse.fromJson(response['data']);
 
-      // Cập nhật token trong SharedPreferences
-      await sharedPreferences.setString(
-        'auth_token',
-        tokenResponse.accessToken,
-      );
+      // Lưu access token mới vào memory
+      await tokenStorageService.saveAccessToken(tokenResponse.accessToken);
 
       // Cập nhật token trong thông tin người dùng
       final userJson = sharedPreferences.getString('user_info');
@@ -179,8 +196,13 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<bool> logout() async {
     try {
-      // Call the logout API endpoint which will clear the HTTP-only cookie
-      final response = await apiService.post('/auths/logout', {});
+      // Lấy refresh token để gửi lên server
+      final refreshToken = await tokenStorageService.getRefreshToken();
+      
+      // Call the logout API endpoint với refresh token
+      final response = await apiService.post('/auths/mobile/logout', {
+        'refreshToken': refreshToken ?? '',
+      });
 
       if (!response['success']) {
         debugPrint('Logout failed: ${response['message']}');
@@ -211,8 +233,10 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<bool> isLoggedIn() async {
     try {
-      final token = sharedPreferences.getString('auth_token');
-      return token != null && token.isNotEmpty;
+      // Kiểm tra access token trong memory hoặc refresh token trong secure storage
+      final hasAccessToken = tokenStorageService.hasAccessToken();
+      final hasRefreshToken = await tokenStorageService.hasRefreshToken();
+      return hasAccessToken || hasRefreshToken;
     } catch (e) {
       return false;
     }
@@ -238,8 +262,8 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<void> saveUserInfo(User user) async {
     try {
-      await sharedPreferences.setString('auth_token', user.authToken);
-
+      // Access token đã được lưu trong TokenStorageService khi login
+      // Chỉ cần lưu thông tin user vào SharedPreferences
       final userMap = {
         'id': user.id,
         'username': user.username,
@@ -270,6 +294,10 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<void> clearUserInfo() async {
     try {
+      // Xóa tokens từ TokenStorageService
+      await tokenStorageService.clearAllTokens();
+      
+      // Xóa thông tin user từ SharedPreferences
       await sharedPreferences.remove('auth_token');
       await sharedPreferences.remove('user_info');
     } catch (e) {

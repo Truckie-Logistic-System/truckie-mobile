@@ -394,7 +394,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return AppColors.warning;
-      case 'FULLY_PURCHASED':
+      case 'FULLY_PAID':
       case 'PICKING_UP':
         return Colors.orange;
       case 'IN_PROGRESS':
@@ -414,7 +414,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return 'Chờ lấy hàng';
-      case 'FULLY_PURCHASED':
+      case 'FULLY_PAID':
       case 'PICKING_UP':
         return 'Đang lấy hàng';
       case 'IN_PROGRESS':

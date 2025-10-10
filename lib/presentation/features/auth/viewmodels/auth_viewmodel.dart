@@ -226,12 +226,11 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Check if user is logged in by retrieving stored token
+      // Check if user is logged in by retrieving stored user info
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
       final userJson = prefs.getString('user_info');
 
-      if (token == null || token.isEmpty || userJson == null) {
+      if (userJson == null) {
         _status = AuthStatus.unauthenticated;
         notifyListeners();
         return;
@@ -264,9 +263,8 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> _clearUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-      await prefs.remove('refresh_token');
       await prefs.remove('user_info');
+      // Tokens sẽ được xóa bởi AuthDataSource thông qua TokenStorageService
     } catch (e) {
       debugPrint('Error clearing user data: $e');
     }

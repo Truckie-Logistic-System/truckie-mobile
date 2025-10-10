@@ -32,6 +32,7 @@ import '../../presentation/features/orders/viewmodels/order_detail_viewmodel.dar
 import '../../presentation/features/orders/viewmodels/order_list_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
 import 'api_service.dart';
+import 'token_storage_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -40,6 +41,9 @@ Future<void> setupServiceLocator() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   getIt.registerSingleton<SharedPreferences>(sharedPreferences);
   getIt.registerLazySingleton<http.Client>(() => http.Client());
+
+  // Token storage service
+  getIt.registerLazySingleton<TokenStorageService>(() => TokenStorageService());
 
   // Kiểm tra kết nối tới API
   final apiUrl = 'http://10.0.2.2:8080/api/v1';
@@ -57,7 +61,11 @@ Future<void> setupServiceLocator() async {
 
   // Core
   getIt.registerLazySingleton<ApiService>(
-    () => ApiService(baseUrl: apiUrl, client: getIt<http.Client>()),
+    () => ApiService(
+      baseUrl: apiUrl,
+      client: getIt<http.Client>(),
+      tokenStorageService: getIt<TokenStorageService>(),
+    ),
   );
 
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(baseUrl: apiUrl));
@@ -67,6 +75,7 @@ Future<void> setupServiceLocator() async {
     () => AuthDataSourceImpl(
       apiService: getIt<ApiService>(),
       sharedPreferences: getIt<SharedPreferences>(),
+      tokenStorageService: getIt<TokenStorageService>(),
     ),
   );
 

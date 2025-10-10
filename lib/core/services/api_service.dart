@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../errors/exceptions.dart';
+import 'token_storage_service.dart';
 
 // Callback khi refresh token thất bại
 typedef OnTokenRefreshFailedCallback = void Function();
@@ -11,12 +11,17 @@ typedef OnTokenRefreshFailedCallback = void Function();
 class ApiService {
   final String baseUrl;
   final http.Client client;
+  final TokenStorageService tokenStorageService;
   bool _isRefreshing = false;
 
   // Callback khi refresh token thất bại
   static OnTokenRefreshFailedCallback? onTokenRefreshFailed;
 
-  ApiService({required this.baseUrl, required this.client});
+  ApiService({
+    required this.baseUrl,
+    required this.client,
+    required this.tokenStorageService,
+  });
 
   // Đặt callback khi refresh token thất bại
   static void setTokenRefreshFailedCallback(
@@ -28,9 +33,9 @@ class ApiService {
   Future<Map<String, String>> _getHeaders() async {
     final headers = {'Content-Type': 'application/json'};
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-    if (token != null) {
+    // Lấy access token từ memory
+    final token = tokenStorageService.getAccessToken();
+    if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
 
@@ -97,7 +102,7 @@ class ApiService {
       // Xử lý token hết hạn
       if (e.message.contains('expired') &&
           !_isRefreshing &&
-          endpoint != '/auths/token/refresh') {
+          endpoint != '/auths/mobile/token/refresh') {
         debugPrint('Token expired, attempting to refresh...');
         final refreshed = await _refreshToken();
         if (refreshed) {
@@ -198,13 +203,23 @@ class ApiService {
     try {
       debugPrint('Refreshing token...');
 
-      // No body needed as the refresh token is sent via HTTP-only cookie
+      // Lấy refresh token từ secure storage
+      final refreshToken = await tokenStorageService.getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        debugPrint('No refresh token available');
+        _isRefreshing = false;
+        await _clearUserData();
+        return false;
+      }
+
+      // Gọi API mobile refresh token
       final response = await client.post(
-        Uri.parse('$baseUrl/auths/token/refresh'),
+        Uri.parse('$baseUrl/auths/mobile/token/refresh'),
         headers: {'Content-Type': 'application/json'},
+        body: json.encode({'refreshToken': refreshToken}),
       );
 
-      _logResponse('POST', '/auths/token/refresh', response);
+      _logResponse('POST', '/auths/mobile/token/refresh', response);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = json.decode(response.body);
@@ -212,17 +227,8 @@ class ApiService {
         if (responseData['success'] == true && responseData['data'] != null) {
           final accessToken = responseData['data']['accessToken'];
 
-          // Lưu token mới
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('auth_token', accessToken);
-
-          // Cập nhật token trong thông tin người dùng
-          final userJson = prefs.getString('user_info');
-          if (userJson != null) {
-            final userMap = json.decode(userJson) as Map<String, dynamic>;
-            userMap['authToken'] = accessToken;
-            await prefs.setString('user_info', json.encode(userMap));
-          }
+          // Lưu access token mới vào memory
+          await tokenStorageService.saveAccessToken(accessToken);
 
           debugPrint('Token refreshed successfully');
           _isRefreshing = false;
@@ -250,10 +256,7 @@ class ApiService {
 
   // Xóa dữ liệu người dùng khi refresh token thất bại
   Future<void> _clearUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('refresh_token');
-    await prefs.remove('user_info');
+    await tokenStorageService.clearAllTokens();
   }
 
   // Gọi callback khi refresh token thất bại
