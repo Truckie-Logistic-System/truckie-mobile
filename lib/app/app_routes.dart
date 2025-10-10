@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/utils/responsive_size_utils.dart';
 import '../domain/entities/driver.dart';
+import '../domain/entities/order_with_details.dart';
 import '../presentation/features/account/screens/account_screen.dart';
 import '../presentation/features/account/screens/change_password_screen.dart';
 import '../presentation/features/account/screens/edit_driver_info_screen.dart';
@@ -12,6 +13,7 @@ import '../presentation/features/home/screens/home_screen.dart';
 import '../presentation/features/main/screens/main_screen.dart';
 import '../presentation/features/orders/screens/order_detail_screen.dart';
 import '../presentation/features/orders/screens/orders_screen.dart';
+import '../presentation/features/orders/screens/pre_delivery_documentation_screen.dart';
 
 class AppRoutes {
   // Route names
@@ -23,6 +25,7 @@ class AppRoutes {
   static const String orderDetail = '/order-detail';
   static const String activeDelivery = '/active-delivery';
   static const String deliveryMap = '/delivery-map';
+  static const String preDeliveryDocumentation = '/pre-delivery-documentation';
 
   // Route generator
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -69,6 +72,14 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ResponsiveWrapper(
             child: DeliveryMapScreen(deliveryId: deliveryId),
+          ),
+        );
+
+      case preDeliveryDocumentation:
+        final OrderWithDetails order = settings.arguments as OrderWithDetails;
+        return MaterialPageRoute(
+          builder: (_) => ResponsiveWrapper(
+            child: PreDeliveryDocumentationScreen(order: order),
           ),
         );
 

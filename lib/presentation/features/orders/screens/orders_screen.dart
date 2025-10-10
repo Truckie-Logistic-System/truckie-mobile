@@ -21,7 +21,8 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class _OrdersScreenState extends State<OrdersScreen>
+    with WidgetsBindingObserver {
   late final AuthViewModel _authViewModel;
   late final OrderListViewModel _orderListViewModel;
   String _selectedStatus = 'Tất cả';
@@ -32,10 +33,30 @@ class _OrdersScreenState extends State<OrdersScreen> {
     _authViewModel = getIt<AuthViewModel>();
     _orderListViewModel = getIt<OrderListViewModel>();
 
+    // Đăng ký observer để theo dõi trạng thái app
+    WidgetsBinding.instance.addObserver(this);
+
     // Fetch orders when the screen initializes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _orderListViewModel.getDriverOrders();
-    });
+    _loadOrders();
+  }
+
+  @override
+  void dispose() {
+    // Hủy đăng ký observer khi widget bị hủy
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Tải lại dữ liệu khi app trở lại foreground
+    if (state == AppLifecycleState.resumed) {
+      _loadOrders();
+    }
+  }
+
+  Future<void> _loadOrders() async {
+    await _orderListViewModel.getDriverOrders();
   }
 
   @override
@@ -47,6 +68,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false, // Loại bỏ nút back
+        actions: [
+          // Thêm nút refresh
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadOrders,
+            tooltip: 'Làm mới',
+          ),
+        ],
       ),
       body: MultiProvider(
         providers: [
@@ -65,10 +94,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       _buildFilterSection(context, orderListViewModel),
                       SizedBox(height: 16.h),
                       Expanded(
-                        child: _buildOrdersContent(
-                          context,
-                          orderListViewModel,
-                          sizingInformation,
+                        child: RefreshIndicator(
+                          onRefresh: _loadOrders,
+                          color: AppColors.primary,
+                          child: _buildOrdersContent(
+                            context,
+                            orderListViewModel,
+                            sizingInformation,
+                          ),
                         ),
                       ),
                     ],
@@ -361,9 +394,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return AppColors.warning;
+      case 'FULLY_PURCHASED':
+      case 'PICKING_UP':
+        return Colors.orange;
       case 'IN_PROGRESS':
+      case 'DELIVERING':
         return AppColors.inProgress;
       case 'COMPLETED':
+      case 'DELIVERED':
         return AppColors.success;
       case 'CANCELLED':
         return AppColors.error;
@@ -376,9 +414,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return 'Chờ lấy hàng';
+      case 'FULLY_PURCHASED':
+      case 'PICKING_UP':
+        return 'Đang lấy hàng';
       case 'IN_PROGRESS':
+      case 'DELIVERING':
         return 'Đang giao';
       case 'COMPLETED':
+      case 'DELIVERED':
         return 'Hoàn thành';
       case 'CANCELLED':
         return 'Đã hủy';

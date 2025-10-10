@@ -83,6 +83,11 @@ class OrderItem extends StatelessWidget {
         color = Colors.blue;
         displayStatus = 'Đã giao cho tài xế';
         break;
+      case 'FULLY_PURCHASED':
+      case 'PICKING_UP':
+        color = Colors.orange;
+        displayStatus = 'Đang lấy hàng';
+        break;
       case 'PICKED_UP':
         color = Colors.orange;
         displayStatus = 'Đã lấy hàng';

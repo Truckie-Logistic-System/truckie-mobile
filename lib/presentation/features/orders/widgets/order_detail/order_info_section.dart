@@ -102,9 +102,14 @@ class OrderInfoSection extends StatelessWidget {
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return AppColors.warning;
+      case 'FULLY_PURCHASED':
+      case 'PICKING_UP':
+        return Colors.orange;
       case 'IN_PROGRESS':
+      case 'DELIVERING':
         return AppColors.inProgress;
       case 'COMPLETED':
+      case 'DELIVERED':
         return AppColors.success;
       case 'CANCELLED':
         return AppColors.error;
@@ -118,9 +123,14 @@ class OrderInfoSection extends StatelessWidget {
     switch (status.toUpperCase()) {
       case 'ASSIGNED_TO_DRIVER':
         return 'Chờ lấy hàng';
+      case 'FULLY_PURCHASED':
+      case 'PICKING_UP':
+        return 'Đang lấy hàng';
       case 'IN_PROGRESS':
+      case 'DELIVERING':
         return 'Đang giao';
       case 'COMPLETED':
+      case 'DELIVERED':
         return 'Hoàn thành';
       case 'CANCELLED':
         return 'Đã hủy';
