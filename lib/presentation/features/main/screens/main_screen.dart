@@ -7,7 +7,6 @@ import '../../../../core/services/system_ui_service.dart';
 import '../../account/screens/account_screen.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../home/screens/home_screen.dart';
-import '../../map_test/screens/navigation_test_screen.dart';
 import '../../orders/screens/orders_screen.dart';
 import '../../../theme/app_colors.dart';
 
@@ -31,8 +30,7 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       const HomeScreen(),
       const OrdersScreen(),
-      const NavigationTestScreen(),
-      const AccountScreen(),
+      const AccountScreen(), // Chỉ còn 3 màn hình
     ];
   }
 
@@ -52,7 +50,7 @@ class _MainScreenState extends State<MainScreen> {
       // Thử refresh token trước khi hiển thị tab mới
       if (authViewModel.status == AuthStatus.authenticated) {
         // Chỉ refresh token nếu đang ở tab tài khoản hoặc trang chủ
-        if (index == 0 || index == 3) {
+        if (index == 0 || index == 2) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             authViewModel.forceRefreshToken().then((success) {
               debugPrint('Force refresh token result: $success');
@@ -119,8 +117,8 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               _buildNavItem(0, Icons.home, 'Trang chủ'),
               _buildNavItem(1, Icons.list_alt, 'Đơn hàng'),
-              _buildNavItem(2, Icons.map, 'Dẫn đường'),
-              _buildNavItem(3, Icons.person, 'Tài khoản'),
+              // _buildNavItem(2, Icons.map, 'Dẫn đường'),
+              _buildNavItem(2, Icons.person, 'Tài khoản'),
             ],
           ),
         ),

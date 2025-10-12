@@ -9,6 +9,7 @@ import '../presentation/features/account/screens/edit_driver_info_screen.dart';
 import '../presentation/features/auth/screens/login_screen.dart';
 import '../presentation/features/delivery/screens/active_delivery_screen.dart';
 import '../presentation/features/delivery/screens/delivery_map_screen.dart';
+import '../presentation/features/delivery/screens/navigation_screen.dart';
 import '../presentation/features/home/screens/home_screen.dart';
 import '../presentation/features/location_tracking/screens/driver_location_screen.dart';
 import '../presentation/features/location_tracking/screens/websocket_test_screen.dart';
@@ -26,6 +27,9 @@ class AppRoutes {
   static const String splash = '/splash';
   static const String login = '/login';
   static const String main = '/main';
+  static const String home = '/home';
+  static const String orders = '/orders';
+  static const String account = '/account';
   static const String editDriverInfo = '/edit-driver-info';
   static const String changePassword = '/change-password';
   static const String orderDetail = '/order-detail';
@@ -35,6 +39,7 @@ class AppRoutes {
   static const String driverLocation = '/driver-location';
   static const String websocketTest = '/websocket-test';
   static const String routeDetails = '/route-details';
+  static const String navigation = '/navigation';
 
   // Route generator
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -47,7 +52,26 @@ class AppRoutes {
 
       case main:
         return MaterialPageRoute(
+          settings: settings,
           builder: (_) => const ResponsiveWrapper(child: MainScreen()),
+        );
+
+      case home:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const ResponsiveWrapper(child: HomeScreen()),
+        );
+
+      case orders:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const ResponsiveWrapper(child: OrdersScreen()),
+        );
+
+      case account:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const ResponsiveWrapper(child: AccountScreen()),
         );
 
       case login:
@@ -71,6 +95,7 @@ class AppRoutes {
       case orderDetail:
         final String orderId = settings.arguments as String;
         return MaterialPageRoute(
+          settings: settings,
           builder: (_) =>
               ResponsiveWrapper(child: OrderDetailScreen(orderId: orderId)),
         );
@@ -103,6 +128,18 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ResponsiveWrapper(
             child: RouteDetailsScreen(viewModel: viewModel),
+          ),
+        );
+
+      case navigation:
+        final Map<String, dynamic> args =
+            settings.arguments as Map<String, dynamic>;
+        return MaterialPageRoute(
+          builder: (_) => ResponsiveWrapper(
+            child: NavigationScreen(
+              orderId: args['orderId'] as String,
+              isSimulationMode: args['isSimulationMode'] as bool? ?? false,
+            ),
           ),
         );
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 
 import '../../../../app/app_routes.dart';
+import '../../../../core/services/integrated_location_service.dart';
 import '../../../../core/services/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
 import '../../../../presentation/theme/app_colors.dart';
@@ -24,6 +25,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final OrderDetailViewModel _viewModel;
   late final AuthViewModel _authViewModel;
   late final OrderListViewModel _orderListViewModel;
+  late final IntegratedLocationService _integratedLocationService;
 
   @override
   void initState() {
@@ -31,7 +33,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _viewModel = getIt<OrderDetailViewModel>();
     _authViewModel = getIt<AuthViewModel>();
     _orderListViewModel = getIt<OrderListViewModel>();
+    _integratedLocationService = IntegratedLocationService.instance;
     _loadOrderDetails();
+    
+    // Rebuild UI periodically to check WebSocket status
+    Future.delayed(Duration.zero, () {
+      if (mounted) {
+        _startPeriodicRefresh();
+      }
+    });
+  }
+  
+  void _startPeriodicRefresh() {
+    // Refresh UI every 2 seconds to update button state
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {});
+        _startPeriodicRefresh();
+      }
+    });
   }
 
   @override
@@ -58,6 +78,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           title: const Text('Chi tiết đơn hàng'),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              // Pop back to orders screen
+              Navigator.of(context).popUntil((route) {
+                return route.settings.name == AppRoutes.orders ||
+                       route.settings.name == AppRoutes.main ||
+                       route.isFirst;
+              });
+            },
+            tooltip: 'Quay lại danh sách đơn hàng',
+          ),
           actions: [
             // Thêm nút refresh
             IconButton(
@@ -108,7 +140,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           padding: SystemUiService.getContentPadding(context).copyWith(
             bottom: (canStartDelivery || canConfirmPreDelivery)
                 ? 100
-                : 24, // Add extra padding at bottom when button is visible
+                : (hasRouteData
+                      ? 70
+                      : 24), // Add extra padding at bottom when buttons are visible
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,117 +161,183 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               SizedBox(height: 16),
               PackageSection(order: orderWithDetails),
               SizedBox(height: 24),
-              // RouteMapSection(viewModel: viewModel),
-              // SizedBox(height: 24),
               VehicleSection(order: orderWithDetails),
+              SizedBox(height: 24),
+              
+              // Nút bắt đầu dẫn đường (chỉ hiển thị khi chưa có tracking và có route data)
+              if (hasRouteData && !_integratedLocationService.isActive)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      // Nút bắt đầu dẫn đường thực
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.navigation,
+                            arguments: {
+                              'orderId': orderWithDetails.id,
+                              'isSimulationMode': false, // Real-time mode
+                            },
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.navigation),
+                            SizedBox(width: 8),
+                            Text('Bắt đầu dẫn đường'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Nút mô phỏng
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.navigation,
+                            arguments: {
+                              'orderId': orderWithDetails.id,
+                              'isSimulationMode': true, // Simulation mode
+                            },
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          side: const BorderSide(color: Colors.orange),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.directions_car),
+                            SizedBox(width: 8),
+                            Text('Mô phỏng dẫn đường'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               SizedBox(height: 24),
             ],
           ),
         ),
 
-        // Sticky Start Delivery Button
-        if (canStartDelivery)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-                border: Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
-                ),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: StartDeliverySection(order: orderWithDetails),
-            ),
-          ),
-
-        // Sticky Pre-Delivery Documentation Button
-        if (canConfirmPreDelivery)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-                border: Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
-                ),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final result = await Navigator.pushNamed(
-                      context,
-                      AppRoutes.preDeliveryDocumentation,
-                      arguments: orderWithDetails,
-                    );
-
-                    if (result == true) {
-                      // Reload order details to reflect status change
-                      _loadOrderDetails();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  child: const Text('Xác nhận hàng hóa và seal'),
-                ),
-              ),
-            ),
-          ),
-
-        // Sticky Route Details Button (always visible in bottom right corner)
+        // Route Details / Navigation Button
+        // Always show if has route data, but behavior changes based on WebSocket status
         if (hasRouteData)
           Positioned(
             bottom: (canStartDelivery || canConfirmPreDelivery) ? 100 : 16,
             right: 16,
+            child: Builder(
+              builder: (context) {
+                final isConnected = _integratedLocationService.isActive;
+                debugPrint('🔍 FAB - Integrated tracking active: $isConnected');
+                
+                return FloatingActionButton.extended(
+                  onPressed: () {
+                    if (isConnected) {
+                      // Return to navigation screen (already has active connection)
+                      // Just navigate back, the screen will detect existing connection
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.navigation,
+                        arguments: {
+                          'orderId': orderWithDetails.id,
+                          'isSimulationMode': false, // Will be ignored if already connected
+                        },
+                      );
+                    } else {
+                      // Go to route details to start navigation
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.routeDetails,
+                        arguments: viewModel,
+                      );
+                    }
+                  },
+                  heroTag: 'routeDetailsButton',
+                  backgroundColor: isConnected ? AppColors.success : AppColors.primary,
+                  elevation: 4,
+                  icon: Icon(
+                    isConnected ? Icons.navigation : Icons.map_outlined,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    isConnected ? 'Dẫn đường' : 'Lộ trình',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              },
+            ),
+          ),
+
+        // Action Buttons Row (white background)
+        if (canStartDelivery || canConfirmPreDelivery)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: Container(
               decoration: BoxDecoration(
+                color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
                   ),
                 ],
+                border: Border(
+                  top: BorderSide(color: AppColors.border, width: 1),
+                ),
               ),
-              child: FloatingActionButton(
-                onPressed: () {
-                  Navigator.pushNamed(
-                    context,
-                    AppRoutes.routeDetails,
-                    arguments: viewModel,
-                  );
-                },
-                backgroundColor: AppColors.primary,
-                child: const Icon(Icons.map_outlined, color: Colors.white),
-                tooltip: 'Xem chi tiết lộ trình',
-              ),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: canStartDelivery
+                  ? StartDeliverySection(order: orderWithDetails)
+                  : ElevatedButton(
+                      onPressed: () async {
+                        final result = await Navigator.pushNamed(
+                          context,
+                          AppRoutes.preDeliveryDocumentation,
+                          arguments: orderWithDetails,
+                        );
+
+                        if (result == true) {
+                          // Reload order details to reflect status change
+                          _loadOrderDetails();
+
+                          // If we're in simulation mode (tracking active), navigate back to continue simulation
+                          if (_integratedLocationService.isActive) {
+                            Navigator.of(context).pushNamed(
+                              AppRoutes.navigation,
+                              arguments: {
+                                'orderId': orderWithDetails.id,
+                                'isSimulationMode': true,
+                              },
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      child: const Text('Xác nhận hàng hóa và seal'),
+                    ),
             ),
           ),
       ],

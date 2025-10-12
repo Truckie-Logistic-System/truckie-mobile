@@ -28,6 +28,7 @@ import '../../domain/usecases/orders/submit_pre_delivery_documentation_usecase.d
 import '../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';
 import '../../presentation/features/account/viewmodels/account_viewmodel.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
+import '../../presentation/features/delivery/viewmodels/navigation_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/order_detail_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/order_list_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
@@ -35,6 +36,10 @@ import '../../presentation/features/location_tracking/viewmodels/location_tracki
 import '../services/vehicle_websocket_service.dart';
 import '../services/mock_vehicle_websocket_service.dart';
 import '../services/location_tracking_service.dart';
+import '../services/enhanced_location_tracking_service.dart';
+import '../services/location_queue_service.dart';
+import '../services/background_location_service.dart';
+import '../services/app_restart_recovery_service.dart';
 import '../services/api_service.dart';
 import '../services/token_storage_service.dart';
 import '../services/vietmap_service.dart';
@@ -99,12 +104,30 @@ Future<void> setupServiceLocator() async {
     );
   }
 
-  // Location tracking service
+  // Location tracking services
   getIt.registerLazySingleton<LocationTrackingService>(
     () => LocationTrackingService(
       webSocketService: getIt<VehicleWebSocketService>(),
     ),
   );
+
+  // Enhanced location tracking services
+  getIt.registerLazySingleton<LocationQueueService>(
+    () => LocationQueueService(),
+  );
+
+  getIt.registerLazySingleton<EnhancedLocationTrackingService>(
+    () => EnhancedLocationTrackingService(
+      webSocketService: getIt<VehicleWebSocketService>(),
+      queueService: getIt<LocationQueueService>(),
+    ),
+  );
+
+  // Initialize recovery service
+  await AppRestartRecoveryService.initialize();
+  
+  // Initialize background service
+  await BackgroundLocationService.initialize();
 
   // Data sources
   getIt.registerLazySingleton<AuthDataSourceImpl>(
@@ -227,4 +250,7 @@ Future<void> setupServiceLocator() async {
           getIt<SubmitPreDeliveryDocumentationUseCase>(),
     ),
   );
+
+  // Đăng ký NavigationViewModel as LazySingleton to preserve state
+  getIt.registerLazySingleton<NavigationViewModel>(() => NavigationViewModel());
 }

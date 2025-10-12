@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/app_routes.dart';
 import '../../../../core/services/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
 import '../../../../core/utils/responsive_extensions.dart';
@@ -304,7 +305,7 @@ class _OrdersScreenState extends State<OrdersScreen>
       child: InkWell(
         onTap: () {
           // Navigate to order details screen
-          Navigator.pushNamed(context, '/order-detail', arguments: order.id);
+          Navigator.pushNamed(context, AppRoutes.orderDetail, arguments: order.id);
         },
         borderRadius: BorderRadius.circular(12.r),
         child: Padding(

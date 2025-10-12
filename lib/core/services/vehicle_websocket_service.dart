@@ -272,12 +272,21 @@ class VehicleWebSocketService {
       'licensePlateNumber': licensePlateNumber,
     };
 
+    final destination = '/app/vehicle/$vehicleId/location-rate-limited';
+    
+    debugPrint('📤 Sending STOMP message:');
+    debugPrint('   - Destination: $destination');
+    debugPrint('   - VehicleId: $vehicleId');
+    debugPrint('   - Location: ($latitude, $longitude)');
+    debugPrint('   - License Plate: $licensePlateNumber');
+    debugPrint('   - Body: ${jsonEncode(message)}');
+
     _client!.send(
-      destination: '/app/vehicle/$vehicleId/location-rate-limited',
+      destination: destination,
       body: jsonEncode(message),
     );
 
-    debugPrint('📤 Sent rate-limited location update for vehicle $vehicleId');
+    debugPrint('✅ STOMP message sent successfully');
   }
 
   Future<void> disconnect() async {

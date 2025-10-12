@@ -1,12 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/services/token_storage_service.dart';
+import '../../core/services/service_locator.dart';
 
 class ApiClient {
   final String baseUrl;
   late final Dio dio;
+  late final TokenStorageService _tokenStorageService;
 
   ApiClient({required this.baseUrl}) {
+    _tokenStorageService = getIt<TokenStorageService>();
+
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -19,9 +23,11 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final prefs = await SharedPreferences.getInstance();
-          final token = prefs.getString('auth_token');
+          final token = _tokenStorageService.getAccessToken();
           if (token != null) {
+            debugPrint(
+              'Using token in ApiClient: ${token.substring(0, 15)}...',
+            );
             options.headers['Authorization'] = 'Bearer $token';
           }
           return handler.next(options);

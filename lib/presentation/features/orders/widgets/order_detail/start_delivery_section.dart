@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../app/app_routes.dart';
 import '../../../../../domain/entities/order_with_details.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
@@ -79,6 +80,10 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
       _isLoading = true;
     });
 
+    debugPrint('🚀 Bắt đầu gửi thông tin công tơ mét...');
+    debugPrint('🚀 Chỉ số công tơ mét: ${_odometerController.text}');
+    debugPrint('🚀 Đường dẫn ảnh: ${_odometerImage!.path}');
+
     try {
       final viewModel = Provider.of<OrderDetailViewModel>(
         context,
@@ -89,19 +94,46 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
         odometerImage: _odometerImage!,
       );
 
+      debugPrint('🚀 Kết quả gửi thông tin: $success');
+
       if (success) {
+        // Lưu lại context và orderId để sử dụng sau khi tải lại order
+        final navigatorContext = context;
+        final orderId = widget.order.id;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Bắt đầu chuyến xe thành công'),
             backgroundColor: Colors.green,
           ),
         );
-        // Reload order details to get updated status
-        await viewModel.getOrderDetails(widget.order.id);
+
+        // Chuyển đến màn hình dẫn đường ngay lập tức, không đợi tải lại dữ liệu order
+        debugPrint('🚀 Chuyển đến màn hình dẫn đường với orderId: $orderId');
+
+        if (mounted) {
+          Navigator.of(navigatorContext).pushReplacementNamed(
+            AppRoutes.navigation,
+            arguments: {'orderId': orderId, 'isSimulationMode': false},
+          );
+        }
       } else {
+        debugPrint('❌ Lỗi: ${viewModel.startDeliveryErrorMessage}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(viewModel.startDeliveryErrorMessage),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Exception khi bắt đầu chuyến xe: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(viewModel.startDeliveryErrorMessage),
+            content: Text('Lỗi không xác định: $e'),
             backgroundColor: Colors.red,
           ),
         );

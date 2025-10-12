@@ -171,36 +171,53 @@ class OrderDetailViewModel extends BaseViewModel {
     _startDeliveryState = StartDeliveryState.loading;
     notifyListeners();
 
-    final result = await _createVehicleFuelConsumptionUseCase(
-      vehicleAssignmentId: vehicleAssignmentId,
-      odometerReadingAtStart: odometerReading,
-      odometerAtStartImage: odometerImage,
+    debugPrint(
+      '🚗 Bắt đầu gửi thông tin odometer: ${odometerReading.toString()}',
     );
+    debugPrint('🚗 Đường dẫn ảnh odometer: ${odometerImage.path}');
+    debugPrint('🚗 Vehicle Assignment ID: $vehicleAssignmentId');
 
-    return result.fold(
-      (failure) async {
-        _startDeliveryState = StartDeliveryState.error;
-        _startDeliveryErrorMessage = failure.message;
+    try {
+      final result = await _createVehicleFuelConsumptionUseCase(
+        vehicleAssignmentId: vehicleAssignmentId,
+        odometerReadingAtStart: odometerReading,
+        odometerAtStartImage: odometerImage,
+      );
 
-        // Sử dụng handleUnauthorizedError từ BaseViewModel
-        final shouldRetry = await handleUnauthorizedError(failure.message);
-        if (shouldRetry) {
-          // Nếu refresh token thành công, thử lại
-          return startDelivery(
-            odometerReading: odometerReading,
-            odometerImage: odometerImage,
-          );
-        }
+      return result.fold(
+        (failure) async {
+          _startDeliveryState = StartDeliveryState.error;
+          _startDeliveryErrorMessage = failure.message;
+          debugPrint('❌ Lỗi khi bắt đầu chuyến xe: ${failure.message}');
 
-        notifyListeners();
-        return false;
-      },
-      (success) {
-        _startDeliveryState = StartDeliveryState.success;
-        notifyListeners();
-        return true;
-      },
-    );
+          // Sử dụng handleUnauthorizedError từ BaseViewModel
+          final shouldRetry = await handleUnauthorizedError(failure.message);
+          if (shouldRetry) {
+            // Nếu refresh token thành công, thử lại
+            debugPrint('🔄 Token đã được làm mới, thử lại...');
+            return startDelivery(
+              odometerReading: odometerReading,
+              odometerImage: odometerImage,
+            );
+          }
+
+          notifyListeners();
+          return false;
+        },
+        (success) {
+          _startDeliveryState = StartDeliveryState.success;
+          debugPrint('✅ Bắt đầu chuyến xe thành công!');
+          notifyListeners();
+          return true;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Lỗi không xác định khi bắt đầu chuyến xe: $e');
+      _startDeliveryState = StartDeliveryState.error;
+      _startDeliveryErrorMessage = 'Lỗi không xác định: $e';
+      notifyListeners();
+      return false;
+    }
   }
 
   void resetStartDeliveryState() {
