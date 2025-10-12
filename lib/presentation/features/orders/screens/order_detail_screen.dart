@@ -1,380 +1,346 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 
+import '../../../../app/app_routes.dart';
+import '../../../../core/services/integrated_location_service.dart';
+import '../../../../core/services/service_locator.dart';
+import '../../../../core/services/system_ui_service.dart';
 import '../../../../presentation/theme/app_colors.dart';
-import '../../../../presentation/theme/app_text_styles.dart';
+import '../../../features/auth/viewmodels/auth_viewmodel.dart';
+import '../viewmodels/order_detail_viewmodel.dart';
+import '../viewmodels/order_list_viewmodel.dart';
+import '../widgets/order_detail/index.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   final String orderId;
 
-  const OrderDetailScreen({super.key, required this.orderId});
+  const OrderDetailScreen({Key? key, required this.orderId}) : super(key: key);
+
+  @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  late final OrderDetailViewModel _viewModel;
+  late final AuthViewModel _authViewModel;
+  late final OrderListViewModel _orderListViewModel;
+  late final IntegratedLocationService _integratedLocationService;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewModel = getIt<OrderDetailViewModel>();
+    _authViewModel = getIt<AuthViewModel>();
+    _orderListViewModel = getIt<OrderListViewModel>();
+    _integratedLocationService = IntegratedLocationService.instance;
+    _loadOrderDetails();
+    
+    // Rebuild UI periodically to check WebSocket status
+    Future.delayed(Duration.zero, () {
+      if (mounted) {
+        _startPeriodicRefresh();
+      }
+    });
+  }
+  
+  void _startPeriodicRefresh() {
+    // Refresh UI every 2 seconds to update button state
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {});
+        _startPeriodicRefresh();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Tải lại danh sách đơn hàng khi màn hình chi tiết bị đóng
+    _orderListViewModel.getDriverOrders();
+    super.dispose();
+  }
+
+  Future<void> _loadOrderDetails() async {
+    await _viewModel.getOrderDetails(widget.orderId);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chi tiết đơn hàng'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildOrderHeader(),
-              const SizedBox(height: 24),
-              _buildLocationInfo(),
-              const SizedBox(height: 24),
-              _buildCustomerInfo(),
-              const SizedBox(height: 24),
-              _buildItemsList(),
-              const SizedBox(height: 24),
-              _buildNotes(),
-              const SizedBox(height: 32),
-              _buildActionButtons(context),
-            ],
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _viewModel),
+        ChangeNotifierProvider.value(value: _authViewModel),
+        ChangeNotifierProvider.value(value: _orderListViewModel),
+      ],
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Chi tiết đơn hàng'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              // Pop back to orders screen
+              Navigator.of(context).popUntil((route) {
+                return route.settings.name == AppRoutes.orders ||
+                       route.settings.name == AppRoutes.main ||
+                       route.isFirst;
+              });
+            },
+            tooltip: 'Quay lại danh sách đơn hàng',
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderHeader() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Mã đơn: #$orderId', style: AppTextStyles.titleLarge),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.inProgress.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'Đang giao',
-                    style: TextStyle(
-                      color: AppColors.inProgress,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              children: [
-                Icon(
-                  Icons.access_time,
-                  color: AppColors.textSecondary,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Thời gian tạo: 08:30 - 15/09/2025'),
-              ],
-            ),
-            const SizedBox(height: 4),
-            const Row(
-              children: [
-                Icon(
-                  Icons.local_shipping,
-                  color: AppColors.textSecondary,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Dự kiến giao: 10:30 - 15/09/2025'),
-              ],
+          actions: [
+            // Thêm nút refresh
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadOrderDetails,
+              tooltip: 'Làm mới',
             ),
           ],
         ),
+        body: Consumer2<OrderDetailViewModel, AuthViewModel>(
+          builder: (context, viewModel, authViewModel, _) {
+            switch (viewModel.state) {
+              case OrderDetailState.loading:
+                return const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                );
+              case OrderDetailState.error:
+                return ErrorView(
+                  message: viewModel.errorMessage,
+                  onRetry: _loadOrderDetails,
+                );
+              case OrderDetailState.loaded:
+                if (viewModel.orderWithDetails == null) {
+                  return ErrorView(
+                    message: 'Không tìm thấy thông tin đơn hàng',
+                    onRetry: _loadOrderDetails,
+                  );
+                }
+                return _buildOrderDetailContent(viewModel);
+              default:
+                return const SizedBox.shrink();
+            }
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildLocationInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Thông tin địa điểm', style: AppTextStyles.headlineSmall),
-        const SizedBox(height: 16),
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildLocationItem(
-                  icon: Icons.location_on,
-                  iconColor: AppColors.error,
-                  title: 'Điểm lấy hàng',
-                  address: '123 Nguyễn Văn Linh, Quận 7, TP.HCM',
-                  time: '09:00 - 15/09/2025',
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(),
-                ),
-                _buildLocationItem(
-                  icon: Icons.flag,
-                  iconColor: AppColors.success,
-                  title: 'Điểm giao hàng',
-                  address: '456 Lê Văn Lương, Quận 7, TP.HCM',
-                  time: '10:30 - 15/09/2025',
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildOrderDetailContent(OrderDetailViewModel viewModel) {
+    final orderWithDetails = viewModel.orderWithDetails!;
+    final bool canStartDelivery = viewModel.canStartDelivery();
+    final bool canConfirmPreDelivery = viewModel.canConfirmPreDelivery();
+    final bool hasRouteData = viewModel.routeSegments.isNotEmpty;
 
-  Widget _buildLocationItem({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String address,
-    required String time,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        Icon(icon, color: iconColor, size: 24),
-        const SizedBox(width: 12),
-        Expanded(
+        SingleChildScrollView(
+          padding: SystemUiService.getContentPadding(context).copyWith(
+            bottom: (canStartDelivery || canConfirmPreDelivery)
+                ? 100
+                : (hasRouteData
+                      ? 70
+                      : 24), // Add extra padding at bottom when buttons are visible
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: AppTextStyles.titleSmall),
-              const SizedBox(height: 4),
-              Text(address, style: AppTextStyles.bodyMedium),
-              const SizedBox(height: 4),
-              Text(time, style: AppTextStyles.bodySmall),
+              OrderInfoSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              TrackingCodeSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              AddressSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              JourneyTimeSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              SenderSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              ReceiverSection(order: orderWithDetails),
+              SizedBox(height: 16),
+              PackageSection(order: orderWithDetails),
+              SizedBox(height: 24),
+              VehicleSection(order: orderWithDetails),
+              SizedBox(height: 24),
+              
+              // Nút bắt đầu dẫn đường (chỉ hiển thị khi chưa có tracking và có route data)
+              if (hasRouteData && !_integratedLocationService.isActive)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      // Nút bắt đầu dẫn đường thực
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.navigation,
+                            arguments: {
+                              'orderId': orderWithDetails.id,
+                              'isSimulationMode': false, // Real-time mode
+                            },
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.navigation),
+                            SizedBox(width: 8),
+                            Text('Bắt đầu dẫn đường'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Nút mô phỏng
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.navigation,
+                            arguments: {
+                              'orderId': orderWithDetails.id,
+                              'isSimulationMode': true, // Simulation mode
+                            },
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          side: const BorderSide(color: Colors.orange),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.directions_car),
+                            SizedBox(width: 8),
+                            Text('Mô phỏng dẫn đường'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              SizedBox(height: 24),
             ],
           ),
         ),
-      ],
-    );
-  }
 
-  Widget _buildCustomerInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Thông tin khách hàng', style: AppTextStyles.headlineSmall),
-        const SizedBox(height: 16),
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildInfoRow(
-                  icon: Icons.person,
-                  label: 'Tên khách hàng',
-                  value: 'Nguyễn Thị B',
-                ),
-                const SizedBox(height: 12),
-                _buildInfoRow(
-                  icon: Icons.phone,
-                  label: 'Số điện thoại',
-                  value: '0987654321',
-                ),
-              ],
+        // Route Details / Navigation Button
+        // Always show if has route data, but behavior changes based on WebSocket status
+        if (hasRouteData)
+          Positioned(
+            bottom: (canStartDelivery || canConfirmPreDelivery) ? 100 : 16,
+            right: 16,
+            child: Builder(
+              builder: (context) {
+                final isConnected = _integratedLocationService.isActive;
+                debugPrint('🔍 FAB - Integrated tracking active: $isConnected');
+                
+                return FloatingActionButton.extended(
+                  onPressed: () {
+                    if (isConnected) {
+                      // Return to navigation screen (already has active connection)
+                      // Just navigate back, the screen will detect existing connection
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.navigation,
+                        arguments: {
+                          'orderId': orderWithDetails.id,
+                          'isSimulationMode': false, // Will be ignored if already connected
+                        },
+                      );
+                    } else {
+                      // Go to route details to start navigation
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.routeDetails,
+                        arguments: viewModel,
+                      );
+                    }
+                  },
+                  heroTag: 'routeDetailsButton',
+                  backgroundColor: isConnected ? AppColors.success : AppColors.primary,
+                  elevation: 4,
+                  icon: Icon(
+                    isConnected ? Icons.navigation : Icons.map_outlined,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    isConnected ? 'Dẫn đường' : 'Lộ trình',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              },
             ),
           ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.primary, size: 20),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AppTextStyles.bodySmall),
-            Text(
-              value,
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontWeight: FontWeight.w500,
+        // Action Buttons Row (white background)
+        if (canStartDelivery || canConfirmPreDelivery)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+                border: Border(
+                  top: BorderSide(color: AppColors.border, width: 1),
+                ),
               ),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: canStartDelivery
+                  ? StartDeliverySection(order: orderWithDetails)
+                  : ElevatedButton(
+                      onPressed: () async {
+                        final result = await Navigator.pushNamed(
+                          context,
+                          AppRoutes.preDeliveryDocumentation,
+                          arguments: orderWithDetails,
+                        );
+
+                        if (result == true) {
+                          // Reload order details to reflect status change
+                          _loadOrderDetails();
+
+                          // If we're in simulation mode (tracking active), navigate back to continue simulation
+                          if (_integratedLocationService.isActive) {
+                            Navigator.of(context).pushNamed(
+                              AppRoutes.navigation,
+                              arguments: {
+                                'orderId': orderWithDetails.id,
+                                'isSimulationMode': true,
+                              },
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      child: const Text('Xác nhận hàng hóa và seal'),
+                    ),
             ),
-          ],
-        ),
+          ),
       ],
-    );
-  }
-
-  Widget _buildItemsList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Danh sách hàng hóa', style: AppTextStyles.headlineSmall),
-        const SizedBox(height: 16),
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildItemRow('Thùng hàng điện tử', '1'),
-                const Divider(),
-                _buildItemRow('Laptop', '2'),
-                const Divider(),
-                _buildItemRow('Điện thoại', '3'),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildItemRow(String name, String quantity) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(name, style: AppTextStyles.bodyMedium),
-          Text(
-            'x$quantity',
-            style: AppTextStyles.bodyMedium.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotes() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Ghi chú', style: AppTextStyles.headlineSmall),
-        const SizedBox(height: 16),
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Giao hàng trong giờ hành chính. Gọi trước khi giao 15 phút.',
-              style: TextStyle(fontSize: 14),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pushNamed(context, '/delivery-map', arguments: orderId);
-            },
-            icon: const Icon(Icons.map),
-            label: const Text('Xem bản đồ'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () {
-              // TODO: Cập nhật trạng thái đơn hàng
-              _showUpdateStatusDialog(context);
-            },
-            icon: const Icon(Icons.update),
-            label: const Text('Cập nhật'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showUpdateStatusDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cập nhật trạng thái'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildStatusOption(context, 'Đã lấy hàng', AppColors.inProgress),
-            _buildStatusOption(context, 'Đang giao hàng', AppColors.inProgress),
-            _buildStatusOption(context, 'Đã giao hàng', AppColors.success),
-            _buildStatusOption(context, 'Giao hàng thất bại', AppColors.error),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusOption(BuildContext context, String status, Color color) {
-    return ListTile(
-      title: Text(status),
-      leading: Icon(Icons.circle, color: color, size: 16),
-      onTap: () {
-        // TODO: Cập nhật trạng thái đơn hàng
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã cập nhật trạng thái: $status'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      },
     );
   }
 }

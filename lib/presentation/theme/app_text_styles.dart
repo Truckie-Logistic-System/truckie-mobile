@@ -1,100 +1,111 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/utils/responsive_size_utils.dart';
 import 'app_colors.dart';
 
 class AppTextStyles {
+  // Helper method to get responsive font size
+  static double _getResponsiveFontSize(double fontSize) {
+    try {
+      return ResponsiveSizeUtils.getFontSize(fontSize);
+    } catch (e) {
+      // Fallback if ResponsiveSizeUtils is not initialized
+      return fontSize;
+    }
+  }
+
   // Display styles
-  static final TextStyle displayLarge = GoogleFonts.roboto(
-    fontSize: 32,
+  static TextStyle get displayLarge => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(32),
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle displayMedium = GoogleFonts.roboto(
-    fontSize: 28,
+  static TextStyle get displayMedium => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(28),
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle displaySmall = GoogleFonts.roboto(
-    fontSize: 24,
+  static TextStyle get displaySmall => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(24),
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
   );
 
   // Headline styles
-  static final TextStyle headlineLarge = GoogleFonts.roboto(
-    fontSize: 22,
+  static TextStyle get headlineLarge => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(22),
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle headlineMedium = GoogleFonts.roboto(
-    fontSize: 20,
+  static TextStyle get headlineMedium => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(20),
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle headlineSmall = GoogleFonts.roboto(
-    fontSize: 18,
+  static TextStyle get headlineSmall => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(18),
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
   // Title styles
-  static final TextStyle titleLarge = GoogleFonts.roboto(
-    fontSize: 18,
+  static TextStyle get titleLarge => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(18),
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle titleMedium = GoogleFonts.roboto(
-    fontSize: 16,
+  static TextStyle get titleMedium => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(16),
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle titleSmall = GoogleFonts.roboto(
-    fontSize: 14,
+  static TextStyle get titleSmall => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(14),
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
   // Body styles
-  static final TextStyle bodyLarge = GoogleFonts.roboto(
-    fontSize: 16,
+  static TextStyle get bodyLarge => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(16),
     fontWeight: FontWeight.normal,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle bodyMedium = GoogleFonts.roboto(
-    fontSize: 14,
+  static TextStyle get bodyMedium => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(14),
     fontWeight: FontWeight.normal,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle bodySmall = GoogleFonts.roboto(
-    fontSize: 12,
+  static TextStyle get bodySmall => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(12),
     fontWeight: FontWeight.normal,
     color: AppColors.textSecondary,
   );
 
   // Label styles
-  static final TextStyle labelLarge = GoogleFonts.roboto(
-    fontSize: 14,
+  static TextStyle get labelLarge => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(14),
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle labelMedium = GoogleFonts.roboto(
-    fontSize: 12,
+  static TextStyle get labelMedium => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(12),
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
-  static final TextStyle labelSmall = GoogleFonts.roboto(
-    fontSize: 11,
+  static TextStyle get labelSmall => GoogleFonts.roboto(
+    fontSize: _getResponsiveFontSize(11),
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
   );

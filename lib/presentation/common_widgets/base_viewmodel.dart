@@ -1,0 +1,72 @@
+import 'package:flutter/foundation.dart';
+
+import '../../core/services/service_locator.dart';
+import '../features/auth/viewmodels/auth_viewmodel.dart';
+
+/// BaseViewModel cung cấp các chức năng cơ bản cho tất cả các ViewModel
+/// như xử lý lỗi, refresh token, v.v.
+abstract class BaseViewModel extends ChangeNotifier {
+  bool _isDisposed = false;
+  bool _isRetrying = false;
+
+  /// Ghi đè phương thức notifyListeners để tránh lỗi khi ViewModel đã bị dispose
+  @override
+  void notifyListeners() {
+    if (!_isDisposed) {
+      super.notifyListeners();
+    }
+  }
+
+  /// Xử lý lỗi unauthorized và thử refresh token
+  Future<bool> handleUnauthorizedError(String errorMessage) async {
+    if (errorMessage.contains('Missing or invalid Authorization header') ||
+        errorMessage.contains('Invalid or missing token') ||
+        errorMessage.contains('Unauthorized') ||
+        errorMessage.contains(
+          'Access token expired. Please refresh your token.',
+        ) ||
+        errorMessage.contains('không có quyền truy cập') ||
+        errorMessage.contains('401') ||
+        errorMessage.contains('token')) {
+      if (!_isRetrying) {
+        _isRetrying = true;
+        debugPrint(
+          'Handling unauthorized error in ${runtimeType.toString()}: $errorMessage',
+        );
+
+        try {
+          final authViewModel = getIt<AuthViewModel>();
+          final refreshed = await authViewModel.handleTokenExpired();
+
+          _isRetrying = false;
+          if (refreshed) {
+            debugPrint(
+              'Token refreshed successfully in ${runtimeType.toString()}',
+            );
+            return true; // Thành công, có thể thử lại request
+          } else {
+            debugPrint('Token refresh failed in ${runtimeType.toString()}');
+            return false; // Thất bại, không thể thử lại
+          }
+        } catch (e) {
+          _isRetrying = false;
+          debugPrint('Error refreshing token in ${runtimeType.toString()}: $e');
+          return false;
+        }
+      } else {
+        debugPrint('Already retrying in ${runtimeType.toString()}');
+        return false;
+      }
+    }
+
+    // Không phải lỗi unauthorized
+    return false;
+  }
+
+  /// Ghi đè phương thức dispose để đánh dấu ViewModel đã bị dispose
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+}

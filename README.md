@@ -1,175 +1,98 @@
-# Truckie Driver - Ứng dụng Quản lý Vận tải với GPS Tracking
+# Truckie Driver App
 
-![Truckie Driver Logo](assets/images/logo.png)
+Transportation Management System with Real-Time GPS Order Tracking for Drivers.
 
-Truckie Driver là ứng dụng dành cho tài xế trong hệ thống quản lý vận tải, cho phép theo dõi đơn hàng, cập nhật trạng thái giao hàng và theo dõi vị trí thời gian thực bằng GPS.
+## Responsive Design Implementation
 
-## Mục lục
+The app has been enhanced with comprehensive responsive design features to ensure optimal user experience across different screen sizes and device types:
 
-- [Tổng quan](#tổng-quan)
-- [Kiến trúc](#kiến-trúc)
-- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-- [Cài đặt](#cài-đặt)
-- [Khởi động](#khởi-động)
-- [Tính năng](#tính-năng)
-- [Hướng dẫn phát triển](#hướng-dẫn-phát-triển)
-- [Giấy phép](#giấy-phép)
+### Responsive Utilities
 
-## Tổng quan
+1. **ResponsiveSizeUtils**: A utility class that provides methods for responsive sizing based on screen dimensions.
+   - Automatically scales UI elements based on screen size
+   - Provides consistent sizing across different devices
+   - Handles font scaling appropriately
 
-Truckie Driver là phần mềm dành cho tài xế trong hệ thống quản lý vận tải, được phát triển bằng Flutter với kiến trúc MVVM (Model-View-ViewModel). Ứng dụng cho phép tài xế:
+2. **Responsive Extensions**: Extension methods for easier usage of responsive sizing.
+   - `.w` - Responsive width
+   - `.h` - Responsive height
+   - `.sp` - Responsive font size
+   - `.r` - Responsive value based on shortest dimension
 
-- Xem danh sách đơn hàng cần giao
-- Cập nhật trạng thái đơn hàng (đã lấy hàng, đang giao, đã giao, v.v.)
-- Theo dõi vị trí thời gian thực bằng GPS
-- Xem thông tin chi tiết về đơn hàng và khách hàng
-- Nhận thông báo về đơn hàng mới
+3. **ResponsiveLayoutBuilder**: A widget that provides sizing information for building responsive layouts.
+   - Detects device type (phone, tablet, desktop)
+   - Provides orientation information
+   - Enables conditional rendering based on screen size
 
-## Kiến trúc
+4. **ResponsiveGrid**: A grid layout that adapts to different screen sizes.
+   - Automatically adjusts columns based on available width
+   - Provides consistent spacing between items
+   - Supports different layouts for different screen sizes
 
-Dự án được tổ chức theo mô hình MVVM (Model-View-ViewModel) với cấu trúc thư mục như sau:
+5. **ResponsiveScaffold**: A scaffold that adapts to different screen sizes.
+   - Applies appropriate padding based on screen size
+   - Handles safe areas properly
+   - Provides consistent layout across different devices
 
-```
-lib/
-  ├── app/                  # Widget gốc và router
-  │   ├── app.dart
-  │   └── app_router.dart
-  │
-  ├── core/                 # Thành phần cốt lõi
-  │   ├── constants/        # Các hằng số
-  │   ├── errors/           # Xử lý lỗi
-  │   ├── network/          # Xử lý mạng
-  │   ├── services/         # Các dịch vụ
-  │   └── utils/            # Tiện ích
-  │
-  ├── data/                 # Tầng dữ liệu
-  │   ├── datasources/      # Nguồn dữ liệu
-  │   │   ├── local/        # Dữ liệu cục bộ
-  │   │   └── remote/       # Dữ liệu từ API
-  │   ├── models/           # Mô hình dữ liệu
-  │   └── repositories/     # Triển khai repository
-  │
-  ├── domain/               # Tầng nghiệp vụ
-  │   ├── entities/         # Đối tượng nghiệp vụ
-  │   ├── repositories/     # Interface repository
-  │   └── usecases/         # Các trường hợp sử dụng
-  │
-  ├── presentation/         # Tầng giao diện
-  │   ├── common_widgets/   # Widget dùng chung
-  │   ├── theme/            # Theme ứng dụng
-  │   └── features/         # Các tính năng
-  │       ├── auth/         # Xác thực
-  │       ├── home/         # Trang chủ
-  │       ├── orders/       # Quản lý đơn hàng
-  │       └── delivery/     # Giao hàng
-  │
-  ├── l10n/                 # Localization
-  │
-  └── main.dart             # Điểm khởi đầu ứng dụng
-```
+6. **SystemUiService**: A service that handles system UI overlays properly.
+   - Ensures content isn't hidden behind system bars
+   - Provides consistent padding for system insets
+   - Handles navigation bar on older Android devices
 
-### Mô hình MVVM
+### Responsive Design Principles Applied
 
-- **Model**: Đại diện bởi các entity trong thư mục `domain/entities` và các model trong `data/models`
-- **View**: Các màn hình trong thư mục `presentation/features/*/screens`
-- **ViewModel**: Các lớp trong thư mục `presentation/features/*/viewmodels`
+- **Flexible Layouts**: UI elements adapt to available space
+- **Appropriate Text Scaling**: Font sizes scale appropriately based on screen size
+- **Consistent Spacing**: Padding and margins adjust based on screen size
+- **Device-Specific Layouts**: Different layouts for phones and tablets
+- **Orientation Support**: UI adapts to both portrait and landscape orientations
+- **System Insets Handling**: Content isn't hidden behind system bars or notches
 
-### Nguyên tắc thiết kế
+### Screen Size Categories
 
-- **Dependency Injection**: Sử dụng `get_it` để quản lý dependency
-- **Repository Pattern**: Tách biệt logic truy cập dữ liệu
-- **Clean Architecture**: Tách biệt các tầng để dễ bảo trì và mở rộng
-- **Separation of Concerns**: Mỗi thành phần có trách nhiệm riêng biệt
+- **Extra Small**: < 360dp (Small phones)
+- **Small**: 360dp - 480dp (Standard phones)
+- **Medium**: 480dp - 768dp (Large phones, small tablets)
+- **Large**: 768dp - 1024dp (Tablets)
+- **Extra Large**: > 1024dp (Large tablets, desktops)
 
-## Yêu cầu hệ thống
+## Features
 
-- Flutter SDK: ^3.8.1
-- Dart SDK: ^3.8.1
-- Android SDK: API 21+ (Android 5.0+)
-- iOS: iOS 12.0+
+- Real-time GPS tracking of deliveries
+- Order management
+- Driver profile and information
+- Authentication and security
+- Delivery history and statistics
 
-## Cài đặt
+## Getting Started
 
-1. **Clone repository**:
-   ```bash
-   git clone https://github.com/your-username/capstone_mobile.git
-   cd capstone_mobile
-   ```
+This project is a Flutter application for the driver-side of the Truckie Transportation Management System.
 
-2. **Cài đặt dependencies**:
-   ```bash
-   flutter pub get
-   ```
+### Prerequisites
 
-3. **Cấu hình Google Maps API Key**:
-   - Tạo API key từ [Google Cloud Console](https://console.cloud.google.com/)
-   - Thay thế `YOUR_API_KEY_HERE` trong `android/app/src/main/AndroidManifest.xml`
-   - Thêm API key vào `ios/Runner/AppDelegate.swift` (nếu cần)
+- Flutter SDK
+- Android Studio / VS Code
+- Android / iOS device or emulator
 
-## Khởi động
+### Installation
 
-### Sử dụng IDE (Android Studio/VS Code)
+1. Clone the repository
+2. Run `flutter pub get` to install dependencies
+3. Run `flutter run` to start the app
 
-1. Mở dự án trong Android Studio hoặc VS Code
-2. Chọn thiết bị hoặc máy ảo
-3. Nhấn nút Run (▶️)
+## Architecture
 
-### Sử dụng Command Line
+The app follows a clean architecture approach with the following layers:
 
-1. **Liệt kê các máy ảo có sẵn**:
-   ```bash
-   flutter emulators
-   ```
+- **Presentation**: UI components and ViewModels
+- **Domain**: Business logic and use cases
+- **Data**: Data sources and repositories
+- **Core**: Shared utilities and services
 
-2. **Khởi động máy ảo**:
-   ```bash
-   flutter emulators --launch <emulator_id>
-   ```
-   Ví dụ: `flutter emulators --launch Pixel_7_Pro`
+## Dependencies
 
-3. **Chạy ứng dụng**:
-   ```bash
-   flutter run
-   ```
-
-## Tính năng
-
-- **Xác thực**: Đăng nhập, đăng xuất
-- **Trang chủ**: Xem tổng quan đơn hàng, thống kê
-- **Đơn hàng**: Xem danh sách và chi tiết đơn hàng
-- **Giao hàng**: Theo dõi quá trình giao hàng, cập nhật trạng thái
-- **Bản đồ**: Xem vị trí và chỉ đường
-
-## Hướng dẫn phát triển
-
-### Thêm tính năng mới
-
-1. Tạo entity trong `domain/entities` (nếu cần)
-2. Tạo repository interface trong `domain/repositories`
-3. Tạo use case trong `domain/usecases`
-4. Triển khai repository trong `data/repositories`
-5. Tạo ViewModel trong `presentation/features/your_feature/viewmodels`
-6. Tạo màn hình trong `presentation/features/your_feature/screens`
-7. Cập nhật router trong `app/app_router.dart`
-
-### Quy ước đặt tên
-
-- **Tệp**: snake_case (ví dụ: `home_screen.dart`)
-- **Lớp**: PascalCase (ví dụ: `HomeScreen`)
-- **Biến/Hàm**: camelCase (ví dụ: `getUserData()`)
-- **Hằng số**: UPPER_SNAKE_CASE (ví dụ: `API_BASE_URL`)
-
-### Kiểm thử
-
-- **Unit Tests**: `test/domain/usecases/`
-- **Widget Tests**: `test/presentation/`
-- **Integration Tests**: `integration_test/`
-
-Chạy kiểm thử:
-```bash
-flutter test
-```
-
-## Giấy phép
-
-© 2025 Truckie. Bản quyền đã đăng ký.
+- Provider for state management
+- Dio for network requests
+- Google Maps Flutter for maps
+- Geolocator for location services
+- SharedPreferences for local storage

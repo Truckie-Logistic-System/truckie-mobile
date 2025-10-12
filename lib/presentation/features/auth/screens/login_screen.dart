@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../app/app_routes.dart';
+import '../../../../core/services/service_locator.dart';
+import '../../../../core/utils/responsive_extensions.dart';
+import '../../../../presentation/common_widgets/responsive_layout_builder.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/theme/app_text_styles.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +23,26 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
+  // We'll use the AuthViewModel from the provider instead of creating our own
+  late AuthViewModel _authViewModel;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Delay to ensure the widget is mounted
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+
+        // Reset error state if needed
+        if (_authViewModel.status == AuthStatus.error) {
+          _authViewModel.resetErrorState();
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
@@ -27,30 +53,76 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildUsernameField(),
-                  const SizedBox(height: 16),
-                  _buildPasswordField(),
-                  const SizedBox(height: 8),
-                  _buildForgotPassword(),
-                  const SizedBox(height: 24),
-                  _buildLoginButton(),
-                ],
+      body: ResponsiveLayoutBuilder(
+        builder: (context, sizingInformation) {
+          // Tablet layout
+          if (sizingInformation.isTablet) {
+            return Center(
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 600.w),
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(32.r),
+                    child: _buildLoginForm(),
+                  ),
+                ),
               ),
-            ),
+            );
+          }
+          // Phone layout
+          else {
+            return SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(24.r),
+                  child: _buildLoginForm(),
+                ),
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
+          SizedBox(height: 32.h),
+          _buildUsernameField(),
+          SizedBox(height: 16.h),
+          _buildPasswordField(),
+          SizedBox(height: 8.h),
+          _buildForgotPassword(),
+          SizedBox(height: 24.h),
+          _buildLoginButton(),
+          // Show error message if there is one
+          Consumer<AuthViewModel>(
+            builder: (context, authViewModel, _) {
+              if (authViewModel.status == AuthStatus.error &&
+                  authViewModel.errorMessage.isNotEmpty) {
+                return Padding(
+                  padding: EdgeInsets.only(top: 16.h),
+                  child: Text(
+                    authViewModel.errorMessage,
+                    style: TextStyle(color: AppColors.error, fontSize: 14.sp),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
           ),
-        ),
+        ],
       ),
     );
   }
@@ -58,13 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        Icon(Icons.local_shipping, size: 80, color: AppColors.primary),
-        const SizedBox(height: 16),
+        Icon(Icons.local_shipping, size: 80.r, color: AppColors.primary),
+        SizedBox(height: 16.h),
         Text(
           'Truckie Driver',
           style: AppTextStyles.displayMedium.copyWith(color: AppColors.primary),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8.h),
         Text(
           'Đăng nhập để tiếp tục',
           style: AppTextStyles.bodyLarge.copyWith(
@@ -78,10 +150,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildUsernameField() {
     return TextFormField(
       controller: _usernameController,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Tên đăng nhập',
-        prefixIcon: Icon(Icons.person),
-        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.person, size: 24.r),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       keyboardType: TextInputType.text,
       textInputAction: TextInputAction.next,
@@ -99,11 +171,12 @@ class _LoginScreenState extends State<LoginScreen> {
       controller: _passwordController,
       decoration: InputDecoration(
         labelText: 'Mật khẩu',
-        prefixIcon: const Icon(Icons.lock),
-        border: const OutlineInputBorder(),
+        prefixIcon: Icon(Icons.lock, size: 24.r),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
         suffixIcon: IconButton(
           icon: Icon(
             _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+            size: 24.r,
           ),
           onPressed: () {
             setState(() {
@@ -127,58 +200,105 @@ class _LoginScreenState extends State<LoginScreen> {
       alignment: Alignment.centerRight,
       child: TextButton(
         onPressed: () {
-          // TODO: Xử lý quên mật khẩu
+          // Quên mật khẩu được xử lý bởi admin
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Vui lòng liên hệ admin để được hỗ trợ'),
+              backgroundColor: AppColors.info,
+            ),
+          );
         },
         child: Text(
           'Quên mật khẩu?',
-          style: TextStyle(color: AppColors.primary),
+          style: TextStyle(color: AppColors.primary, fontSize: 14.sp),
         ),
       ),
     );
   }
 
   Widget _buildLoginButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _handleLogin,
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-      ),
-      child: _isLoading
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-          : const Text('Đăng nhập', style: TextStyle(fontSize: 16)),
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, _) {
+        final isLoading =
+            authViewModel.status == AuthStatus.loading || _isLoading;
+
+        return ElevatedButton(
+          onPressed: isLoading ? null : () => _handleLogin(authViewModel),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(vertical: 16.h),
+            minimumSize: Size(double.infinity, 50.h),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8.r),
+            ),
+          ),
+          child: isLoading
+              ? SizedBox(
+                  height: 20.r,
+                  width: 20.r,
+                  child: const CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text('Đăng nhập', style: TextStyle(fontSize: 16.sp)),
+        );
+      },
     );
   }
 
-  void _handleLogin() async {
+  void _handleLogin(AuthViewModel authViewModel) async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      try {
-        // Giả lập đăng nhập thành công
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
+      final username = _usernameController.text.trim();
+      final password = _passwordController.text.trim();
 
-        // TODO: Thay thế bằng logic đăng nhập thực tế
-        Navigator.pushReplacementNamed(context, '/');
-      } catch (e) {
-        // Xử lý lỗi đăng nhập
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đăng nhập thất bại. Vui lòng thử lại.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      } finally {
+      try {
+        // Start login process
+        final success = await authViewModel.login(username, password);
+
         if (mounted) {
+          if (success) {
+            // Navigate to main screen on success
+            Navigator.pushReplacementNamed(context, '/main');
+          } else {
+            // Show error message and reset loading state
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  authViewModel.errorMessage,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.fixed,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      } catch (e) {
+        // Handle exceptions
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Đã xảy ra lỗi: ${e.toString()}',
+                style: const TextStyle(color: Colors.white),
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.fixed,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
           setState(() {
             _isLoading = false;
           });

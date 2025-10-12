@@ -21,6 +21,10 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
       ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        elevation: 0,
+        backgroundColor: Colors.white,
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
@@ -99,6 +103,10 @@ class AppTheme {
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        elevation: 0,
+        backgroundColor: AppColors.darkBackground,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
