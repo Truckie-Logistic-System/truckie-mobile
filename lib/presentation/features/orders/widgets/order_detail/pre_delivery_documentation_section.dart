@@ -13,10 +13,10 @@ class PreDeliveryDocumentationSection extends StatefulWidget {
   final VoidCallback? onSubmitSuccess;
 
   const PreDeliveryDocumentationSection({
-    Key? key,
+    super.key,
     required this.order,
     this.onSubmitSuccess,
-  }) : super(key: key);
+  });
 
   @override
   State<PreDeliveryDocumentationSection> createState() =>

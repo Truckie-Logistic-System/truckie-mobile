@@ -17,7 +17,7 @@ import '../../../../core/services/location_tracking_service.dart';
 import '../viewmodels/navigation_test_viewmodel.dart';
 
 class NavigationTestScreen extends StatefulWidget {
-  const NavigationTestScreen({Key? key}) : super(key: key);
+  const NavigationTestScreen({super.key});
 
   @override
   State<NavigationTestScreen> createState() => _NavigationTestScreenState();
@@ -372,13 +372,13 @@ class _NavigationTestScreenState extends State<NavigationTestScreen> {
   // Hàm thực hiện việc bắt đầu mô phỏng sau khi đã kết nối WebSocket
   void _startActualSimulation() {
     // Biến để theo dõi thời gian cập nhật camera
-    int _cameraUpdateCounter = 0;
+    int cameraUpdateCounter = 0;
 
     _viewModel.startSimulation(
       onLocationUpdate: (location, bearing, completedRoute) {
         if (_mapController != null && _isMapReady && _isMapInitialized) {
           // Tăng bộ đếm
-          _cameraUpdateCounter++;
+          cameraUpdateCounter++;
 
           // Update camera position to follow vehicle - luôn theo dõi xe
           if (_isFollowingUser) {
@@ -400,7 +400,7 @@ class _NavigationTestScreenState extends State<NavigationTestScreen> {
           // Update completed route line
           if (_completedRouteLine != null && completedRoute.length >= 2) {
             // Tối ưu hóa: chỉ cập nhật polyline sau mỗi vài lần cập nhật vị trí
-            if (_cameraUpdateCounter % 5 == 0) {
+            if (cameraUpdateCounter % 5 == 0) {
               // Tăng tần suất cập nhật để giảm tải
               // Đơn giản hóa route trước khi cập nhật để giảm tải
               List<LatLng> optimizedRoute = _simplifyRoute(completedRoute);
@@ -1517,8 +1517,9 @@ class _NavigationTestScreenState extends State<NavigationTestScreen> {
 
   // Gửi vị trí hiện tại
   void _sendCurrentLocation() {
-    if (!_isLocationTrackingActive || _viewModel.currentLocation == null)
+    if (!_isLocationTrackingActive || _viewModel.currentLocation == null) {
       return;
+    }
 
     _locationTrackingService.sendLocation(
       _viewModel.currentLocation!,

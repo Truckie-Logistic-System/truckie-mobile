@@ -6,7 +6,7 @@ class ReportIssueDialog extends StatelessWidget {
   final List<String> issueOptions;
 
   const ReportIssueDialog({
-    Key? key,
+    super.key,
     required this.onIssueSelected,
     required this.onCancel,
     this.issueOptions = const [
@@ -15,7 +15,7 @@ class ReportIssueDialog extends StatelessWidget {
       'Khách hàng không nhận hàng',
       'Vấn đề khác',
     ],
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

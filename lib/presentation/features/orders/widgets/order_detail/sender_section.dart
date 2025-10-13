@@ -10,7 +10,7 @@ class SenderSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const SenderSection({Key? key, required this.order}) : super(key: key);
+  const SenderSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

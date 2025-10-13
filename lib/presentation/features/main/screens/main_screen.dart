@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../app/app_routes.dart';
-import '../../../../core/services/service_locator.dart';
-import '../../../../core/services/system_ui_service.dart';
 import '../../account/screens/account_screen.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../home/screens/home_screen.dart';

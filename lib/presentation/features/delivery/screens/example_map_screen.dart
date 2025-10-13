@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../common_widgets/vietmap/index.dart';
 
 class ExampleMapScreen extends StatefulWidget {
-  const ExampleMapScreen({Key? key}) : super(key: key);
+  const ExampleMapScreen({super.key});
 
   @override
   State<ExampleMapScreen> createState() => _ExampleMapScreenState();
@@ -12,7 +12,7 @@ class ExampleMapScreen extends StatefulWidget {
 
 class _ExampleMapScreenState extends State<ExampleMapScreen> {
   VietmapController? _mapController;
-  List<Marker> _markers = [];
+  final List<Marker> _markers = [];
   Line? _routeLine;
 
   @override

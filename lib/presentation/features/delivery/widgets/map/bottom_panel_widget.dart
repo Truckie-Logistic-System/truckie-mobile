@@ -8,10 +8,10 @@ class BottomPanelWidget extends StatelessWidget {
   final VoidCallback onUpdateStatus;
 
   const BottomPanelWidget({
-    Key? key,
+    super.key,
     required this.onCallCustomer,
     required this.onUpdateStatus,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

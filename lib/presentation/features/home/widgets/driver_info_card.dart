@@ -11,8 +11,7 @@ class DriverInfoCard extends StatelessWidget {
   final dynamic user;
   final dynamic driver;
 
-  const DriverInfoCard({Key? key, required this.user, required this.driver})
-    : super(key: key);
+  const DriverInfoCard({super.key, required this.user, required this.driver});
 
   @override
   Widget build(BuildContext context) {

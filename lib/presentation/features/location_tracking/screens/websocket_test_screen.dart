@@ -4,7 +4,7 @@ import '../../../../core/services/vehicle_websocket_service.dart';
 import '../../../../core/services/mock_vehicle_websocket_service.dart';
 
 class WebSocketTestScreen extends StatefulWidget {
-  const WebSocketTestScreen({Key? key}) : super(key: key);
+  const WebSocketTestScreen({super.key});
 
   @override
   State<WebSocketTestScreen> createState() => _WebSocketTestScreenState();
@@ -32,7 +32,7 @@ class _WebSocketTestScreenState extends State<WebSocketTestScreen> {
     if (_webSocketService is MockVehicleWebSocketService) {
       _serviceType = 'Mock Service';
 
-      final mockService = _webSocketService as MockVehicleWebSocketService;
+      final mockService = _webSocketService;
       mockService.locationUpdates.listen((data) {
         setState(() {
           _lastMessage =

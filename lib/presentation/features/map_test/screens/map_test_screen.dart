@@ -14,7 +14,7 @@ import '../../../common_widgets/vietmap/vietmap_widget.dart';
 import '../../../theme/app_colors.dart';
 
 class MapTestScreen extends StatefulWidget {
-  const MapTestScreen({Key? key}) : super(key: key);
+  const MapTestScreen({super.key});
 
   @override
   State<MapTestScreen> createState() => _MapTestScreenState();

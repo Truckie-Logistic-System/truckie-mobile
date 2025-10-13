@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../app/app_routes.dart';
-import '../../../../core/services/service_locator.dart';
 import '../../../../core/utils/responsive_extensions.dart';
 import '../../../../presentation/common_widgets/responsive_layout_builder.dart';
 import '../../../../presentation/theme/app_colors.dart';

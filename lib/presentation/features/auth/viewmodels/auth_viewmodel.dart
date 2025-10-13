@@ -21,8 +21,8 @@ class AuthViewModel extends BaseViewModel {
   final GetDriverInfoUseCase? _getDriverInfoUseCase;
 
   AuthStatus _status = AuthStatus.initial;
-  User? _user = null;
-  Driver? _driver = null;
+  User? _user;
+  Driver? _driver;
   String _errorMessage = '';
   bool _isRefreshing = false;
 
@@ -140,7 +140,7 @@ class AuthViewModel extends BaseViewModel {
   Future<void> _fetchDriverInfo() async {
     if (_getDriverInfoUseCase == null) return;
 
-    final result = await _getDriverInfoUseCase!(const GetDriverInfoParams());
+    final result = await _getDriverInfoUseCase(const GetDriverInfoParams());
 
     result.fold(
       (failure) async {
@@ -165,7 +165,7 @@ class AuthViewModel extends BaseViewModel {
   Future<bool> refreshDriverInfo() async {
     if (_getDriverInfoUseCase == null) return false;
 
-    final result = await _getDriverInfoUseCase!(const GetDriverInfoParams());
+    final result = await _getDriverInfoUseCase(const GetDriverInfoParams());
 
     return result.fold(
       (failure) async {

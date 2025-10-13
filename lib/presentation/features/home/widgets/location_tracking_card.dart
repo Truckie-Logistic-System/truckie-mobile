@@ -5,7 +5,7 @@ import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:provider/provider.dart';
 
 class LocationTrackingCard extends StatelessWidget {
-  const LocationTrackingCard({Key? key}) : super(key: key);
+  const LocationTrackingCard({super.key});
 
   @override
   Widget build(BuildContext context) {

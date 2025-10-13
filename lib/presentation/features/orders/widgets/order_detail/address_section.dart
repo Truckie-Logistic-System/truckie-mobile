@@ -10,7 +10,7 @@ class AddressSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const AddressSection({Key? key, required this.order}) : super(key: key);
+  const AddressSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

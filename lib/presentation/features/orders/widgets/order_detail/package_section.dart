@@ -11,7 +11,7 @@ class PackageSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const PackageSection({Key? key, required this.order}) : super(key: key);
+  const PackageSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

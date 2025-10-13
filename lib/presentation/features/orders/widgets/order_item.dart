@@ -7,8 +7,7 @@ class OrderItem extends StatelessWidget {
   final Order order;
   final VoidCallback onTap;
 
-  const OrderItem({Key? key, required this.order, required this.onTap})
-    : super(key: key);
+  const OrderItem({super.key, required this.order, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

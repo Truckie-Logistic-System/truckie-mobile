@@ -14,35 +14,37 @@ class EnhancedLocationTrackingService {
   // Core services
   final VehicleWebSocketService _webSocketService;
   final LocationQueueService _queueService;
-  
+
   // Connection state
   bool _isConnected = false;
   String? _vehicleId;
   String? _licensePlateNumber;
-  
+
   // GPS throttling state
   DateTime? _lastSendTime;
   LatLng? _lastSendLocation;
   Position? _lastValidPosition;
-  
+
   // Configuration
   static const Duration _minTimeBetweenSends = Duration(seconds: 5);
   static const double _minDistanceBetweenSends = 20.0; // meters
-  static const double _maxAccuracyThreshold = 1000.0; // meters (relaxed for emulator testing)
+  static const double _maxAccuracyThreshold =
+      1000.0; // meters (relaxed for emulator testing)
   static const double _maxSpeedThreshold = 200.0; // km/h
   static const double _dedupeRadius = 5.0; // meters
-  
+
   // Stream controllers
   final StreamController<Map<String, dynamic>> _locationUpdatesController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<LocationTrackingStats> _statsController =
       StreamController<LocationTrackingStats>.broadcast();
-  
+
   // Stats tracking
-  LocationTrackingStats _stats = LocationTrackingStats();
-  
+  final LocationTrackingStats _stats = LocationTrackingStats();
+
   // Getters
-  Stream<Map<String, dynamic>> get locationUpdates => _locationUpdatesController.stream;
+  Stream<Map<String, dynamic>> get locationUpdates =>
+      _locationUpdatesController.stream;
   Stream<LocationTrackingStats> get statsStream => _statsController.stream;
   bool get isConnected => _isConnected;
   String? get vehicleId => _vehicleId;
@@ -106,10 +108,10 @@ class EnhancedLocationTrackingService {
         _isConnected = true;
         _stats.connectionTime = DateTime.now();
         _updateStats();
-        
+
         // Process any queued locations
         await _processQueuedLocations();
-        
+
         debugPrint('✅ Enhanced location tracking started');
       }
 
@@ -313,8 +315,10 @@ class EnhancedLocationTrackingService {
         longitude: location.longitude,
         licensePlateNumber: _licensePlateNumber!,
       );
-      
-      debugPrint('📤 Enhanced location sent: ${location.latitude}, ${location.longitude}');
+
+      debugPrint(
+        '📤 Enhanced location sent: ${location.latitude}, ${location.longitude}',
+      );
       return true;
     } catch (e) {
       debugPrint('❌ Failed to send location: $e');
@@ -326,7 +330,11 @@ class EnhancedLocationTrackingService {
   }
 
   /// Queue location for offline sending
-  Future<void> _queueLocation(LatLng location, double bearing, double accuracy) async {
+  Future<void> _queueLocation(
+    LatLng location,
+    double bearing,
+    double accuracy,
+  ) async {
     await _queueService.queueLocation(
       vehicleId: _vehicleId!,
       latitude: location.latitude,

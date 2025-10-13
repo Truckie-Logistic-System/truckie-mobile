@@ -77,7 +77,7 @@ class PreDeliveryDocumentationViewModel extends ChangeNotifier {
     }
 
     // Validate that at least one image is provided
-    if ((_packingProofImages.isEmpty || _packingProofImages.length == 0) &&
+    if ((_packingProofImages.isEmpty || _packingProofImages.isEmpty) &&
         _sealImage == null) {
       _state = PreDeliveryDocumentationState.error;
       _errorMessage = 'Vui lòng chụp ít nhất một ảnh đóng gói hoặc ảnh seal';

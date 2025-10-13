@@ -8,8 +8,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 class AccountActionsWidget extends StatelessWidget {
   final VoidCallback onChangePassword;
 
-  const AccountActionsWidget({Key? key, required this.onChangePassword})
-    : super(key: key);
+  const AccountActionsWidget({super.key, required this.onChangePassword});
 
   @override
   Widget build(BuildContext context) {

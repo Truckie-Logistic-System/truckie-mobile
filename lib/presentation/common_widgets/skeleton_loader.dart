@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-import '../theme/app_colors.dart';
-
 class SkeletonLoader extends StatelessWidget {
   final double height;
   final double width;

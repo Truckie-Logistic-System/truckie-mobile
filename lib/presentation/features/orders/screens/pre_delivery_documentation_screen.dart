@@ -11,8 +11,7 @@ import '../../../../presentation/theme/app_colors.dart';
 class PreDeliveryDocumentationScreen extends StatefulWidget {
   final OrderWithDetails order;
 
-  const PreDeliveryDocumentationScreen({Key? key, required this.order})
-    : super(key: key);
+  const PreDeliveryDocumentationScreen({super.key, required this.order});
 
   // Named route for navigation
   static const routeName = '/pre-delivery-documentation';

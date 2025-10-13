@@ -10,11 +10,11 @@ class CustomerInfoWidget extends StatelessWidget {
   final VoidCallback? onCallPressed;
 
   const CustomerInfoWidget({
-    Key? key,
+    super.key,
     required this.customerName,
     required this.phoneNumber,
     this.onCallPressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

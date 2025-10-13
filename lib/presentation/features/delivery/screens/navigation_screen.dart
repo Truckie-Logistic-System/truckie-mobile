@@ -15,10 +15,10 @@ class NavigationScreen extends StatefulWidget {
   final bool isSimulationMode;
 
   const NavigationScreen({
-    Key? key,
+    super.key,
     required this.orderId,
     this.isSimulationMode = false,
-  }) : super(key: key);
+  });
 
   @override
   State<NavigationScreen> createState() => _NavigationScreenState();
@@ -54,15 +54,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('🔧 NavigationScreen.initState()');
     debugPrint('   - orderId: ${widget.orderId}');
     debugPrint('   - isSimulationMode: ${widget.isSimulationMode}');
-    
+
     _viewModel = getIt<NavigationViewModel>();
     _integratedLocationService = IntegratedLocationService.instance;
-    
-    debugPrint('   - Integrated tracking active: ${_integratedLocationService.isActive}');
+
+    debugPrint(
+      '   - Integrated tracking active: ${_integratedLocationService.isActive}',
+    );
     debugPrint('   - Route segments: ${_viewModel.routeSegments.length}');
 
     _loadMapStyle();
-    
+
     // Only load order details if we don't have route data yet
     if (_viewModel.routeSegments.isEmpty) {
       debugPrint('   - Loading order details...');
@@ -70,7 +72,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     } else {
       debugPrint('✅ Route data already loaded, skipping reload');
     }
-    
+
     // Check if viewModel is already simulating (returning to active simulation)
     // Only set _isSimulating if viewModel confirms it's running
     if (_viewModel.isSimulating && widget.isSimulationMode) {
@@ -86,14 +88,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
     // IMPORTANT: Don't stop tracking when just navigating away
     // Only stop when explicitly requested (trip complete, cancel, etc.)
     // This allows user to go back to order detail and return to navigation
-    
+
     // Only stop if trip is complete
     if (_isTripComplete) {
       debugPrint('🏁 Trip complete, stopping tracking');
       _stopLocationTracking();
       _viewModel.resetNavigation();
     } else {
-      debugPrint('🔄 Navigation screen disposed but tracking continues in background');
+      debugPrint(
+        '🔄 Navigation screen disposed but tracking continues in background',
+      );
       // Keep tracking active for when user returns
     }
     super.dispose();
@@ -302,7 +306,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
     });
 
     // Đảm bảo đã tải xong dữ liệu order trước khi vẽ route
-    debugPrint('   - Route segments empty: ${_viewModel.routeSegments.isEmpty}');
+    debugPrint(
+      '   - Route segments empty: ${_viewModel.routeSegments.isEmpty}',
+    );
     if (_viewModel.routeSegments.isEmpty) {
       debugPrint('⚠️ Chưa có dữ liệu route, đang tải lại...');
       _loadOrderDetails().then((_) {
@@ -323,7 +329,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
             // DON'T stop tracking - keep WebSocket alive for simulation
             // Simulation will use the same WebSocket connection
             _showSimulationDialog();
-          } else if (!widget.isSimulationMode && !_integratedLocationService.isActive) {
+          } else if (!widget.isSimulationMode &&
+              !_integratedLocationService.isActive) {
             _startRealTimeNavigation();
           } else if (_isSimulating) {
             // Resume existing simulation
@@ -376,14 +383,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
       debugPrint('   - widget.isSimulationMode: ${widget.isSimulationMode}');
       debugPrint('   - _isSimulating: $_isSimulating');
       debugPrint('   - _isPaused: $_isPaused');
-      debugPrint('   - Integrated tracking active: ${_integratedLocationService.isActive}');
-      
+      debugPrint(
+        '   - Integrated tracking active: ${_integratedLocationService.isActive}',
+      );
+
       if (widget.isSimulationMode && !_isSimulating) {
-        debugPrint('🎬 Starting simulation mode (isSimulationMode=true, _isSimulating=false)');
+        debugPrint(
+          '🎬 Starting simulation mode (isSimulationMode=true, _isSimulating=false)',
+        );
         // DON'T stop tracking - keep WebSocket alive for simulation
         // Simulation will use the same WebSocket connection
         _showSimulationDialog();
-      } else if (!widget.isSimulationMode && !_integratedLocationService.isActive) {
+      } else if (!widget.isSimulationMode &&
+          !_integratedLocationService.isActive) {
         debugPrint('🚗 Starting real-time navigation');
         _startRealTimeNavigation();
       } else if (_isSimulating && _isPaused) {
@@ -460,7 +472,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     try {
       debugPrint('🚀 Starting enhanced location tracking...');
-      
+
       // Use IntegratedLocationService for enhanced tracking
       final success = await _integratedLocationService.startTracking(
         vehicleId: _viewModel.currentVehicleId,
@@ -468,17 +480,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
         enableBackgroundTracking: true, // Enable background tracking
         onLocationUpdate: (data) {
           debugPrint('📍 Enhanced location update: $data');
-          
+
           // Update current location in viewModel
           final lat = data['latitude'] as double?;
           final lng = data['longitude'] as double?;
-          
+
           if (lat != null && lng != null) {
             final location = LatLng(lat, lng);
-            
+
             // Update viewModel's current location
             _viewModel.currentLocation = location;
-            
+
             // Update camera if following user
             if (_isFollowingUser && mounted) {
               _setCameraToNavigationMode(location);
@@ -487,7 +499,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         },
         onError: (error) {
           debugPrint('❌ Enhanced tracking error: $error');
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -506,21 +518,25 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       if (success) {
         debugPrint('✅ Enhanced location tracking started successfully');
-        
+
         // Listen to tracking statistics (optional)
         _integratedLocationService.statsStream.listen((stats) {
           debugPrint('📊 Tracking Stats:');
-          debugPrint('   - Success rate: ${(stats.successRate * 100).toStringAsFixed(1)}%');
+          debugPrint(
+            '   - Success rate: ${(stats.successRate * 100).toStringAsFixed(1)}%',
+          );
           debugPrint('   - Queue size: ${stats.queueSize}');
           debugPrint('   - Total sent: ${stats.successfulSends}');
           debugPrint('   - Throttled: ${stats.throttledUpdates}');
           debugPrint('   - Rejected (quality): ${stats.rejectedByQuality}');
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Enhanced tracking started with GPS throttling & offline support'),
+              content: Text(
+                '✅ Enhanced tracking started with GPS throttling & offline support',
+              ),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 3),
             ),
@@ -528,7 +544,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         }
       } else {
         debugPrint('❌ Failed to start enhanced location tracking');
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -548,7 +564,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       return success;
     } catch (e) {
       debugPrint('❌ Exception starting enhanced tracking: $e');
-      
+
       // Close loading dialog
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -581,13 +597,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Future<void> _stopLocationTracking() async {
     debugPrint('🛑 Stopping location tracking...');
     debugPrint('⚠️ This should ONLY be called when trip is complete!');
-    
+
     // Stop integrated location service if active
     if (_integratedLocationService.isActive) {
       await _integratedLocationService.stopTracking();
       debugPrint('✅ IntegratedLocationService stopped');
     }
-    
+
     // Note: Only IntegratedLocationService is used now
     debugPrint('✅ All location services stopped');
   }
@@ -793,10 +809,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   void _showResumeSimulationDialog() {
     debugPrint('🎭 _showResumeSimulationDialog called');
-    
+
     // Get current segment name for context
     final currentSegment = _viewModel.getCurrentSegmentName();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -834,10 +850,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     debugPrint('🎬 Starting simulation...');
-    
+
     // Reset any existing simulation in viewModel
     _viewModel.pauseSimulation();
-    
+
     // Connect to WebSocket first
     final connected = await _startLocationTracking();
     if (!connected) {
@@ -861,7 +877,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   void _startActualSimulation() {
     debugPrint('🚀 _startActualSimulation called');
-    
+
     // Ensure we're following the vehicle
     setState(() {
       _isFollowingUser = true;
@@ -870,19 +886,24 @@ class _NavigationScreenState extends State<NavigationScreen> {
     // Start the simulation with callbacks
     _viewModel.startSimulation(
       onLocationUpdate: (location, bearing) {
-        debugPrint('📍 Location update: ${location.latitude}, ${location.longitude}, bearing: $bearing');
-        
+        debugPrint(
+          '📍 Location update: ${location.latitude}, ${location.longitude}, bearing: $bearing',
+        );
+
         // Update camera to follow vehicle
         if (_isFollowingUser) {
           _setCameraToNavigationMode(location);
         }
 
         // Send location update via IntegratedLocationService
-        _integratedLocationService.sendLocationUpdate(location, bearing: bearing);
+        _integratedLocationService.sendLocationUpdate(
+          location,
+          bearing: bearing,
+        );
       },
       onSegmentComplete: (segmentIndex, isLastSegment) {
         debugPrint('✅ Segment $segmentIndex complete, isLast: $isLastSegment');
-        
+
         // Pause simulation when reaching any waypoint
         _pauseSimulation();
         _drawRoutes();
@@ -901,7 +922,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       simulationSpeed:
           _simulationSpeed * 0.7, // Slow down for better experience
     );
-    
+
     debugPrint('✅ Simulation started with speed: ${_simulationSpeed * 0.7}');
   }
 
@@ -909,20 +930,22 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('⏸️ _pauseSimulation called');
     debugPrint('   - _isSimulating: $_isSimulating');
     debugPrint('   - _isPaused: $_isPaused');
-    
+
     if (!_isSimulating || _isPaused) {
-      debugPrint('❌ Cannot pause: _isSimulating=$_isSimulating, _isPaused=$_isPaused');
+      debugPrint(
+        '❌ Cannot pause: _isSimulating=$_isSimulating, _isPaused=$_isPaused',
+      );
       return;
     }
 
     setState(() {
       _isPaused = true;
     });
-    
+
     debugPrint('✅ State updated: _isPaused=true');
 
     _viewModel.pauseSimulation();
-    
+
     debugPrint('✅ ViewModel.pauseSimulation() called');
   }
 
@@ -931,7 +954,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('   - _isSimulating: $_isSimulating');
     debugPrint('   - _isPaused: $_isPaused');
     debugPrint('   - ViewModel.isSimulating: ${_viewModel.isSimulating}');
-    
+
     // If simulation is running and not paused, just continue
     if (_isSimulating && !_isPaused) {
       debugPrint('✅ Simulation already running, just refocusing camera');
@@ -943,7 +966,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     if (!_isSimulating || !_isPaused) {
-      debugPrint('❌ Cannot resume: _isSimulating=$_isSimulating, _isPaused=$_isPaused');
+      debugPrint(
+        '❌ Cannot resume: _isSimulating=$_isSimulating, _isPaused=$_isPaused',
+      );
       return;
     }
 
@@ -966,11 +991,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
       _isPaused = false;
       _isFollowingUser = true;
     });
-    
+
     debugPrint('✅ State updated: _isPaused=false');
 
     _viewModel.resumeSimulation();
-    
+
     debugPrint('✅ ViewModel.resumeSimulation() called');
 
     // Refocus camera on current position
@@ -978,13 +1003,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
       _setCameraToNavigationMode(_viewModel.currentLocation!);
       debugPrint('✅ Camera refocused');
     }
-    
+
     debugPrint('✅ Resume complete');
   }
 
   void _resetSimulation() {
     debugPrint('🔄 Resetting simulation...');
-    
+
     setState(() {
       _isSimulating = false;
       _isPaused = false;
@@ -995,12 +1020,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
     if (_viewModel.orderWithDetails != null) {
       _viewModel.parseRouteFromOrder(_viewModel.orderWithDetails!);
       _drawRoutes();
-      
+
       // Focus camera back to starting position
-      if (_viewModel.routeSegments.isNotEmpty && 
+      if (_viewModel.routeSegments.isNotEmpty &&
           _viewModel.routeSegments[0].points.isNotEmpty) {
         final startPoint = _viewModel.routeSegments[0].points.first;
-        debugPrint('📍 Focusing camera to start position: ${startPoint.latitude}, ${startPoint.longitude}');
+        debugPrint(
+          '📍 Focusing camera to start position: ${startPoint.latitude}, ${startPoint.longitude}',
+        );
         _setCameraToNavigationMode(startPoint);
       }
     }
@@ -1009,7 +1036,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   void _reportIncident() {
     // TODO: Implement incident reporting logic
     debugPrint('⚠️ Report incident button pressed');
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1053,10 +1080,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               // Navigate to order detail screen
-              Navigator.of(context).pushNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
+              Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.orderDetail, arguments: widget.orderId);
             },
             child: const Text('Xác nhận'),
           ),
@@ -1079,10 +1105,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               // Navigate to order detail screen
-              Navigator.of(context).pushNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
+              Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.orderDetail, arguments: widget.orderId);
             },
             child: const Text('Xác nhận'),
           ),
@@ -1185,372 +1210,375 @@ class _NavigationScreenState extends State<NavigationScreen> {
             },
           ),
           actions: [
-          // Button to toggle following mode
-          IconButton(
-            icon: Icon(
-              _isFollowingUser ? Icons.gps_fixed : Icons.gps_not_fixed,
+            // Button to toggle following mode
+            IconButton(
+              icon: Icon(
+                _isFollowingUser ? Icons.gps_fixed : Icons.gps_not_fixed,
+              ),
+              onPressed: () {
+                setState(() {
+                  _isFollowingUser = !_isFollowingUser;
+                  if (_isFollowingUser && _viewModel.currentLocation != null) {
+                    _updateCameraPosition(
+                      _viewModel.currentLocation!,
+                      _viewModel.currentBearing,
+                    );
+                  }
+                });
+              },
+              tooltip: _isFollowingUser ? 'Đang theo dõi' : 'Không theo dõi',
             ),
-            onPressed: () {
-              setState(() {
-                _isFollowingUser = !_isFollowingUser;
-                if (_isFollowingUser && _viewModel.currentLocation != null) {
-                  _updateCameraPosition(
-                    _viewModel.currentLocation!,
-                    _viewModel.currentBearing,
-                  );
-                }
-              });
-            },
-            tooltip: _isFollowingUser ? 'Đang theo dõi' : 'Không theo dõi',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Route info panel
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppColors.primary.withOpacity(0.1),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Đoạn đường: ${_viewModel.getCurrentSegmentName()}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tốc độ: ${_viewModel.currentSpeed.toStringAsFixed(1)} km/h',
-                      ),
-                    ],
-                  ),
-                ),
-                if (!widget.isSimulationMode)
-                  ElevatedButton(
-                    onPressed: () {
-                      // Navigate to simulation mode
-                      Navigator.of(context).pushReplacementNamed(
-                        AppRoutes.navigation,
-                        arguments: {
-                          'orderId': widget.orderId,
-                          'isSimulationMode': true,
-                        },
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                    ),
-                    child: const Text('Mô phỏng'),
-                  ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Container(
-              color: Colors.white,
-              child: Stack(
-                fit: StackFit.expand,
+          ],
+        ),
+        body: Column(
+          children: [
+            // Route info panel
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: AppColors.primary.withOpacity(0.1),
+              child: Row(
                 children: [
-                  if (!_isLoadingMapStyle)
-                    SizedBox.expand(
-                      child: VietmapGL(
-                        styleString: _getMapStyleString(),
-                        initialCameraPosition: _getInitialCameraPosition(),
-                        myLocationEnabled: false,
-                        myLocationTrackingMode:
-                            MyLocationTrackingMode.values[0],
-                        myLocationRenderMode: MyLocationRenderMode.values[0],
-                        trackCameraPosition: true,
-                        onMapCreated: _onMapCreated,
-                        onMapRenderedCallback: _onMapRendered,
-                        onStyleLoadedCallback: _onStyleLoaded,
-                        rotateGesturesEnabled: true,
-                        scrollGesturesEnabled: true,
-                        tiltGesturesEnabled: true,
-                        zoomGesturesEnabled: true,
-                        doubleClickZoomEnabled: true,
-                        cameraTargetBounds: CameraTargetBounds.unbounded,
-                      ),
-                    ),
-
-                  // Vehicle marker
-                  if (_mapController != null &&
-                      _viewModel.currentLocation != null &&
-                      _isMapReady &&
-                      _isMapInitialized)
-                    MarkerLayer(
-                      mapController: _mapController!,
-                      markers: [
-                        Marker(
-                          child: Transform.rotate(
-                            angle:
-                                (_viewModel.currentBearing ?? 0) *
-                                (3.14159265359 / 180),
-                            child: const Icon(
-                              Icons.local_shipping,
-                              color: AppColors.primary,
-                              size: 30,
-                            ),
-                          ),
-                          latLng: _viewModel.currentLocation!,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Đoạn đường: ${_viewModel.getCurrentSegmentName()}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tốc độ: ${_viewModel.currentSpeed.toStringAsFixed(1)} km/h',
                         ),
                       ],
-                      ignorePointer: true,
                     ),
+                  ),
+                  if (!widget.isSimulationMode)
+                    ElevatedButton(
+                      onPressed: () {
+                        // Navigate to simulation mode
+                        Navigator.of(context).pushReplacementNamed(
+                          AppRoutes.navigation,
+                          arguments: {
+                            'orderId': widget.orderId,
+                            'isSimulationMode': true,
+                          },
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                      ),
+                      child: const Text('Mô phỏng'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                color: Colors.white,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (!_isLoadingMapStyle)
+                      SizedBox.expand(
+                        child: VietmapGL(
+                          styleString: _getMapStyleString(),
+                          initialCameraPosition: _getInitialCameraPosition(),
+                          myLocationEnabled: false,
+                          myLocationTrackingMode:
+                              MyLocationTrackingMode.values[0],
+                          myLocationRenderMode: MyLocationRenderMode.values[0],
+                          trackCameraPosition: true,
+                          onMapCreated: _onMapCreated,
+                          onMapRenderedCallback: _onMapRendered,
+                          onStyleLoadedCallback: _onStyleLoaded,
+                          rotateGesturesEnabled: true,
+                          scrollGesturesEnabled: true,
+                          tiltGesturesEnabled: true,
+                          zoomGesturesEnabled: true,
+                          doubleClickZoomEnabled: true,
+                          cameraTargetBounds: CameraTargetBounds.unbounded,
+                        ),
+                      ),
 
-                  // Loading indicator
-                  if (_isLoadingMapStyle)
-                    const Center(child: CircularProgressIndicator()),
+                    // Vehicle marker
+                    if (_mapController != null &&
+                        _viewModel.currentLocation != null &&
+                        _isMapReady &&
+                        _isMapInitialized)
+                      MarkerLayer(
+                        mapController: _mapController!,
+                        markers: [
+                          Marker(
+                            child: Transform.rotate(
+                              angle:
+                                  (_viewModel.currentBearing ?? 0) *
+                                  (3.14159265359 / 180),
+                              child: const Icon(
+                                Icons.local_shipping,
+                                color: AppColors.primary,
+                                size: 30,
+                              ),
+                            ),
+                            latLng: _viewModel.currentLocation!,
+                          ),
+                        ],
+                        ignorePointer: true,
+                      ),
 
-                  // Route info overlay
-                  if (_viewModel.routeSegments.isNotEmpty)
+                    // Loading indicator
+                    if (_isLoadingMapStyle)
+                      const Center(child: CircularProgressIndicator()),
+
+                    // Route info overlay
+                    if (_viewModel.routeSegments.isNotEmpty)
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (
+                                int i = 0;
+                                i < _viewModel.routeSegments.length;
+                                i++
+                              )
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              i ==
+                                                  _viewModel.currentSegmentIndex
+                                              ? AppColors.primary
+                                              : Colors.grey,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _viewModel.routeSegments[i].name,
+                                        style: TextStyle(
+                                          fontWeight:
+                                              i ==
+                                                  _viewModel.currentSegmentIndex
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color:
+                                              i ==
+                                                  _viewModel.currentSegmentIndex
+                                              ? AppColors.primary
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Action buttons
                     Positioned(
                       top: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                      right: 16,
+                      child: Column(
+                        children: [
+                          // Toggle 3D mode button
+                          FloatingActionButton(
+                            onPressed: _toggle3DMode,
+                            backgroundColor: Colors.white,
+                            mini: true,
+                            heroTag: '3d',
+                            child: Icon(
+                              _is3DMode ? Icons.view_in_ar : Icons.map,
+                              color: AppColors.primary,
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (
-                              int i = 0;
-                              i < _viewModel.routeSegments.length;
-                              i++
-                            )
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color:
-                                            i == _viewModel.currentSegmentIndex
-                                            ? AppColors.primary
-                                            : Colors.grey,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _viewModel.routeSegments[i].name,
-                                      style: TextStyle(
-                                        fontWeight:
-                                            i == _viewModel.currentSegmentIndex
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color:
-                                            i == _viewModel.currentSegmentIndex
-                                            ? AppColors.primary
-                                            : Colors.black,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Toggle follow user button
+                          FloatingActionButton(
+                            onPressed: () {
+                              setState(() {
+                                _isFollowingUser = !_isFollowingUser;
+                                if (_isFollowingUser &&
+                                    _viewModel.currentLocation != null) {
+                                  _setCameraToNavigationMode(
+                                    _viewModel.currentLocation!,
+                                  );
+                                }
+                              });
+                            },
+                            backgroundColor: Colors.white,
+                            mini: true,
+                            heroTag: 'follow',
+                            child: Icon(
+                              _isFollowingUser
+                                  ? Icons.gps_fixed
+                                  : Icons.gps_not_fixed,
+                              color: _isFollowingUser
+                                  ? AppColors.success
+                                  : Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Report incident button
+                          FloatingActionButton(
+                            onPressed: _reportIncident,
+                            backgroundColor: Colors.red,
+                            mini: true,
+                            heroTag: 'incident',
+                            child: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
 
-                  // Action buttons
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: Column(
+            // Simulation controls (only visible in simulation mode)
+            if (widget.isSimulationMode)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Đoạn đường hiện tại: ${_viewModel.getCurrentSegmentName()}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        // Toggle 3D mode button
-                        FloatingActionButton(
-                          onPressed: _toggle3DMode,
-                          backgroundColor: Colors.white,
-                          mini: true,
-                          heroTag: '3d',
-                          child: Icon(
-                            _is3DMode ? Icons.view_in_ar : Icons.map,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Toggle follow user button
-                        FloatingActionButton(
-                          onPressed: () {
-                            setState(() {
-                              _isFollowingUser = !_isFollowingUser;
-                              if (_isFollowingUser &&
-                                  _viewModel.currentLocation != null) {
-                                _setCameraToNavigationMode(
-                                  _viewModel.currentLocation!,
+                        const Text('Tốc độ:'),
+                        Expanded(
+                          child: Slider(
+                            value: _simulationSpeed,
+                            min: 0.5,
+                            max: 3.0,
+                            divisions: 5,
+                            label: '${_simulationSpeed.toStringAsFixed(1)}x',
+                            onChanged: (value) {
+                              setState(() {
+                                _simulationSpeed = value;
+                              });
+                              if (_isSimulating && !_isPaused) {
+                                _viewModel.updateSimulationSpeed(
+                                  _simulationSpeed * 0.7,
                                 );
                               }
-                            });
-                          },
-                          backgroundColor: Colors.white,
-                          mini: true,
-                          heroTag: 'follow',
-                          child: Icon(
-                            _isFollowingUser
-                                ? Icons.gps_fixed
-                                : Icons.gps_not_fixed,
-                            color: _isFollowingUser
-                                ? AppColors.success
-                                : Colors.grey,
+                            },
                           ),
                         ),
-                        const SizedBox(height: 8),
-
-                        // Report incident button
-                        FloatingActionButton(
-                          onPressed: _reportIncident,
-                          backgroundColor: Colors.red,
-                          mini: true,
-                          heroTag: 'incident',
-                          child: const Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.white,
+                        Text('${_simulationSpeed.toStringAsFixed(1)}x'),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton(
+                          onPressed: !_isSimulating
+                              ? _startSimulation
+                              : (_isPaused
+                                    ? _resumeSimulation
+                                    : _pauseSimulation),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                !_isSimulating
+                                    ? Icons.play_arrow
+                                    : (_isPaused
+                                          ? Icons.play_arrow
+                                          : Icons.pause),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                !_isSimulating
+                                    ? 'Bắt đầu'
+                                    : (_isPaused ? 'Tiếp tục' : 'Tạm dừng'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: _resetSimulation,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.refresh),
+                              SizedBox(width: 8),
+                              Text('Đặt lại'),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
-
-          // Simulation controls (only visible in simulation mode)
-          if (widget.isSimulationMode)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Đoạn đường hiện tại: ${_viewModel.getCurrentSegmentName()}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Text('Tốc độ:'),
-                      Expanded(
-                        child: Slider(
-                          value: _simulationSpeed,
-                          min: 0.5,
-                          max: 3.0,
-                          divisions: 5,
-                          label: '${_simulationSpeed.toStringAsFixed(1)}x',
-                          onChanged: (value) {
-                            setState(() {
-                              _simulationSpeed = value;
-                            });
-                            if (_isSimulating && !_isPaused) {
-                              _viewModel.updateSimulationSpeed(
-                                _simulationSpeed * 0.7,
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                      Text('${_simulationSpeed.toStringAsFixed(1)}x'),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton(
-                        onPressed: !_isSimulating
-                            ? _startSimulation
-                            : (_isPaused
-                                  ? _resumeSimulation
-                                  : _pauseSimulation),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              !_isSimulating
-                                  ? Icons.play_arrow
-                                  : (_isPaused
-                                        ? Icons.play_arrow
-                                        : Icons.pause),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              !_isSimulating
-                                  ? 'Bắt đầu'
-                                  : (_isPaused ? 'Tiếp tục' : 'Tạm dừng'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: _resetSimulation,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.refresh),
-                            SizedBox(width: 8),
-                            Text('Đặt lại'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

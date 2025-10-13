@@ -180,7 +180,7 @@ class AppRoutes {
 class ResponsiveWrapper extends StatelessWidget {
   final Widget child;
 
-  const ResponsiveWrapper({Key? key, required this.child}) : super(key: key);
+  const ResponsiveWrapper({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {

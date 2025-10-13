@@ -10,7 +10,7 @@ class ReceiverSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const ReceiverSection({Key? key, required this.order}) : super(key: key);
+  const ReceiverSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

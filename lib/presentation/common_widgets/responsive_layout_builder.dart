@@ -32,8 +32,7 @@ enum DeviceScreenType { phone, tablet, desktop }
 class ResponsiveLayoutBuilder extends StatelessWidget {
   final ResponsiveWidgetBuilder builder;
 
-  const ResponsiveLayoutBuilder({Key? key, required this.builder})
-    : super(key: key);
+  const ResponsiveLayoutBuilder({super.key, required this.builder});
 
   @override
   Widget build(BuildContext context) {
@@ -79,12 +78,12 @@ class ScreenTypeLayout extends StatelessWidget {
   final Widget? watch;
 
   const ScreenTypeLayout({
-    Key? key,
+    super.key,
     this.phone,
     this.tablet,
     this.desktop,
     this.watch,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,8 +132,7 @@ class OrientationLayout extends StatelessWidget {
   final Widget? portrait;
   final Widget? landscape;
 
-  const OrientationLayout({Key? key, this.portrait, this.landscape})
-    : super(key: key);
+  const OrientationLayout({super.key, this.portrait, this.landscape});
 
   @override
   Widget build(BuildContext context) {

@@ -12,8 +12,7 @@ class ErrorView extends StatelessWidget {
   /// Callback khi người dùng nhấn nút thử lại
   final VoidCallback onRetry;
 
-  const ErrorView({Key? key, required this.message, required this.onRetry})
-    : super(key: key);
+  const ErrorView({super.key, required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

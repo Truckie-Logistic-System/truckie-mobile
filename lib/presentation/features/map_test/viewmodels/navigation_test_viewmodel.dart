@@ -18,7 +18,7 @@ class NavigationTestViewModel extends ChangeNotifier {
   bool _isTrackingActive = false;
 
   // WebSocket service không còn cần thiết vì đã sử dụng LocationTrackingService
-  bool _isWebSocketConnected = false;
+  final bool _isWebSocketConnected = false;
   String? _currentVehicleId;
   String? _currentLicensePlateNumber;
   String? _jwtToken;
@@ -177,7 +177,7 @@ class NavigationTestViewModel extends ChangeNotifier {
   List<List<LatLng>> _routeSegments = [];
   int _currentSegmentIndex = 0;
   int _currentPointIndex = 0;
-  List<LatLng> _completedRoute = [];
+  final List<LatLng> _completedRoute = [];
   List<LatLng> _activeSegmentPoints = []; // Points of the active segment
 
   // Current location

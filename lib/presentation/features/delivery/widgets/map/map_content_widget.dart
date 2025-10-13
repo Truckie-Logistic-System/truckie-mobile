@@ -6,8 +6,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 class MapContentWidget extends StatelessWidget {
   final String deliveryId;
 
-  const MapContentWidget({Key? key, required this.deliveryId})
-    : super(key: key);
+  const MapContentWidget({super.key, required this.deliveryId});
 
   @override
   Widget build(BuildContext context) {

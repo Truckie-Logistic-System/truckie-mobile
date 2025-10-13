@@ -11,12 +11,12 @@ class OrderInfoWidget extends StatelessWidget {
   final String deliveryTime;
 
   const OrderInfoWidget({
-    Key? key,
+    super.key,
     required this.orderId,
     required this.status,
     required this.pickupTime,
     required this.deliveryTime,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

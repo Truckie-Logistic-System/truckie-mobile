@@ -11,7 +11,7 @@ class JourneyTimeSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const JourneyTimeSection({Key? key, required this.order}) : super(key: key);
+  const JourneyTimeSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

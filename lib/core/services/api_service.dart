@@ -121,7 +121,7 @@ class ApiService {
       _logResponse('GET', endpoint, response);
 
       return _processResponse(response, endpoint);
-    } on UnauthorizedException catch (e) {
+    } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
         debugPrint(
@@ -171,7 +171,7 @@ class ApiService {
       _logResponse('POST', endpoint, response);
 
       return _processResponse(response, endpoint);
-    } on UnauthorizedException catch (e) {
+    } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
         debugPrint('Unauthorized error, attempting to refresh token...');
@@ -213,7 +213,7 @@ class ApiService {
       _logResponse('PUT', endpoint, response);
 
       return _processResponse(response, endpoint);
-    } on UnauthorizedException catch (e) {
+    } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
         debugPrint('Unauthorized error, attempting to refresh token...');
@@ -253,7 +253,7 @@ class ApiService {
       _logResponse('DELETE', endpoint, response);
 
       return _processResponse(response, endpoint);
-    } on UnauthorizedException catch (e) {
+    } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
         debugPrint('Unauthorized error, attempting to refresh token...');

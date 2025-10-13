@@ -9,12 +9,12 @@ class DriverInfoDateField extends StatelessWidget {
   final VoidCallback onTap;
 
   const DriverInfoDateField({
-    Key? key,
+    super.key,
     required this.label,
     required this.icon,
     required this.date,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

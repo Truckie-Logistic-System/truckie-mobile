@@ -11,7 +11,7 @@ class DriverInfoFormField extends StatelessWidget {
   final int? maxLength;
 
   const DriverInfoFormField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.label,
     required this.icon,
@@ -19,7 +19,7 @@ class DriverInfoFormField extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.obscureText = false,
     this.maxLength,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

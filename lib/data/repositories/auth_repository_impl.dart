@@ -1,5 +1,4 @@
 import 'package:dartz/dartz.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../core/errors/exceptions.dart';
 import '../../core/errors/failures.dart';

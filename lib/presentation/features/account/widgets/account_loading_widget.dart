@@ -8,7 +8,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 
 /// Widget hiển thị trạng thái loading cho màn hình tài khoản
 class AccountLoadingWidget extends StatelessWidget {
-  const AccountLoadingWidget({Key? key}) : super(key: key);
+  const AccountLoadingWidget({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../../core/services/service_locator.dart';
 import '../../../../domain/entities/order.dart';
 import '../../../../domain/usecases/orders/get_driver_orders_usecase.dart';
 import '../../../common_widgets/base_viewmodel.dart';

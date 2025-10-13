@@ -9,7 +9,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 class UserHeaderWidget extends StatelessWidget {
   final User user;
 
-  const UserHeaderWidget({Key? key, required this.user}) : super(key: key);
+  const UserHeaderWidget({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {

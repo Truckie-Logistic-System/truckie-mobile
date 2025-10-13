@@ -37,7 +37,7 @@ class NavigationViewModel extends ChangeNotifier {
   Timer? _simulationTimer;
   List<List<int>> _pointIndices = [];
   List<int> _currentPointIndices = [];
-  double _simulationInterval = 800; // milliseconds
+  final double _simulationInterval = 800; // milliseconds
   bool _isSimulating = false;
 
   // Error handling
@@ -131,8 +131,7 @@ class NavigationViewModel extends ChangeNotifier {
 
         // Parse route points from JSON if available
         try {
-          if (segment.pathCoordinatesJson != null &&
-              segment.pathCoordinatesJson.isNotEmpty) {
+          if (segment.pathCoordinatesJson.isNotEmpty) {
             // Parse JSON string to get coordinates
             final List<dynamic> coordinates = json.decode(
               segment.pathCoordinatesJson,
@@ -312,12 +311,12 @@ class NavigationViewModel extends ChangeNotifier {
     debugPrint('🎬 NavigationViewModel.startSimulation called');
     debugPrint('   - routeSegments.length: ${routeSegments.length}');
     debugPrint('   - _isSimulating: $_isSimulating');
-    
+
     if (routeSegments.isEmpty) {
       debugPrint('❌ Cannot start simulation: no route segments');
       return;
     }
-    
+
     if (_isSimulating) {
       debugPrint('⚠️ Simulation already running');
       return;
@@ -352,8 +351,10 @@ class NavigationViewModel extends ChangeNotifier {
     // Calculate base interval based on simulation speed
     final baseInterval = _simulationInterval;
     final interval = (baseInterval / simulationSpeed).round();
-    
-    debugPrint('⏱️ Starting timer with interval: ${interval}ms (speed: ${simulationSpeed}x)');
+
+    debugPrint(
+      '⏱️ Starting timer with interval: ${interval}ms (speed: ${simulationSpeed}x)',
+    );
 
     // Start simulation timer
     _simulationTimer = Timer.periodic(Duration(milliseconds: interval), (
@@ -361,7 +362,7 @@ class NavigationViewModel extends ChangeNotifier {
     ) {
       _updateLocation(onLocationUpdate, onSegmentComplete);
     });
-    
+
     debugPrint('✅ Timer started successfully');
     notifyListeners();
   }
@@ -446,11 +447,13 @@ class NavigationViewModel extends ChangeNotifier {
 
   void pauseSimulation() {
     debugPrint('⏸️ NavigationViewModel.pauseSimulation called');
-    debugPrint('   - Timer before cancel: ${_simulationTimer != null ? "active" : "null"}');
-    
+    debugPrint(
+      '   - Timer before cancel: ${_simulationTimer != null ? "active" : "null"}',
+    );
+
     _simulationTimer?.cancel();
     _simulationTimer = null; // ✅ IMPORTANT: Set to null after cancel
-    
+
     debugPrint('✅ Timer cancelled and set to null');
     notifyListeners();
   }
@@ -458,8 +461,10 @@ class NavigationViewModel extends ChangeNotifier {
   void resumeSimulation() {
     debugPrint('▶️ NavigationViewModel.resumeSimulation called');
     debugPrint('   - _isSimulating: $_isSimulating');
-    debugPrint('   - _simulationTimer: ${_simulationTimer != null ? "active" : "null"}');
-    
+    debugPrint(
+      '   - _simulationTimer: ${_simulationTimer != null ? "active" : "null"}',
+    );
+
     if (_isSimulating && _simulationTimer == null) {
       debugPrint('✅ Resuming simulation timer...');
       _simulationTimer = Timer.periodic(
@@ -477,7 +482,9 @@ class NavigationViewModel extends ChangeNotifier {
       debugPrint('✅ Simulation timer resumed');
       notifyListeners();
     } else {
-      debugPrint('⚠️ Cannot resume: _isSimulating=$_isSimulating, timer=${_simulationTimer != null}');
+      debugPrint(
+        '⚠️ Cannot resume: _isSimulating=$_isSimulating, timer=${_simulationTimer != null}',
+      );
     }
   }
 
@@ -495,10 +502,7 @@ class NavigationViewModel extends ChangeNotifier {
       ) {
         if (_locationUpdateCallback != null &&
             _segmentCompleteCallback != null) {
-          _updateLocation(
-            _locationUpdateCallback!,
-            _segmentCompleteCallback!,
-          );
+          _updateLocation(_locationUpdateCallback!, _segmentCompleteCallback!);
         }
       });
     }
@@ -530,7 +534,7 @@ class NavigationViewModel extends ChangeNotifier {
     }
     return routeSegments[currentSegmentIndex].name;
   }
-  
+
   // Getter to check if simulation is running
   bool get isSimulating => _isSimulating;
 
@@ -545,7 +549,7 @@ class NavigationViewModel extends ChangeNotifier {
       'Origin': 'Điểm đi',
       'Destination': 'Điểm đến',
     };
-    
+
     // Return translated name if exists, otherwise return original
     return translations[name] ?? name;
   }

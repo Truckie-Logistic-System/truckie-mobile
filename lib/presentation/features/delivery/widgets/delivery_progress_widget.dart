@@ -9,11 +9,11 @@ class DeliveryProgressWidget extends StatelessWidget {
   final double progress;
 
   const DeliveryProgressWidget({
-    Key? key,
+    super.key,
     required this.remainingTime,
     required this.distance,
     required this.progress,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

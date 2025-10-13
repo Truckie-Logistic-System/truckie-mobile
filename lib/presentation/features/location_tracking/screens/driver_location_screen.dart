@@ -10,11 +10,11 @@ class DriverLocationScreen extends StatefulWidget {
   final String jwtToken;
 
   const DriverLocationScreen({
-    Key? key,
+    super.key,
     required this.vehicleId,
     required this.licensePlateNumber,
     required this.jwtToken,
-  }) : super(key: key);
+  });
 
   @override
   State<DriverLocationScreen> createState() => _DriverLocationScreenState();

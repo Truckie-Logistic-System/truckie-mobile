@@ -51,7 +51,7 @@ class LoadingDocumentationRepositoryImpl
               'packingProofImages',
               await MultipartFile.fromFile(
                 file.path,
-                filename: 'packing_proof_${i}.jpg',
+                filename: 'packing_proof_$i.jpg',
               ),
             ),
           );
@@ -84,9 +84,9 @@ class LoadingDocumentationRepositoryImpl
         'FormData fields: ${formData.fields.map((e) => "${e.key}: ${e.value}").join(', ')}',
       );
       debugPrint('FormData files count: ${formData.files.length}');
-      formData.files.forEach((file) {
+      for (var file in formData.files) {
         debugPrint('File name: ${file.key}, filename: ${file.value.filename}');
-      });
+      }
 
       // Log thông tin API endpoint
       debugPrint(

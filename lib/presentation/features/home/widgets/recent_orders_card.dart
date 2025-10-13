@@ -6,7 +6,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 
 /// Widget hiển thị các đơn hàng gần đây trên màn hình home
 class RecentOrdersCard extends StatelessWidget {
-  const RecentOrdersCard({Key? key}) : super(key: key);
+  const RecentOrdersCard({super.key});
 
   @override
   Widget build(BuildContext context) {

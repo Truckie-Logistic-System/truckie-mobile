@@ -32,21 +32,26 @@ void main() async {
   // Attempt to recover location tracking if app was killed during tracking
   debugPrint('🔄 Checking for location tracking recovery...');
   try {
-    final wasTrackingActive = await IntegratedLocationService.instance.wasTrackingActiveBeforeKill();
+    final wasTrackingActive = await IntegratedLocationService.instance
+        .wasTrackingActiveBeforeKill();
     if (wasTrackingActive) {
-      debugPrint('📍 Previous tracking session detected, attempting recovery...');
-      final recovered = await IntegratedLocationService.instance.attemptRecovery();
+      debugPrint(
+        '📍 Previous tracking session detected, attempting recovery...',
+      );
+      final recovered = await IntegratedLocationService.instance
+          .attemptRecovery();
       if (recovered) {
         debugPrint('✅ Location tracking recovered successfully');
-        
+
         // Process background location queue
-        await IntegratedLocationService.instance.processBackgroundLocationQueue();
+        await IntegratedLocationService.instance
+            .processBackgroundLocationQueue();
       } else {
         debugPrint('⚠️ Location tracking recovery failed');
       }
     } else {
       debugPrint('ℹ️ No previous tracking session to recover');
-      
+
       // Still process background queue in case there are pending locations
       await IntegratedLocationService.instance.processBackgroundLocationQueue();
     }
@@ -73,7 +78,7 @@ void main() async {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {

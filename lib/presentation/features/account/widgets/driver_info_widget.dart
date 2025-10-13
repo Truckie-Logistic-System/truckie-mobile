@@ -11,8 +11,11 @@ class DriverInfoWidget extends StatelessWidget {
   final Driver driver;
   final VoidCallback onEdit;
 
-  const DriverInfoWidget({Key? key, required this.driver, required this.onEdit})
-    : super(key: key);
+  const DriverInfoWidget({
+    super.key,
+    required this.driver,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {

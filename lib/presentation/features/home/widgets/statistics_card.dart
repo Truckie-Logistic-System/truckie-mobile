@@ -6,7 +6,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 
 /// Widget hiển thị thống kê trên màn hình home
 class StatisticsCard extends StatelessWidget {
-  const StatisticsCard({Key? key}) : super(key: key);
+  const StatisticsCard({super.key});
 
   @override
   Widget build(BuildContext context) {

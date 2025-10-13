@@ -45,3 +45,4 @@ app.*.map.json
 /android/app/release
 .cursor/rules/my-rules.mdc
 .windsurf/rules/my-rule.md
+android/app/google-services.json

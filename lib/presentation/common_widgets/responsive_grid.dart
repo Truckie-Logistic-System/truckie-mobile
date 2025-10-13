@@ -24,7 +24,7 @@ class ResponsiveGrid extends StatelessWidget {
   final bool stretchItems;
 
   const ResponsiveGrid({
-    Key? key,
+    super.key,
     required this.children,
     this.smallScreenColumns = 1,
     this.mediumScreenColumns = 2,
@@ -32,7 +32,7 @@ class ResponsiveGrid extends StatelessWidget {
     this.horizontalSpacing = 16.0,
     this.verticalSpacing = 16.0,
     this.stretchItems = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +67,7 @@ class ResponsiveGrid extends StatelessWidget {
               if (stretchItems) {
                 child = SizedBox(width: itemWidth, child: child);
               } else {
-                child = Container(width: itemWidth, child: child);
+                child = SizedBox(width: itemWidth, child: child);
               }
 
               // Add the child to the row
@@ -117,12 +117,12 @@ class ResponsiveGridItem extends StatelessWidget {
   final double? maxHeight;
 
   const ResponsiveGridItem({
-    Key? key,
+    super.key,
     required this.child,
     this.flex = 1,
     this.minHeight,
     this.maxHeight,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

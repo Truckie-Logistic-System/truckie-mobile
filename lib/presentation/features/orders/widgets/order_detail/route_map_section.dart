@@ -14,7 +14,7 @@ class RouteMapSection extends StatefulWidget {
   /// ViewModel chứa thông tin lộ trình
   final OrderDetailViewModel viewModel;
 
-  const RouteMapSection({Key? key, required this.viewModel}) : super(key: key);
+  const RouteMapSection({super.key, required this.viewModel});
 
   @override
   State<RouteMapSection> createState() => _RouteMapSectionState();
@@ -23,9 +23,9 @@ class RouteMapSection extends StatefulWidget {
 class _RouteMapSectionState extends State<RouteMapSection>
     with AutomaticKeepAliveClientMixin {
   VietmapController? _mapController;
-  bool _isMapReady = false;
+  final bool _isMapReady = false;
   bool _isDisposed = false;
-  bool _isMapInitialized = false;
+  final bool _isMapInitialized = false;
   bool _hasError = false;
   String _errorMessage = '';
 

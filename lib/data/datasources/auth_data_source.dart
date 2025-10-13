@@ -74,11 +74,11 @@ class AuthDataSourceImpl implements AuthDataSource {
 
       debugPrint('Login successful, processing user data');
       final authResponse = AuthResponse.fromJson(response['data']);
-      
+
       // Lưu tokens
       await tokenStorageService.saveAccessToken(authResponse.authToken);
       await tokenStorageService.saveRefreshToken(authResponse.refreshToken);
-      
+
       final user = User(
         id: authResponse.user.id,
         username: authResponse.user.username,
@@ -98,7 +98,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     } catch (e) {
       debugPrint('Login exception: ${e.toString()}');
       if (e is ServerException) {
-        throw e;
+        rethrow;
       }
       throw ServerException(message: 'Đăng nhập thất bại');
     }
@@ -150,7 +150,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     } catch (e) {
       debugPrint('Refresh token exception: ${e.toString()}');
       if (e is ServerException) {
-        throw e;
+        rethrow;
       }
       throw ServerException(message: 'Làm mới token thất bại');
     }
@@ -187,7 +187,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     } catch (e) {
       debugPrint('Change password exception: ${e.toString()}');
       if (e is ServerException) {
-        throw e;
+        rethrow;
       }
       throw ServerException(message: 'Đổi mật khẩu thất bại');
     }
@@ -198,7 +198,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     try {
       // Lấy refresh token để gửi lên server
       final refreshToken = await tokenStorageService.getRefreshToken();
-      
+
       // Call the logout API endpoint với refresh token
       final response = await apiService.post('/auths/mobile/logout', {
         'refreshToken': refreshToken ?? '',
@@ -224,7 +224,7 @@ class AuthDataSourceImpl implements AuthDataSource {
       }
 
       if (e is ServerException) {
-        throw e;
+        rethrow;
       }
       throw ServerException(message: 'Đăng xuất thất bại: ${e.toString()}');
     }
@@ -296,7 +296,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     try {
       // Xóa tokens từ TokenStorageService
       await tokenStorageService.clearAllTokens();
-      
+
       // Xóa thông tin user từ SharedPreferences
       await sharedPreferences.remove('auth_token');
       await sharedPreferences.remove('user_info');

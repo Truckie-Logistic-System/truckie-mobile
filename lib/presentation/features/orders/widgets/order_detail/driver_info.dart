@@ -20,12 +20,12 @@ class DriverInfo extends StatelessWidget {
   final bool isCurrentUser;
 
   const DriverInfo({
-    Key? key,
+    super.key,
     required this.role,
     required this.driver,
     this.isHighlighted = false,
     this.isCurrentUser = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

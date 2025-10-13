@@ -10,8 +10,7 @@ import '../../../../../presentation/theme/app_colors.dart';
 class LogoutButtonWidget extends StatefulWidget {
   final AuthViewModel authViewModel;
 
-  const LogoutButtonWidget({Key? key, required this.authViewModel})
-    : super(key: key);
+  const LogoutButtonWidget({super.key, required this.authViewModel});
 
   @override
   State<LogoutButtonWidget> createState() => _LogoutButtonWidgetState();

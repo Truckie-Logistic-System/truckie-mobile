@@ -11,8 +11,7 @@ import '../../../../domain/entities/order_detail.dart';
 class RouteDetailsScreen extends StatefulWidget {
   final OrderDetailViewModel viewModel;
 
-  const RouteDetailsScreen({Key? key, required this.viewModel})
-    : super(key: key);
+  const RouteDetailsScreen({super.key, required this.viewModel});
 
   @override
   State<RouteDetailsScreen> createState() => _RouteDetailsScreenState();

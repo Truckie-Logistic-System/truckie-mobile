@@ -5,7 +5,6 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show debugPrint;
 
-import '../../../../domain/entities/order_detail.dart';
 import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/usecases/orders/get_order_details_usecase.dart';
 import '../../../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';

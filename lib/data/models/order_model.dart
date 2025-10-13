@@ -2,28 +2,17 @@ import '../../domain/entities/order.dart';
 
 class OrderModel extends Order {
   const OrderModel({
-    required String id,
-    required String notes,
-    required int totalQuantity,
-    required String orderCode,
-    required String receiverName,
-    required String receiverPhone,
-    required String receiverIdentity,
-    required String packageDescription,
-    required DateTime createdAt,
-    required String status,
-  }) : super(
-         id: id,
-         notes: notes,
-         totalQuantity: totalQuantity,
-         orderCode: orderCode,
-         receiverName: receiverName,
-         receiverPhone: receiverPhone,
-         receiverIdentity: receiverIdentity,
-         packageDescription: packageDescription,
-         createdAt: createdAt,
-         status: status,
-       );
+    required super.id,
+    required super.notes,
+    required super.totalQuantity,
+    required super.orderCode,
+    required super.receiverName,
+    required super.receiverPhone,
+    required super.receiverIdentity,
+    required super.packageDescription,
+    required super.createdAt,
+    required super.status,
+  });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(

@@ -14,7 +14,7 @@ class VehicleSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
 
-  const VehicleSection({Key? key, required this.order}) : super(key: key);
+  const VehicleSection({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {

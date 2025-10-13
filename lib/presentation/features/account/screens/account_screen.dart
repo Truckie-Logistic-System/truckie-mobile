@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
 
 import '../../../../core/services/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';

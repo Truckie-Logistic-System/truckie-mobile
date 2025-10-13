@@ -45,6 +45,10 @@ android {
         versionName flutterVersionName
         multiDexEnabled true
     }
+    
+    aaptOptions {
+        noCompress "tflite"
+    }
 
     buildTypes {
         release {

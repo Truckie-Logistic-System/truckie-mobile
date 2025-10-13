@@ -5,7 +5,7 @@ import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/theme/app_text_styles.dart';
 
 class LocationInfoWidget extends StatelessWidget {
-  const LocationInfoWidget({Key? key}) : super(key: key);
+  const LocationInfoWidget({super.key});
 
   @override
   Widget build(BuildContext context) {

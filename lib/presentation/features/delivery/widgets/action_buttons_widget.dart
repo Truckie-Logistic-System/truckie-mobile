@@ -9,11 +9,11 @@ class ActionButtonsWidget extends StatelessWidget {
   final VoidCallback onReportIssuePressed;
 
   const ActionButtonsWidget({
-    Key? key,
+    super.key,
     required this.onViewMapPressed,
     required this.onCompleteDeliveryPressed,
     required this.onReportIssuePressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

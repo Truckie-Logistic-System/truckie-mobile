@@ -7,7 +7,7 @@ import '../../../features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../theme/app_colors.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -15,7 +15,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   late final AuthViewModel _authViewModel;
-  bool _isInitializing = true;
+  final bool _isInitializing = true;
 
   @override
   void initState() {

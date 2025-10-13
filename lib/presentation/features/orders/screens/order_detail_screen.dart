@@ -15,7 +15,7 @@ import '../widgets/order_detail/index.dart';
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
 
-  const OrderDetailScreen({Key? key, required this.orderId}) : super(key: key);
+  const OrderDetailScreen({super.key, required this.orderId});
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -35,7 +35,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _orderListViewModel = getIt<OrderListViewModel>();
     _integratedLocationService = IntegratedLocationService.instance;
     _loadOrderDetails();
-    
+
     // Rebuild UI periodically to check WebSocket status
     Future.delayed(Duration.zero, () {
       if (mounted) {
@@ -43,7 +43,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       }
     });
   }
-  
+
   void _startPeriodicRefresh() {
     // Refresh UI every 2 seconds to update button state
     Future.delayed(const Duration(seconds: 2), () {
@@ -84,8 +84,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               // Pop back to orders screen
               Navigator.of(context).popUntil((route) {
                 return route.settings.name == AppRoutes.orders ||
-                       route.settings.name == AppRoutes.main ||
-                       route.isFirst;
+                    route.settings.name == AppRoutes.main ||
+                    route.isFirst;
               });
             },
             tooltip: 'Quay lại danh sách đơn hàng',
@@ -163,7 +163,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               SizedBox(height: 24),
               VehicleSection(order: orderWithDetails),
               SizedBox(height: 24),
-              
+
               // Nút bắt đầu dẫn đường (chỉ hiển thị khi chưa có tracking và có route data)
               if (hasRouteData && !_integratedLocationService.isActive)
                 Padding(
@@ -241,7 +241,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               builder: (context) {
                 final isConnected = _integratedLocationService.isActive;
                 debugPrint('🔍 FAB - Integrated tracking active: $isConnected');
-                
+
                 return FloatingActionButton.extended(
                   onPressed: () {
                     if (isConnected) {
@@ -252,7 +252,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         AppRoutes.navigation,
                         arguments: {
                           'orderId': orderWithDetails.id,
-                          'isSimulationMode': false, // Will be ignored if already connected
+                          'isSimulationMode':
+                              false, // Will be ignored if already connected
                         },
                       );
                     } else {
@@ -265,7 +266,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     }
                   },
                   heroTag: 'routeDetailsButton',
-                  backgroundColor: isConnected ? AppColors.success : AppColors.primary,
+                  backgroundColor: isConnected
+                      ? AppColors.success
+                      : AppColors.primary,
                   elevation: 4,
                   icon: Icon(
                     isConnected ? Icons.navigation : Icons.map_outlined,

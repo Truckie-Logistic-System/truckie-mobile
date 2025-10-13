@@ -2,34 +2,20 @@ import '../../domain/entities/order_detail.dart';
 
 class OrderDetailModel extends OrderDetail {
   const OrderDetailModel({
-    required String id,
-    required double weightBaseUnit,
-    required String unit,
-    required String description,
-    required String status,
-    DateTime? startTime,
-    DateTime? estimatedStartTime,
-    DateTime? endTime,
-    DateTime? estimatedEndTime,
-    required DateTime createdAt,
-    required String trackingCode,
-    OrderSizeModel? orderSize,
-    VehicleAssignmentModel? vehicleAssignment,
-  }) : super(
-         id: id,
-         weightBaseUnit: weightBaseUnit,
-         unit: unit,
-         description: description,
-         status: status,
-         startTime: startTime,
-         estimatedStartTime: estimatedStartTime,
-         endTime: endTime,
-         estimatedEndTime: estimatedEndTime,
-         createdAt: createdAt,
-         trackingCode: trackingCode,
-         orderSize: orderSize,
-         vehicleAssignment: vehicleAssignment,
-       );
+    required super.id,
+    required super.weightBaseUnit,
+    required super.unit,
+    required super.description,
+    required super.status,
+    super.startTime,
+    super.estimatedStartTime,
+    super.endTime,
+    super.estimatedEndTime,
+    required super.createdAt,
+    required super.trackingCode,
+    OrderSizeModel? super.orderSize,
+    VehicleAssignmentModel? super.vehicleAssignment,
+  });
 
   factory OrderDetailModel.fromJson(Map<String, dynamic> json) {
     return OrderDetailModel(
@@ -86,24 +72,15 @@ class OrderDetailModel extends OrderDetail {
 
 class OrderSizeModel extends OrderSize {
   const OrderSizeModel({
-    required String id,
-    required String description,
-    required double minLength,
-    required double maxLength,
-    required double minHeight,
-    required double maxHeight,
-    required double minWidth,
-    required double maxWidth,
-  }) : super(
-         id: id,
-         description: description,
-         minLength: minLength,
-         maxLength: maxLength,
-         minHeight: minHeight,
-         maxHeight: maxHeight,
-         minWidth: minWidth,
-         maxWidth: maxWidth,
-       );
+    required super.id,
+    required super.description,
+    required super.minLength,
+    required super.maxLength,
+    required super.minHeight,
+    required super.maxHeight,
+    required super.minWidth,
+    required super.maxWidth,
+  });
 
   factory OrderSizeModel.fromJson(Map<String, dynamic> json) {
     return OrderSizeModel(
@@ -134,22 +111,14 @@ class OrderSizeModel extends OrderSize {
 
 class VehicleAssignmentModel extends VehicleAssignment {
   const VehicleAssignmentModel({
-    required String id,
-    VehicleModel? vehicle,
-    DriverModel? primaryDriver,
-    DriverModel? secondaryDriver,
-    required String status,
-    required String trackingCode,
-    required List<JourneyHistoryModel> journeyHistories,
-  }) : super(
-         id: id,
-         vehicle: vehicle,
-         primaryDriver: primaryDriver,
-         secondaryDriver: secondaryDriver,
-         status: status,
-         trackingCode: trackingCode,
-         journeyHistories: journeyHistories,
-       );
+    required super.id,
+    VehicleModel? super.vehicle,
+    DriverModel? super.primaryDriver,
+    DriverModel? super.secondaryDriver,
+    required super.status,
+    required super.trackingCode,
+    required List<JourneyHistoryModel> super.journeyHistories,
+  });
 
   factory VehicleAssignmentModel.fromJson(Map<String, dynamic> json) {
     return VehicleAssignmentModel(
@@ -194,18 +163,12 @@ class VehicleAssignmentModel extends VehicleAssignment {
 
 class VehicleModel extends Vehicle {
   const VehicleModel({
-    String? id,
-    required String manufacturer,
-    required String model,
-    required String licensePlateNumber,
-    required String vehicleType,
-  }) : super(
-         id: id,
-         manufacturer: manufacturer,
-         model: model,
-         licensePlateNumber: licensePlateNumber,
-         vehicleType: vehicleType,
-       );
+    super.id,
+    required super.manufacturer,
+    required super.model,
+    required super.licensePlateNumber,
+    required super.vehicleType,
+  });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
     return VehicleModel(
@@ -230,10 +193,10 @@ class VehicleModel extends Vehicle {
 
 class DriverModel extends Driver {
   const DriverModel({
-    required String id,
-    required String fullName,
-    required String phoneNumber,
-  }) : super(id: id, fullName: fullName, phoneNumber: phoneNumber);
+    required super.id,
+    required super.fullName,
+    required super.phoneNumber,
+  });
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
     return DriverModel(
@@ -250,28 +213,17 @@ class DriverModel extends Driver {
 
 class JourneyHistoryModel extends JourneyHistory {
   const JourneyHistoryModel({
-    required String id,
-    required String journeyName,
-    required String journeyType,
-    required String status,
-    required double totalTollFee,
-    String? reasonForReroute,
-    required String vehicleAssignmentId,
-    required List<JourneySegmentModel> journeySegments,
-    required DateTime createdAt,
-    required DateTime modifiedAt,
-  }) : super(
-         id: id,
-         journeyName: journeyName,
-         journeyType: journeyType,
-         status: status,
-         totalTollFee: totalTollFee,
-         reasonForReroute: reasonForReroute,
-         vehicleAssignmentId: vehicleAssignmentId,
-         journeySegments: journeySegments,
-         createdAt: createdAt,
-         modifiedAt: modifiedAt,
-       );
+    required super.id,
+    required super.journeyName,
+    required super.journeyType,
+    required super.status,
+    required super.totalTollFee,
+    super.reasonForReroute,
+    required super.vehicleAssignmentId,
+    required List<JourneySegmentModel> super.journeySegments,
+    required super.createdAt,
+    required super.modifiedAt,
+  });
 
   factory JourneyHistoryModel.fromJson(Map<String, dynamic> json) {
     return JourneyHistoryModel(
@@ -316,34 +268,20 @@ class JourneyHistoryModel extends JourneyHistory {
 
 class JourneySegmentModel extends JourneySegment {
   const JourneySegmentModel({
-    required String id,
-    required int segmentOrder,
-    required String startPointName,
-    required String endPointName,
-    required double startLatitude,
-    required double startLongitude,
-    required double endLatitude,
-    required double endLongitude,
-    required int distanceMeters,
-    required String pathCoordinatesJson,
-    required String status,
-    required DateTime createdAt,
-    required DateTime modifiedAt,
-  }) : super(
-         id: id,
-         segmentOrder: segmentOrder,
-         startPointName: startPointName,
-         endPointName: endPointName,
-         startLatitude: startLatitude,
-         startLongitude: startLongitude,
-         endLatitude: endLatitude,
-         endLongitude: endLongitude,
-         distanceMeters: distanceMeters,
-         pathCoordinatesJson: pathCoordinatesJson,
-         status: status,
-         createdAt: createdAt,
-         modifiedAt: modifiedAt,
-       );
+    required super.id,
+    required super.segmentOrder,
+    required super.startPointName,
+    required super.endPointName,
+    required super.startLatitude,
+    required super.startLongitude,
+    required super.endLatitude,
+    required super.endLongitude,
+    required super.distanceMeters,
+    required super.pathCoordinatesJson,
+    required super.status,
+    required super.createdAt,
+    required super.modifiedAt,
+  });
 
   factory JourneySegmentModel.fromJson(Map<String, dynamic> json) {
     return JourneySegmentModel(

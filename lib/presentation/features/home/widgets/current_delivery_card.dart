@@ -6,7 +6,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 
 /// Widget hiển thị đơn hàng hiện tại trên màn hình home
 class CurrentDeliveryCard extends StatelessWidget {
-  const CurrentDeliveryCard({Key? key}) : super(key: key);
+  const CurrentDeliveryCard({super.key});
 
   @override
   Widget build(BuildContext context) {

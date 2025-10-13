@@ -48,7 +48,7 @@ class VietMapWidget extends StatefulWidget {
   final List<StaticMarker>? staticMarkers;
 
   const VietMapWidget({
-    Key? key,
+    super.key,
     this.onMapCreated,
     this.onMapClick,
     this.onMapLongClick,
@@ -62,7 +62,7 @@ class VietMapWidget extends StatefulWidget {
     this.bearingIcon,
     this.markers,
     this.staticMarkers,
-  }) : super(key: key);
+  });
 
   @override
   State<VietMapWidget> createState() => _VietMapWidgetState();

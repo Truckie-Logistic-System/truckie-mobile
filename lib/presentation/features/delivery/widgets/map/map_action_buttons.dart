@@ -7,10 +7,10 @@ class MapActionButtons extends StatelessWidget {
   final VoidCallback onDirectionsPressed;
 
   const MapActionButtons({
-    Key? key,
+    super.key,
     required this.onLocationPressed,
     required this.onDirectionsPressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

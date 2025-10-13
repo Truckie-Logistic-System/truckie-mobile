@@ -19,11 +19,11 @@ class DriverInfoForm extends StatefulWidget {
   final Function(bool) onUpdateComplete;
 
   const DriverInfoForm({
-    Key? key,
+    super.key,
     required this.driver,
     required this.formKey,
     required this.onUpdateComplete,
-  }) : super(key: key);
+  });
 
   @override
   State<DriverInfoForm> createState() => _DriverInfoFormState();

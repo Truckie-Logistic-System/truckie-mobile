@@ -7,32 +7,33 @@ import 'package:hive_flutter/hive_flutter.dart';
 class LocationQueueService {
   static const String _boxName = 'location_queue';
   static const int _maxQueueSize = 50; // Giữ tối đa 50 locations
-  
+
   Box<Map>? _box;
   bool _isInitialized = false;
-  
+
   int get queueSize => _box?.length ?? 0;
   bool get isInitialized => _isInitialized;
 
   /// Initialize Hive box
   Future<void> initialize() async {
     if (_isInitialized) return;
-    
+
     try {
       // Initialize Hive if not already done
       if (!Hive.isAdapterRegistered(0)) {
         await Hive.initFlutter();
       }
-      
+
       // Open box
       _box = await Hive.openBox<Map>(_boxName);
       _isInitialized = true;
-      
-      debugPrint('✅ LocationQueueService initialized with ${queueSize} queued items');
-      
+
+      debugPrint(
+        '✅ LocationQueueService initialized with $queueSize queued items',
+      );
+
       // Clean old items if queue is too large
       await _cleanOldItems();
-      
     } catch (e) {
       debugPrint('❌ Failed to initialize LocationQueueService: $e');
       rethrow;
@@ -67,14 +68,15 @@ class LocationQueueService {
 
       // Add to queue
       await _box!.add(locationData);
-      
-      debugPrint('📦 Location queued: $latitude, $longitude (queue size: ${queueSize})');
-      
+
+      debugPrint(
+        '📦 Location queued: $latitude, $longitude (queue size: $queueSize)',
+      );
+
       // Clean old items if queue is getting too large
       if (queueSize > _maxQueueSize) {
         await _cleanOldItems();
       }
-      
     } catch (e) {
       debugPrint('❌ Failed to queue location: $e');
     }
@@ -88,24 +90,23 @@ class LocationQueueService {
 
     try {
       final locations = <Map<String, dynamic>>[];
-      
+
       for (int i = 0; i < _box!.length; i++) {
         final item = _box!.getAt(i);
         if (item != null) {
           locations.add(Map<String, dynamic>.from(item));
         }
       }
-      
+
       // Sort by timestamp (oldest first)
       locations.sort((a, b) {
         final timestampA = a['timestamp'] as int? ?? 0;
         final timestampB = b['timestamp'] as int? ?? 0;
         return timestampA.compareTo(timestampB);
       });
-      
+
       debugPrint('📦 Retrieved ${locations.length} queued locations');
       return locations;
-      
     } catch (e) {
       debugPrint('❌ Failed to get queued locations: $e');
       return [];
@@ -160,7 +161,7 @@ class LocationQueueService {
 
     try {
       final locations = <Map<String, dynamic>>[];
-      
+
       for (int i = 0; i < _box!.length; i++) {
         final item = _box!.getAt(i);
         if (item != null) {
@@ -186,11 +187,14 @@ class LocationQueueService {
 
       return {
         'size': locations.length,
-        'oldestTimestamp': DateTime.fromMillisecondsSinceEpoch(locations.first['timestamp']),
-        'newestTimestamp': DateTime.fromMillisecondsSinceEpoch(locations.last['timestamp']),
+        'oldestTimestamp': DateTime.fromMillisecondsSinceEpoch(
+          locations.first['timestamp'],
+        ),
+        'newestTimestamp': DateTime.fromMillisecondsSinceEpoch(
+          locations.last['timestamp'],
+        ),
         'isInitialized': true,
       };
-      
     } catch (e) {
       debugPrint('❌ Failed to get queue stats: $e');
       return {
@@ -214,30 +218,31 @@ class LocationQueueService {
         // Remove oldest item (index 0)
         await _box!.deleteAt(0);
       }
-      
+
       // Also remove items older than 24 hours
       final cutoffTime = DateTime.now().subtract(const Duration(hours: 24));
       final itemsToRemove = <int>[];
-      
+
       for (int i = 0; i < _box!.length; i++) {
         final item = _box!.getAt(i);
         if (item != null) {
-          final queuedAt = DateTime.fromMillisecondsSinceEpoch(item['queuedAt'] ?? 0);
+          final queuedAt = DateTime.fromMillisecondsSinceEpoch(
+            item['queuedAt'] ?? 0,
+          );
           if (queuedAt.isBefore(cutoffTime)) {
             itemsToRemove.add(i);
           }
         }
       }
-      
+
       // Remove old items (in reverse order to maintain indices)
       for (int i = itemsToRemove.length - 1; i >= 0; i--) {
         await _box!.deleteAt(itemsToRemove[i]);
       }
-      
+
       if (itemsToRemove.isNotEmpty) {
         debugPrint('🧹 Cleaned ${itemsToRemove.length} old items from queue');
       }
-      
     } catch (e) {
       debugPrint('❌ Failed to clean old items: $e');
     }
@@ -259,26 +264,27 @@ class LocationQueueService {
 
     try {
       final locations = <Map<String, dynamic>>[];
-      
+
       for (int i = 0; i < _box!.length; i++) {
         final item = _box!.getAt(i);
         if (item != null) {
-          final timestamp = DateTime.fromMillisecondsSinceEpoch(item['timestamp'] ?? 0);
+          final timestamp = DateTime.fromMillisecondsSinceEpoch(
+            item['timestamp'] ?? 0,
+          );
           if (timestamp.isAfter(startTime) && timestamp.isBefore(endTime)) {
             locations.add(Map<String, dynamic>.from(item));
           }
         }
       }
-      
+
       // Sort by timestamp
       locations.sort((a, b) {
         final timestampA = a['timestamp'] as int? ?? 0;
         final timestampB = b['timestamp'] as int? ?? 0;
         return timestampA.compareTo(timestampB);
       });
-      
+
       return locations;
-      
     } catch (e) {
       debugPrint('❌ Failed to get locations by time range: $e');
       return [];

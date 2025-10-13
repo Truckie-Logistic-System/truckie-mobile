@@ -163,7 +163,7 @@ class AccountViewModel extends BaseViewModel {
     _status = AccountStatus.changingPassword;
     notifyListeners();
 
-    final result = await _changePasswordUseCase!(
+    final result = await _changePasswordUseCase(
       ChangePasswordParams(
         username: username,
         oldPassword: oldPassword,

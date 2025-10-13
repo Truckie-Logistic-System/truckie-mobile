@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../app/app_routes.dart';
+import '../../../../../core/services/ocr_service.dart';
 import '../../../../../domain/entities/order_with_details.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
@@ -13,7 +14,7 @@ import '../../viewmodels/order_detail_viewmodel.dart';
 class StartDeliverySection extends StatefulWidget {
   final OrderWithDetails order;
 
-  const StartDeliverySection({Key? key, required this.order}) : super(key: key);
+  const StartDeliverySection({super.key, required this.order});
 
   @override
   State<StartDeliverySection> createState() => _StartDeliverySectionState();
@@ -23,14 +24,46 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
   final TextEditingController _odometerController = TextEditingController();
   File? _odometerImage;
   final ImagePicker _picker = ImagePicker();
+  final OCRService _ocrService = OCRService();
   bool _isLoading = false;
   bool _showForm = false;
   bool _showImagePreview = false;
+  bool _isProcessingOCR = false;
 
   @override
   void dispose() {
     _odometerController.dispose();
     super.dispose();
+  }
+
+  void _showImageSourceOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Chụp ảnh mới'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Chọn từ thư viện'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImageFromGallery();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _pickImage() async {
@@ -43,7 +76,85 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
     if (image != null) {
       setState(() {
         _odometerImage = File(image.path);
+        _isProcessingOCR = true;
       });
+
+      // Tự động xử lý OCR để đọc số từ ảnh
+      await _processOCR();
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+
+    if (image != null) {
+      setState(() {
+        _odometerImage = File(image.path);
+        _isProcessingOCR = true;
+      });
+
+      // Tự động xử lý OCR để đọc số từ ảnh
+      await _processOCR();
+    }
+  }
+
+  Future<void> _processOCR() async {
+    if (_odometerImage == null) return;
+
+    try {
+      final extractedText = await _ocrService.extractOdometerReading(
+        _odometerImage!,
+      );
+
+      if (extractedText != null && extractedText.isNotEmpty) {
+        setState(() {
+          _odometerController.text = extractedText;
+        });
+
+        // Hiển thị thông báo thành công
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Đã tự động đọc số: $extractedText'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // Không đọc được số, hiển thị thông báo
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Không thể đọc số từ ảnh. Vui lòng chụp lại ảnh rõ hơn.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Lỗi OCR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lỗi khi đọc ảnh. Vui lòng chụp lại.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingOCR = false;
+        });
+      }
     }
   }
 
@@ -59,8 +170,8 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
     if (_odometerController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Vui lòng nhập chỉ số công tơ mét'),
-          backgroundColor: Colors.red,
+          content: Text('Vui lòng chụp ảnh công tơ mét để đọc số'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -215,10 +326,10 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _pickImage,
+                  onPressed: _showImageSourceOptions,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey.shade200,
-                    foregroundColor: Colors.black87,
+                    foregroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text('CHỤP LẠI'),
@@ -311,47 +422,84 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
                 child: TextFormField(
                   controller: _odometerController,
                   keyboardType: TextInputType.number,
+                  readOnly: true, // Chỉ đọc, không được nhập thủ công
                   decoration: InputDecoration(
                     labelText: 'Chỉ số công tơ mét (km)',
+                    hintText: 'Chụp hình để điền giá trị',
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 16,
                     ),
-                    fillColor: Colors.white,
+                    fillColor: Colors.grey.shade50,
                     filled: true,
+                    suffixIcon: _odometerController.text.isNotEmpty
+                        ? Icon(Icons.check_circle, color: Colors.green)
+                        : null,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               InkWell(
-                onTap: _odometerImage == null
-                    ? _pickImage
+                onTap: _isProcessingOCR
+                    ? null
+                    : _odometerImage == null
+                    ? _showImageSourceOptions
                     : _showImagePreviewDialog,
                 child: Container(
                   height: 56,
                   width: 56,
                   decoration: BoxDecoration(
-                    color: _odometerImage != null
-                        ? AppColors.success
-                        : AppColors.primary,
+                    color: _isProcessingOCR
+                        ? Colors.grey.shade300
+                        : (_odometerImage != null
+                              ? AppColors.success
+                              : AppColors.primary),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isProcessingOCR
+                          ? Colors.grey
+                          : (_odometerImage != null
+                                ? AppColors.success
+                                : AppColors.primary),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _odometerImage != null
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : const Icon(Icons.camera_alt, color: Colors.white),
-                      if (_odometerImage == null) const SizedBox(height: 2),
-                      if (_odometerImage == null)
-                        Text(
+                      if (_isProcessingOCR)
+                        const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.grey,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      else if (_odometerImage != null)
+                        const Icon(Icons.check, color: Colors.white, size: 24)
+                      else
+                        const Icon(
+                          Icons.camera_alt,
+                          size: 24,
+                          color: Colors.white,
+                        ),
+
+                      const SizedBox(height: 2),
+
+                      if (_isProcessingOCR)
+                        const Text(
+                          'Đọc...',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        )
+                      else if (_odometerImage == null)
+                        const Text(
                           'Chụp',
                           style: TextStyle(color: Colors.white, fontSize: 10),
-                        ),
-                      if (_odometerImage != null) const SizedBox(height: 2),
-                      if (_odometerImage != null)
-                        Text(
+                        )
+                      else
+                        const Text(
                           'Xem',
                           style: TextStyle(color: Colors.white, fontSize: 10),
                         ),

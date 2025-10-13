@@ -9,7 +9,7 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 class UserInfoWidget extends StatelessWidget {
   final User user;
 
-  const UserInfoWidget({Key? key, required this.user}) : super(key: key);
+  const UserInfoWidget({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {

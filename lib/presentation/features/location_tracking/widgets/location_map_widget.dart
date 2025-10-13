@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../viewmodels/location_tracking_viewmodel.dart';
 
 class LocationMapWidget extends StatefulWidget {
-  const LocationMapWidget({Key? key}) : super(key: key);
+  const LocationMapWidget({super.key});
 
   @override
   State<LocationMapWidget> createState() => _LocationMapWidgetState();
