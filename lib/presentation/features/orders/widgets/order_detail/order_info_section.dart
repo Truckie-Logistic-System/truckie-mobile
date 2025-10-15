@@ -28,35 +28,30 @@ class OrderInfoSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Mã đơn: #${order.orderCode}',
-                    style: AppTextStyles.titleLarge,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            // Hiển thị mã đơn đầy đủ
+            Text(
+              'Mã đơn: #${order.orderCode}',
+              style: AppTextStyles.titleLarge,
+            ),
+            SizedBox(height: 8.h),
+            // Status badge
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 12.w,
+                vertical: 6.h,
+              ),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              child: Text(
+                _getStatusText(order.status),
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w500,
                 ),
-                SizedBox(width: 8.w),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12.w,
-                    vertical: 6.h,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(16.r),
-                  ),
-                  child: Text(
-                    _getStatusText(order.status),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             SizedBox(height: 8.h),
             Row(

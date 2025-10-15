@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../../core/utils/responsive_extensions.dart';
 import '../../../../../domain/entities/order_detail.dart';
@@ -25,6 +26,16 @@ class PackageSection extends StatelessWidget {
           children: [
             Text('Thông tin hàng hóa', style: AppTextStyles.titleMedium),
             SizedBox(height: 12.h),
+            
+            // Hiển thị tracking code của order detail (quan trọng để phân biệt)
+            if (order.orderDetails.isNotEmpty) ...[
+              _buildTrackingCodeRow(
+                context: context,
+                code: order.orderDetails.first.trackingCode,
+              ),
+              SizedBox(height: 12.h),
+            ],
+            
             Row(
               children: [
                 Icon(
@@ -80,6 +91,80 @@ class PackageSection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Widget hiển thị mã theo dõi order detail
+  Widget _buildTrackingCodeRow({
+    required BuildContext context,
+    required String code,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.qr_code, size: 16.r, color: AppColors.textSecondary),
+        SizedBox(width: 8.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Mã theo dõi:',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 4.h),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 8.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8.r),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        code,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontFamily: 'Courier',
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  InkWell(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: code));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Đã sao chép: $code'),
+                          backgroundColor: AppColors.success,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8.r),
+                    child: Container(
+                      padding: EdgeInsets.all(8.r),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
+                      child: Icon(Icons.copy, color: Colors.white, size: 20.r),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

@@ -147,85 +147,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Thông tin cơ bản đơn hàng
               OrderInfoSection(order: orderWithDetails),
               SizedBox(height: 16),
+
+              // Mã đơn hàng
               TrackingCodeSection(order: orderWithDetails),
               SizedBox(height: 16),
+
+              // Địa chỉ lấy/giao hàng
               AddressSection(order: orderWithDetails),
               SizedBox(height: 16),
+
+              // Thời gian dự kiến
               JourneyTimeSection(order: orderWithDetails),
               SizedBox(height: 16),
+
+              // Thông tin người gửi
               SenderSection(order: orderWithDetails),
               SizedBox(height: 16),
+
+              // Thông tin người nhận
               ReceiverSection(order: orderWithDetails),
               SizedBox(height: 16),
-              PackageSection(order: orderWithDetails),
-              SizedBox(height: 24),
-              VehicleSection(order: orderWithDetails),
-              SizedBox(height: 24),
 
-              // Nút bắt đầu dẫn đường (chỉ hiển thị khi chưa có tracking và có route data)
-              if (hasRouteData && !_integratedLocationService.isActive)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      // Nút bắt đầu dẫn đường thực
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pushNamed(
-                            AppRoutes.navigation,
-                            arguments: {
-                              'orderId': orderWithDetails.id,
-                              'isSimulationMode': false, // Real-time mode
-                            },
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.navigation),
-                            SizedBox(width: 8),
-                            Text('Bắt đầu dẫn đường'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Nút mô phỏng
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).pushNamed(
-                            AppRoutes.navigation,
-                            arguments: {
-                              'orderId': orderWithDetails.id,
-                              'isSimulationMode': true, // Simulation mode
-                            },
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orange,
-                          side: const BorderSide(color: Colors.orange),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.directions_car),
-                            SizedBox(width: 8),
-                            Text('Mô phỏng dẫn đường'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              // Thông tin hàng hóa
+              PackageSection(order: orderWithDetails),
+              SizedBox(height: 16),
+
+              // Chi tiết đơn hàng + Vehicle Assignment + Tài xế
+              OrderDetailsSection(order: orderWithDetails),
               SizedBox(height: 24),
             ],
           ),

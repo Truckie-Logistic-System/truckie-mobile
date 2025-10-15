@@ -6,7 +6,7 @@ import '../../../../../domain/entities/order_with_details.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
 
-/// Widget hiển thị thông tin mã theo dõi
+/// Widget hiển thị mã theo dõi đơn hàng
 class TrackingCodeSection extends StatelessWidget {
   /// Đối tượng chứa thông tin đơn hàng
   final OrderWithDetails order;
@@ -15,15 +15,6 @@ class TrackingCodeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (order.orderDetails.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final orderDetail = order.orderDetails.first;
-    final trackingCode = orderDetail.trackingCode;
-    final vehicleAssignment = orderDetail.vehicleAssignment;
-    final tripTrackingCode = vehicleAssignment?.trackingCode;
-
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
@@ -32,27 +23,16 @@ class TrackingCodeSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Mã theo dõi', style: AppTextStyles.titleMedium),
+            Text('Mã đơn hàng', style: AppTextStyles.titleMedium),
             SizedBox(height: 12.h),
 
-            // Mã theo dõi đơn hàng
+            // Mã đơn hàng (orderCode)
             _buildTrackingCodeRow(
               context: context,
-              icon: Icons.qr_code,
+              icon: Icons.receipt_long,
               label: 'Mã đơn hàng:',
-              code: trackingCode,
+              code: order.orderCode,
             ),
-
-            // Mã theo dõi chuyến xe
-            if (tripTrackingCode != null && tripTrackingCode.isNotEmpty) ...[
-              SizedBox(height: 12.h),
-              _buildTrackingCodeRow(
-                context: context,
-                icon: Icons.local_shipping,
-                label: 'Mã chuyến xe:',
-                code: tripTrackingCode,
-              ),
-            ],
           ],
         ),
       ),

@@ -70,23 +70,6 @@ class ApiService {
       return await _refreshToken();
     }
 
-    // Nếu có token, kiểm tra xem có phải token mới nhất không
-    try {
-      final authViewModel = getIt<AuthViewModel>();
-      if (authViewModel.user != null &&
-          authViewModel.user!.authToken != token) {
-        debugPrint(
-          'Token mismatch between memory and AuthViewModel, updating...',
-        );
-        await tokenStorageService.saveAccessToken(
-          authViewModel.user!.authToken,
-        );
-        return true;
-      }
-    } catch (e) {
-      debugPrint('Error checking token: $e');
-    }
-
     return true;
   }
 

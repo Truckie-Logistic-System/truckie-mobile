@@ -10,6 +10,8 @@ import '../../../../domain/usecases/auth/login_usecase.dart';
 import '../../../../domain/usecases/auth/logout_usecase.dart';
 import '../../../../domain/usecases/auth/refresh_token_usecase.dart';
 import '../../../../app/app_routes.dart';
+import '../../../../core/services/service_locator.dart';
+import '../../../../core/services/token_storage_service.dart';
 import '../../../common_widgets/base_viewmodel.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading, error }
@@ -347,6 +349,11 @@ class AuthViewModel extends BaseViewModel {
       try {
         final userMap = json.decode(userJson);
         _user = User.fromJson(userMap);
+        
+        // CRITICAL: Load access token vào TokenStorageService ngay khi restore user
+        // Điều này đảm bảo TokenStorageService có token ngay từ đầu
+        await _loadTokenToStorage();
+        
         status = AuthStatus.authenticated;
 
         // Fetch driver information if user is a driver
@@ -372,6 +379,23 @@ class AuthViewModel extends BaseViewModel {
       // Tokens sẽ được xóa bởi AuthDataSource thông qua TokenStorageService
     } catch (e) {
       debugPrint('Error clearing user data: $e');
+    }
+  }
+
+  /// Load access token từ user vào TokenStorageService
+  /// Được gọi khi restore user từ SharedPreferences để đảm bảo
+  /// TokenStorageService có token ngay từ đầu
+  Future<void> _loadTokenToStorage() async {
+    if (_user != null && _user!.authToken.isNotEmpty) {
+      try {
+        final tokenStorage = getIt<TokenStorageService>();
+        await tokenStorage.saveAccessToken(_user!.authToken);
+        debugPrint(
+          'Loaded access token to storage: ${_user!.authToken.substring(0, 15)}...',
+        );
+      } catch (e) {
+        debugPrint('Error loading token to storage: $e');
+      }
     }
   }
 
