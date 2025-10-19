@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../../app/app_routes.dart';
 import '../../../../../core/services/ocr_service.dart';
+import '../../../../../core/utils/driver_role_checker.dart';
 import '../../../../../domain/entities/order_with_details.dart';
+import '../../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
 import '../../viewmodels/order_detail_viewmodel.dart';
@@ -167,6 +169,19 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
   }
 
   Future<void> _startDelivery(BuildContext context) async {
+    // Kiểm tra driver role trước khi cho phép thực hiện action
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    if (!DriverRoleChecker.canPerformActions(widget.order, authViewModel)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(DriverRoleChecker.getSecondaryDriverActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     if (_odometerController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -212,13 +227,6 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
         final navigatorContext = context;
         final orderId = widget.order.id;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bắt đầu chuyến xe thành công'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
         // Chuyển đến màn hình dẫn đường ngay lập tức, không đợi tải lại dữ liệu order
         debugPrint('🚀 Chuyển đến màn hình dẫn đường với orderId: $orderId');
 
@@ -261,9 +269,15 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<OrderDetailViewModel>(context);
+    final authViewModel = Provider.of<AuthViewModel>(context);
 
     if (!viewModel.canStartDelivery()) {
       return const SizedBox.shrink();
+    }
+
+    // Kiểm tra driver role
+    if (!DriverRoleChecker.canPerformActions(widget.order, authViewModel)) {
+      return _buildSecondaryDriverMessage(authViewModel);
     }
 
     if (_showImagePreview) {
@@ -273,6 +287,74 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
     } else {
       return _buildButton();
     }
+  }
+
+  Widget _buildSecondaryDriverMessage(AuthViewModel authViewModel) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: Colors.orange.shade700,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Quyền hạn bị giới hạn',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            DriverRoleChecker.getSecondaryDriverActionMessage(),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: Colors.orange.shade800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.person,
+                  size: 16,
+                  color: Colors.orange.shade700,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Vai trò hiện tại: ${DriverRoleChecker.getUserRoleDisplayName(widget.order, authViewModel)}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildImagePreview() {

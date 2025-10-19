@@ -19,6 +19,7 @@ class EnhancedLocationTrackingService {
   bool _isConnected = false;
   String? _vehicleId;
   String? _licensePlateNumber;
+  bool _isSimulationMode = false; // CRITICAL: Block GPS location trong simulation
 
   // GPS throttling state
   DateTime? _lastSendTime;
@@ -50,6 +51,7 @@ class EnhancedLocationTrackingService {
   String? get vehicleId => _vehicleId;
   String? get licensePlateNumber => _licensePlateNumber;
   LocationTrackingStats get currentStats => _stats;
+  bool get isSimulationMode => _isSimulationMode; // Expose simulation mode flag
 
   EnhancedLocationTrackingService({
     VehicleWebSocketService? webSocketService,
@@ -62,6 +64,7 @@ class EnhancedLocationTrackingService {
     String? vehicleId,
     String? licensePlateNumber,
     String? jwtToken,
+    bool isSimulationMode = false, // CRITICAL: Block GPS trong simulation
     Function(Map<String, dynamic>)? onLocationUpdate,
     Function(String)? onError,
   }) async {
@@ -92,6 +95,11 @@ class EnhancedLocationTrackingService {
 
       _vehicleId = vehicleId;
       _licensePlateNumber = licensePlateNumber;
+      _isSimulationMode = isSimulationMode; // Set simulation mode flag
+      
+      if (_isSimulationMode) {
+        debugPrint('⚠️ SIMULATION MODE: GPS location sending will be BLOCKED');
+      }
 
       // Initialize queue service
       await _queueService.initialize();
@@ -191,42 +199,87 @@ class EnhancedLocationTrackingService {
       speedAccuracy: 0.0,
     );
 
-    await sendPosition(position);
+    await sendPosition(position, isManualUpdate: true); // Manual update - always allow
   }
 
   /// Send Position object with full validation
-  Future<void> sendPosition(Position position) async {
+  Future<void> sendPosition(Position position, {bool isManualUpdate = false}) async {
+    // Check for California GPS
+    final lat = position.latitude;
+    final lng = position.longitude;
+    final isCaliforniaGPS = (lat >= 32.0 && lat <= 42.0) && (lng >= -125.0 && lng <= -114.0);
+    
+    // CRITICAL: Block GPS location trong simulation mode
+    // NHƯNG CHO PHÉP manual updates (simulation location)
+    if (_isSimulationMode && !isManualUpdate) {
+      if (isCaliforniaGPS) {
+        debugPrint('🚫🚫🚫 CALIFORNIA GPS DETECTED IN SIMULATION MODE! 🚫🚫🚫');
+        debugPrint('   - GPS Location: ${position.latitude}, ${position.longitude}');
+        debugPrint('   - Source: GPS Stream (SHOULD BE STOPPED!)');
+        debugPrint('   - ⚠️⚠️⚠️ CRITICAL: GPS stream is LEAKING in simulation mode!');
+      } else {
+        debugPrint('🚫 BLOCKED: GPS location ignored in simulation mode');
+        debugPrint('   - GPS Location: ${position.latitude}, ${position.longitude}');
+      }
+      return;
+    }
+    
+    if (isManualUpdate && _isSimulationMode) {
+      if (isCaliforniaGPS) {
+        debugPrint('❌❌❌ ERROR: Manual update with California GPS in simulation!');
+        debugPrint('   - This should NEVER happen!');
+        debugPrint('   - Location: ${position.latitude}, ${position.longitude}');
+        return; // Don't send California GPS even if manual
+      }
+      debugPrint('✅ ALLOWED: Manual location update in simulation mode');
+      debugPrint('   - Simulation Location: ${position.latitude}, ${position.longitude}');
+      debugPrint('   - Source: Manual sendLocationUpdate()');
+    }
+    
+    if (!_isSimulationMode && !isManualUpdate) {
+      debugPrint('📍 GPS: Real GPS location in normal mode');
+      debugPrint('   - GPS Location: ${position.latitude}, ${position.longitude}');
+    }
+    
     _stats.totalUpdatesReceived++;
 
-    // 1. GPS Quality Validation
-    if (!_isValidGPSQuality(position)) {
-      _stats.rejectedByQuality++;
-      _updateStats();
-      debugPrint('❌ GPS quality too poor: accuracy=${position.accuracy}m');
-      return;
-    }
+    // CRITICAL: Skip validation and throttling for simulation mode
+    // Simulation locations are always valid and should be sent immediately
+    if (!isManualUpdate || !_isSimulationMode) {
+      // 1. GPS Quality Validation (only for real GPS)
+      if (!_isValidGPSQuality(position)) {
+        _stats.rejectedByQuality++;
+        _updateStats();
+        debugPrint('❌ GPS quality too poor: accuracy=${position.accuracy}m');
+        return;
+      }
 
-    // 2. Speed Validation
-    if (!_isValidSpeed(position)) {
-      _stats.rejectedBySpeed++;
-      _updateStats();
-      debugPrint('❌ Speed too high: ${position.speed * 3.6} km/h');
-      return;
-    }
+      // 2. Speed Validation (only for real GPS)
+      if (!_isValidSpeed(position)) {
+        _stats.rejectedBySpeed++;
+        _updateStats();
+        debugPrint('❌ Speed too high: ${position.speed * 3.6} km/h');
+        return;
+      }
 
-    // 3. Throttling Check
-    if (!_shouldSendUpdate(position)) {
-      _stats.throttledUpdates++;
-      _updateStats();
-      debugPrint('🔄 Update throttled');
-      return;
+      // 3. Throttling Check (only for real GPS)
+      if (!_shouldSendUpdate(position)) {
+        _stats.throttledUpdates++;
+        _updateStats();
+        debugPrint('🔄 Update throttled');
+        return;
+      }
+    } else {
+      debugPrint('⚡ FAST-TRACK: Simulation location - skipping validation & throttling');
     }
 
     final location = LatLng(position.latitude, position.longitude);
 
     // 4. Try to send immediately
     if (_isConnected && await _isOnline()) {
-      final success = await _sendLocationNow(location, position.heading);
+      // Convert speed from m/s to km/h
+      final speedKmh = position.speed * 3.6;
+      final success = await _sendLocationNow(location, position.heading, speed: speedKmh);
       if (success) {
         _updateLastSendState(location);
         _stats.successfulSends++;
@@ -303,7 +356,7 @@ class EnhancedLocationTrackingService {
   }
 
   /// Send location immediately via WebSocket
-  Future<bool> _sendLocationNow(LatLng location, double bearing) async {
+  Future<bool> _sendLocationNow(LatLng location, double bearing, {double? speed}) async {
     if (!_isConnected || _vehicleId == null || _licensePlateNumber == null) {
       return false;
     }
@@ -314,10 +367,12 @@ class EnhancedLocationTrackingService {
         latitude: location.latitude,
         longitude: location.longitude,
         licensePlateNumber: _licensePlateNumber!,
+        bearing: bearing,
+        speed: speed,
       );
 
       debugPrint(
-        '📤 Enhanced location sent: ${location.latitude}, ${location.longitude}',
+        '📤 Enhanced location sent: ${location.latitude}, ${location.longitude}, speed: ${speed ?? 0}km/h',
       );
       return true;
     } catch (e) {
@@ -389,14 +444,31 @@ class EnhancedLocationTrackingService {
 
   /// Stop tracking
   Future<void> stopTracking() async {
-    if (!_isConnected) return;
+    if (!_isConnected) {
+      debugPrint('⚠️ Enhanced tracking already stopped or not connected');
+      return;
+    }
 
     try {
+      debugPrint('🔌 Stopping enhanced location tracking...');
+      debugPrint('   - Vehicle ID: $_vehicleId');
+      debugPrint('   - Was simulation mode: $_isSimulationMode');
+      
       await _webSocketService.disconnect();
       _isConnected = false;
+      _vehicleId = null;
+      _licensePlateNumber = null;
+      _isSimulationMode = false; // CRITICAL: Reset simulation mode flag
+      _lastSendTime = null;
+      _lastSendLocation = null;
+      _lastValidPosition = null;
+      
       _stats.disconnectionTime = DateTime.now();
       _updateStats();
-      debugPrint('🔌 Enhanced location tracking stopped');
+      
+      debugPrint('✅ Enhanced location tracking stopped');
+      debugPrint('   - Simulation mode reset to: false');
+      debugPrint('   - All state cleared');
     } catch (e) {
       debugPrint('❌ Error stopping tracking: $e');
     }

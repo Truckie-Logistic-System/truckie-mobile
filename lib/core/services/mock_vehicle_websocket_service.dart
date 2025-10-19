@@ -154,6 +154,8 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
     required double latitude,
     required double longitude,
     required String licensePlateNumber,
+    double? bearing,
+    double? speed,
   }) {
     sendLocationUpdate(
       vehicleId: vehicleId,

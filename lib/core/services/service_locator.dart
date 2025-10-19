@@ -32,17 +32,14 @@ import '../../presentation/features/delivery/viewmodels/navigation_viewmodel.dar
 import '../../presentation/features/orders/viewmodels/order_detail_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/order_list_viewmodel.dart';
 import '../../presentation/features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
-import '../../presentation/features/location_tracking/viewmodels/location_tracking_viewmodel.dart';
 import '../services/vehicle_websocket_service.dart';
 import '../services/mock_vehicle_websocket_service.dart';
-import '../services/location_tracking_service.dart';
 import '../services/enhanced_location_tracking_service.dart';
 import '../services/location_queue_service.dart';
-import '../services/background_location_service.dart';
-import '../services/app_restart_recovery_service.dart';
 import '../services/api_service.dart';
 import '../services/token_storage_service.dart';
 import '../services/vietmap_service.dart';
+import '../services/global_location_manager.dart';
 
 final GetIt getIt = GetIt.instance;
 final GetIt serviceLocator = GetIt.instance;
@@ -104,12 +101,8 @@ Future<void> setupServiceLocator() async {
     );
   }
 
-  // Location tracking services
-  getIt.registerLazySingleton<LocationTrackingService>(
-    () => LocationTrackingService(
-      webSocketService: getIt<VehicleWebSocketService>(),
-    ),
-  );
+  // Location tracking services - Simplified architecture
+  // Only EnhancedLocationTrackingService and GlobalLocationManager are used
 
   // Enhanced location tracking services
   getIt.registerLazySingleton<LocationQueueService>(
@@ -123,11 +116,11 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Initialize recovery service
-  await AppRestartRecoveryService.initialize();
-  
-  // Initialize background service
-  await BackgroundLocationService.initialize();
+  // NOTE: Recovery and background services removed as part of architecture simplification
+  // GlobalLocationManager now handles all location tracking directly
+
+  // Register Global Location Manager (singleton)
+  getIt.registerSingleton<GlobalLocationManager>(GlobalLocationManager.instance);
 
   // Data sources
   getIt.registerLazySingleton<AuthDataSourceImpl>(
@@ -216,11 +209,7 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  getIt.registerFactory<LocationTrackingViewModel>(
-    () => LocationTrackingViewModel(
-      webSocketService: getIt<VehicleWebSocketService>(),
-    ),
-  );
+  // NOTE: LocationTrackingViewModel removed - testing feature
 
   getIt.registerFactory<AccountViewModel>(
     () => AccountViewModel(

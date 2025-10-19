@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../app/app_routes.dart';
 import '../../../../core/services/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
-import '../../../../core/services/token_storage_service.dart';
 import '../../../../core/utils/responsive_extensions.dart';
 import '../../../../presentation/common_widgets/responsive_grid.dart';
 import '../../../../presentation/common_widgets/responsive_layout_builder.dart';
@@ -91,74 +89,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             DriverInfoCard(user: user, driver: driver),
                           SizedBox(height: 24.h),
 
-                          // Location tracking card
-                          if (user != null && driver != null)
-                            GestureDetector(
-                              onTap: () async {
-                                final tokenStorage =
-                                    getIt<TokenStorageService>();
-                                final token = tokenStorage.getAccessToken();
-                                if (token != null) {
-                                  Navigator.of(context).pushNamed(
-                                    AppRoutes.driverLocation,
-                                    arguments: {
-                                      'vehicleId': driver.id,
-                                      'licensePlateNumber':
-                                          driver.userResponse.phoneNumber ??
-                                          'Không có biển số',
-                                      'jwtToken': token,
-                                    },
-                                  );
-                                }
-                              },
-                              child: Card(
-                                elevation: 4,
-                                margin: EdgeInsets.symmetric(horizontal: 16.w),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Padding(
-                                  padding: EdgeInsets.all(16.r),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.location_on,
-                                        color: Colors.blue,
-                                        size: 32,
-                                      ),
-                                      SizedBox(width: 16.w),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Theo dõi vị trí xe',
-                                              style: TextStyle(
-                                                fontSize: 18.sp,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            SizedBox(height: 4.h),
-                                            Text(
-                                              'Bật theo dõi vị trí xe để chia sẻ với điều phối',
-                                              style: TextStyle(
-                                                fontSize: 14.sp,
-                                                color: Colors.black54,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Icons.arrow_forward_ios,
-                                        color: Colors.blue,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
                           SizedBox(height: 16.h),
 
                           // Use ResponsiveGrid for tablet layout

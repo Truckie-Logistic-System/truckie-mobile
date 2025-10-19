@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 
 import '../../../../app/app_routes.dart';
-import '../../../../core/services/integrated_location_service.dart';
+import '../../../../core/services/global_location_manager.dart';
 import '../../../../core/services/service_locator.dart';
 import '../../../../presentation/theme/app_colors.dart';
+import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/navigation_viewmodel.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -26,7 +27,8 @@ class NavigationScreen extends StatefulWidget {
 
 class _NavigationScreenState extends State<NavigationScreen> {
   late final NavigationViewModel _viewModel;
-  late final IntegratedLocationService _integratedLocationService;
+  late final GlobalLocationManager _globalLocationManager;
+  late final AuthViewModel _authViewModel;
 
   VietmapController? _mapController;
   String? _mapStyle;
@@ -48,6 +50,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
   // Biến để theo dõi chế độ 3D
   bool _is3DMode = true;
 
+  // Custom marker for current location
+  Symbol? _currentLocationMarker;
+
   @override
   void initState() {
     super.initState();
@@ -56,10 +61,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('   - isSimulationMode: ${widget.isSimulationMode}');
 
     _viewModel = getIt<NavigationViewModel>();
-    _integratedLocationService = IntegratedLocationService.instance;
+    _globalLocationManager = getIt<GlobalLocationManager>();
+    _authViewModel = getIt<AuthViewModel>();
+
+    // Register this screen with GlobalLocationManager
+    _globalLocationManager.registerScreen('NavigationScreen');
 
     debugPrint(
-      '   - Integrated tracking active: ${_integratedLocationService.isActive}',
+      '   - Global tracking active: ${_globalLocationManager.isGlobalTrackingActive}',
+    );
+    debugPrint(
+      '   - Global tracking active for order ${widget.orderId}: ${_globalLocationManager.isTrackingOrder(widget.orderId)}',
     );
     debugPrint('   - Route segments: ${_viewModel.routeSegments.length}');
 
@@ -85,18 +97,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   void dispose() {
+    // Unregister this screen from GlobalLocationManager
+    _globalLocationManager.unregisterScreen('NavigationScreen');
+
     // IMPORTANT: Don't stop tracking when just navigating away
     // Only stop when explicitly requested (trip complete, cancel, etc.)
     // This allows user to go back to order detail and return to navigation
 
     // Only stop if trip is complete
     if (_isTripComplete) {
-      debugPrint('🏁 Trip complete, stopping tracking');
-      _stopLocationTracking();
+      debugPrint('🏁 Trip complete, stopping global tracking');
+      _globalLocationManager.stopGlobalTracking(reason: 'Trip completed');
       _viewModel.resetNavigation();
     } else {
       debugPrint(
-        '🔄 Navigation screen disposed but tracking continues in background',
+        '🔄 Navigation screen disposed but global tracking continues in background',
       );
       // Keep tracking active for when user returns
     }
@@ -330,7 +345,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             // Simulation will use the same WebSocket connection
             _showSimulationDialog();
           } else if (!widget.isSimulationMode &&
-              !_integratedLocationService.isActive) {
+              !_globalLocationManager.isGlobalTrackingActive) {
             _startRealTimeNavigation();
           } else if (_isSimulating) {
             // Resume existing simulation
@@ -384,7 +399,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       debugPrint('   - _isSimulating: $_isSimulating');
       debugPrint('   - _isPaused: $_isPaused');
       debugPrint(
-        '   - Integrated tracking active: ${_integratedLocationService.isActive}',
+        '   - Global tracking active: ${_globalLocationManager.isGlobalTrackingActive}',
       );
 
       if (widget.isSimulationMode && !_isSimulating) {
@@ -395,7 +410,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         // Simulation will use the same WebSocket connection
         _showSimulationDialog();
       } else if (!widget.isSimulationMode &&
-          !_integratedLocationService.isActive) {
+          !_globalLocationManager.isGlobalTrackingActive) {
         debugPrint('🚗 Starting real-time navigation');
         _startRealTimeNavigation();
       } else if (_isSimulating && _isPaused) {
@@ -406,7 +421,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         debugPrint('▶️ Resuming existing simulation');
         // Resume existing simulation
         _resumeSimulation();
-      } else if (_integratedLocationService.isActive) {
+      } else if (_globalLocationManager.isGlobalTrackingActive) {
         debugPrint('🔗 Integrated tracking already active, continuing...');
         // WebSocket is connected, just update camera
         if (_viewModel.currentLocation != null) {
@@ -464,52 +479,142 @@ class _NavigationScreenState extends State<NavigationScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Đang khởi động enhanced location tracking...'),
+            Text('Đang khởi động location tracking...'),
           ],
         ),
       ),
     );
 
     try {
-      debugPrint('🚀 Starting enhanced location tracking...');
+      debugPrint('🚀 Starting global location tracking...');
 
-      // Use IntegratedLocationService for enhanced tracking
-      final success = await _integratedLocationService.startTracking(
+      // CRITICAL: Nếu là simulation mode và tracking đã active
+      // KHÔNG stop WebSocket, chỉ switch sang simulation mode
+      if (widget.isSimulationMode && _globalLocationManager.isGlobalTrackingActive) {
+        debugPrint('⚠️ Simulation mode with active tracking detected');
+        debugPrint('   - Keeping WebSocket alive, just switching to simulation mode');
+        debugPrint('   - Current tracking order: ${_globalLocationManager.currentOrderId}');
+        
+        // Check if it's the same order
+        if (_globalLocationManager.currentOrderId == widget.orderId) {
+          debugPrint('✅ Same order - WebSocket stays connected, simulation will override GPS');
+          // Just register this screen, don't restart tracking
+          _globalLocationManager.registerScreen(
+            'NavigationScreen',
+            onLocationUpdate: (data) {
+              final isPrimary = _globalLocationManager.isPrimaryDriver;
+              debugPrint(
+                '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
+              );
+
+              final lat = data['latitude'] as double?;
+              final lng = data['longitude'] as double?;
+
+              if (lat != null && lng != null) {
+                final location = LatLng(lat, lng);
+                _viewModel.currentLocation = location;
+
+                if (_isFollowingUser && mounted) {
+                  _setCameraToNavigationMode(location);
+                }
+              }
+            },
+            onError: (error) {
+              debugPrint('❌ Global tracking error: $error');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Lỗi tracking: $error'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          );
+          
+          // Close loading dialog and return success
+          if (mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+            setState(() {
+              _isConnectingWebSocket = false;
+            });
+          }
+          return true;
+        }
+      }
+
+      // Xác định driver role từ order details
+      bool isPrimaryDriver = true; // Default
+      if (_viewModel.orderWithDetails != null &&
+          _viewModel.orderWithDetails!.orderDetails.isNotEmpty) {
+        final vehicleAssignment =
+            _viewModel.orderWithDetails!.orderDetails.first.vehicleAssignment;
+        if (vehicleAssignment != null) {
+          final currentUserId = _authViewModel.driver?.id;
+          final primaryDriverId = vehicleAssignment.primaryDriver?.id;
+          final secondaryDriverId = vehicleAssignment.secondaryDriver?.id;
+
+          isPrimaryDriver = (currentUserId == primaryDriverId);
+
+          debugPrint('   - Current User ID: $currentUserId');
+          debugPrint('   - Primary Driver ID: $primaryDriverId');
+          debugPrint('   - Secondary Driver ID: $secondaryDriverId');
+          debugPrint('   - Is Primary Driver: $isPrimaryDriver');
+        }
+      }
+
+      // Use GlobalLocationManager instead of direct IntegratedLocationService
+      final success = await _globalLocationManager.startGlobalTracking(
+        orderId: widget.orderId,
         vehicleId: _viewModel.currentVehicleId,
         licensePlateNumber: _viewModel.currentLicensePlateNumber,
-        enableBackgroundTracking: true, // Enable background tracking
-        onLocationUpdate: (data) {
-          debugPrint('📍 Enhanced location update: $data');
-
-          // Update current location in viewModel
-          final lat = data['latitude'] as double?;
-          final lng = data['longitude'] as double?;
-
-          if (lat != null && lng != null) {
-            final location = LatLng(lat, lng);
-
-            // Update viewModel's current location
-            _viewModel.currentLocation = location;
-
-            // Update camera if following user
-            if (_isFollowingUser && mounted) {
-              _setCameraToNavigationMode(location);
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('❌ Enhanced tracking error: $error');
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Lỗi tracking: $error'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
+        initiatingScreen: 'NavigationScreen',
+        isPrimaryDriver: isPrimaryDriver,
+        isSimulationMode:
+            widget.isSimulationMode, // CRITICAL: Tắt GPS thật trong simulation
       );
+
+      if (success) {
+        // Register callbacks for location updates
+        // Cả primary và secondary driver đều có thể nhận location updates
+        _globalLocationManager.registerScreen(
+          'NavigationScreen',
+          onLocationUpdate: (data) {
+            final isPrimary = _globalLocationManager.isPrimaryDriver;
+            debugPrint(
+              '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
+            );
+
+            // Update current location in viewModel
+            final lat = data['latitude'] as double?;
+            final lng = data['longitude'] as double?;
+
+            if (lat != null && lng != null) {
+              final location = LatLng(lat, lng);
+
+              // Update viewModel's current location
+              _viewModel.currentLocation = location;
+
+              // Update camera if following user
+              if (_isFollowingUser && mounted) {
+                _setCameraToNavigationMode(location);
+              }
+            }
+          },
+          onError: (error) {
+            debugPrint('❌ Global tracking error: $error');
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Lỗi tracking: $error'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+        );
+      }
 
       // Close loading dialog
       if (mounted) {
@@ -517,25 +622,28 @@ class _NavigationScreenState extends State<NavigationScreen> {
       }
 
       if (success) {
-        debugPrint('✅ Enhanced location tracking started successfully');
+        debugPrint('✅ Global location tracking started successfully');
 
-        // Listen to tracking statistics (optional)
-        _integratedLocationService.statsStream.listen((stats) {
-          debugPrint('📊 Tracking Stats:');
-          debugPrint(
-            '   - Success rate: ${(stats.successRate * 100).toStringAsFixed(1)}%',
-          );
-          debugPrint('   - Queue size: ${stats.queueSize}');
-          debugPrint('   - Total sent: ${stats.successfulSends}');
-          debugPrint('   - Throttled: ${stats.throttledUpdates}');
-          debugPrint('   - Rejected (quality): ${stats.rejectedByQuality}');
-        });
+        // Listen to tracking statistics from GlobalLocationManager
+        // _globalLocationManager.globalStatsStream.listen((stats) {
+        //   debugPrint('📊 Global Tracking Stats:');
+        //   debugPrint(
+        //     '   - Success rate: ${(stats.successRate * 100).toStringAsFixed(1)}%',
+        //   );
+        //   debugPrint('   - Queue size: ${stats.queueSize}');
+        //   debugPrint('   - Total sent: ${stats.successfulSends}');
+        //   debugPrint('   - Throttled: ${stats.throttledUpdates}');
+        //   debugPrint('   - Rejected (quality): ${stats.rejectedByQuality}');
+        // });
 
         if (mounted) {
+          final isPrimary = _globalLocationManager.isPrimaryDriver;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                '✅ Enhanced tracking started with GPS throttling & offline support',
+                isPrimary
+                    ? '✅ Location tracking started (Primary Driver)'
+                    : '✅ Tracking initialized (Secondary Driver - No WebSocket)',
               ),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 3),
@@ -543,7 +651,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           );
         }
       } else {
-        debugPrint('❌ Failed to start enhanced location tracking');
+        debugPrint('❌ Failed to start global location tracking');
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -595,17 +703,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
   /// - Pausing navigation
   /// WebSocket must stay alive until trip is finished!
   Future<void> _stopLocationTracking() async {
-    debugPrint('🛑 Stopping location tracking...');
+    debugPrint('🛑 Stopping global location tracking...');
     debugPrint('⚠️ This should ONLY be called when trip is complete!');
 
-    // Stop integrated location service if active
-    if (_integratedLocationService.isActive) {
-      await _integratedLocationService.stopTracking();
-      debugPrint('✅ IntegratedLocationService stopped');
-    }
-
-    // Note: Only IntegratedLocationService is used now
-    debugPrint('✅ All location services stopped');
+    // Stop global location tracking
+    await _globalLocationManager.stopGlobalTracking(
+      reason: 'Trip completed from NavigationScreen',
+    );
+    debugPrint('✅ GlobalLocationManager stopped');
   }
 
   void _drawRoutes() {
@@ -766,18 +871,56 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _cameraUpdateCounter++;
 
     // Update camera position to follow user's location
+    // Use moveCamera instead of animateCamera to avoid "chasing" effect
+    // Camera moves instantly with marker, creating smooth tracking
     if (_cameraUpdateCounter % _cameraUpdateFrequency == 0) {
-      _mapController!.animateCamera(
+      _mapController!.moveCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target: location,
             zoom: 16.0,
             bearing: bearing ?? 0.0,
-            tilt: 45.0, // Thêm góc nghiêng để có trải nghiệm 3D tốt hơn
+            tilt: 45.0, // Góc nghiêng 3D
           ),
         ),
-        duration: const Duration(milliseconds: 500),
       );
+    }
+  }
+
+  Future<void> _updateLocationMarker(LatLng location, double? bearing) async {
+    if (_mapController == null) return;
+
+    try {
+      // Remove old marker if exists
+      if (_currentLocationMarker != null) {
+        await _mapController!.removeSymbol(_currentLocationMarker!);
+      }
+
+      // Add new custom marker - use emoji truck icon with rotation
+      _currentLocationMarker = await _mapController!.addSymbol(
+        SymbolOptions(
+          geometry: location,
+          textField: '🚛', // Truck emoji
+          textSize: 32.0,
+          textRotate: bearing ?? 0.0, // Rotate with bearing
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ Error updating location marker: $e');
+      // Fallback: Use bright blue circle with white border
+      try {
+        await _mapController!.addCircle(
+          CircleOptions(
+            geometry: location,
+            circleRadius: 12.0,
+            circleColor: Colors.blue,
+            circleStrokeWidth: 4.0,
+            circleStrokeColor: Colors.white,
+          ),
+        );
+      } catch (e2) {
+        debugPrint('❌ Error adding fallback circle: $e2');
+      }
     }
   }
 
@@ -850,20 +993,44 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     debugPrint('🎬 Starting simulation...');
+    debugPrint('   - isSimulationMode: ${widget.isSimulationMode}');
+    debugPrint('   - Route segments: ${_viewModel.routeSegments.length}');
+
+    // Validate route data
+    if (_viewModel.routeSegments.isEmpty) {
+      debugPrint('❌ Cannot start simulation: No route data');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không có dữ liệu lộ trình để mô phỏng'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     // Reset any existing simulation in viewModel
     _viewModel.pauseSimulation();
 
-    // Connect to WebSocket first
+    // Connect to WebSocket first (with simulation mode enabled)
     final connected = await _startLocationTracking();
     if (!connected) {
-      debugPrint('❌ Failed to connect WebSocket');
+      debugPrint('❌ Failed to connect WebSocket for simulation');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể kết nối WebSocket cho mô phỏng'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
     debugPrint('✅ WebSocket connected, waiting for stabilization...');
-    // Wait a moment for WebSocket connection to stabilize
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Wait longer for WebSocket connection to stabilize and GPS stream to be fully stopped
+    await Future.delayed(const Duration(milliseconds: 1000));
 
     setState(() {
       _isSimulating = true;
@@ -890,16 +1057,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
           '📍 Location update: ${location.latitude}, ${location.longitude}, bearing: $bearing',
         );
 
+        // Update custom location marker
+        _updateLocationMarker(location, bearing);
+
         // Update camera to follow vehicle
         if (_isFollowingUser) {
           _setCameraToNavigationMode(location);
         }
 
-        // Send location update via IntegratedLocationService
-        _integratedLocationService.sendLocationUpdate(
-          location,
+        // Send location update via GlobalLocationManager with speed
+        _globalLocationManager.sendLocationUpdate(
+          location.latitude,
+          location.longitude,
           bearing: bearing,
+          speed: _viewModel.currentSpeed, // Add current speed
         );
+
+        // Rebuild UI to update speed display
+        if (mounted) {
+          setState(() {});
+        }
       },
       onSegmentComplete: (segmentIndex, isLastSegment) {
         debugPrint('✅ Segment $segmentIndex complete, isLast: $isLastSegment');
@@ -920,10 +1097,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
         }
       },
       simulationSpeed:
-          _simulationSpeed * 0.7, // Slow down for better experience
+          _simulationSpeed * 0.5, // Giảm xuống 0.5 để đạt 30-60 km/h
     );
 
-    debugPrint('✅ Simulation started with speed: ${_simulationSpeed * 0.7}');
+    debugPrint('✅ Simulation started with speed: ${_simulationSpeed * 0.5}x');
   }
 
   void _pauseSimulation() {
@@ -947,6 +1124,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _viewModel.pauseSimulation();
 
     debugPrint('✅ ViewModel.pauseSimulation() called');
+
+    // Rebuild UI to show speed = 0
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _resumeSimulation() async {
@@ -974,9 +1156,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     debugPrint('▶️ Resuming simulation...');
 
-    // Ensure integrated tracking is active
-    if (!_integratedLocationService.isActive) {
-      debugPrint('⚠️ Integrated tracking not active, starting...');
+    // Ensure global tracking is active
+    if (!_globalLocationManager.isGlobalTrackingActive) {
+      debugPrint('⚠️ Global tracking not active, starting...');
       final connected = await _startLocationTracking();
       if (!connected) {
         debugPrint('❌ Failed to start tracking');
@@ -1004,6 +1186,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
       debugPrint('✅ Camera refocused');
     }
 
+    // Rebuild UI to show updated speed
+    if (mounted) {
+      setState(() {});
+    }
+
     debugPrint('✅ Resume complete');
   }
 
@@ -1029,8 +1216,37 @@ class _NavigationScreenState extends State<NavigationScreen> {
           '📍 Focusing camera to start position: ${startPoint.latitude}, ${startPoint.longitude}',
         );
         _setCameraToNavigationMode(startPoint);
+
+        // Send location update to reset position on server
+        debugPrint('📤 Sending reset location to server...');
+        _globalLocationManager.sendLocationUpdate(
+          startPoint.latitude,
+          startPoint.longitude,
+          bearing: 0.0,
+        );
       }
     }
+  }
+
+  Widget _buildSpeedButton(String label, double speed) {
+    final isSelected = _simulationSpeed == speed;
+    return ElevatedButton(
+      onPressed: () {
+        setState(() {
+          _simulationSpeed = speed;
+        });
+        if (_isSimulating && !_isPaused) {
+          _viewModel.updateSimulationSpeed(_simulationSpeed * 0.5);
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isSelected ? AppColors.primary : Colors.grey[300],
+        foregroundColor: isSelected ? Colors.white : Colors.black87,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        minimumSize: const Size(60, 36),
+      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+    );
   }
 
   void _reportIncident() {
@@ -1494,27 +1710,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Text('Tốc độ:'),
+                        const Text(
+                          'Tốc độ:',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Slider(
-                            value: _simulationSpeed,
-                            min: 0.5,
-                            max: 3.0,
-                            divisions: 5,
-                            label: '${_simulationSpeed.toStringAsFixed(1)}x',
-                            onChanged: (value) {
-                              setState(() {
-                                _simulationSpeed = value;
-                              });
-                              if (_isSimulating && !_isPaused) {
-                                _viewModel.updateSimulationSpeed(
-                                  _simulationSpeed * 0.7,
-                                );
-                              }
-                            },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildSpeedButton('x1', 1.0),
+                              _buildSpeedButton('x2', 2.0),
+                              _buildSpeedButton('x3', 3.0),
+                            ],
                           ),
                         ),
-                        Text('${_simulationSpeed.toStringAsFixed(1)}x'),
                       ],
                     ),
                     Row(

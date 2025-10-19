@@ -37,8 +37,15 @@ class NavigationViewModel extends ChangeNotifier {
   Timer? _simulationTimer;
   List<List<int>> _pointIndices = [];
   List<int> _currentPointIndices = [];
-  final double _simulationInterval = 800; // milliseconds
+  final double _simulationInterval = 1000; // milliseconds - Consistent 1Hz updates for smooth interpolation
+  double _currentSimulationSpeed = 1.0; // Lưu tốc độ simulation hiện tại
   bool _isSimulating = false;
+  
+  // Interpolation variables for smooth animation
+  LatLng? _startPoint;
+  LatLng? _endPoint;
+  double _interpolationProgress = 0.0; // 0.0 to 1.0
+  final int _interpolationSteps = 10; // Number of steps between route points
 
   // Error handling
   String _errorMessage = '';
@@ -224,84 +231,8 @@ class NavigationViewModel extends ChangeNotifier {
     }
   }
 
-  // Sử dụng dữ liệu mẫu khi không có dữ liệu thực
-  void useSampleRouteData() {
-    debugPrint('📍 Sử dụng dữ liệu route mẫu');
-
-    // Xóa dữ liệu cũ
-    routeSegments = [];
-    _pointIndices = [];
-
-    // Tạo 3 đoạn đường mẫu: Kho → Lấy hàng → Giao hàng → Kho
-
-    // Đoạn 1: Kho → Lấy hàng
-    final segment1Points = [
-      LatLng(10.762534, 106.660191), // Kho (Carrier)
-      LatLng(10.763543, 106.660091),
-      LatLng(10.765976, 106.664035),
-      LatLng(10.767635, 106.667073),
-      LatLng(10.767692, 106.674123),
-      LatLng(10.765588, 106.680924),
-      LatLng(10.765377, 106.690095), // Điểm lấy hàng (Pickup)
-    ];
-
-    // Đoạn 2: Lấy hàng → Giao hàng
-    final segment2Points = [
-      LatLng(10.765377, 106.690095), // Điểm lấy hàng (Pickup)
-      LatLng(10.764690, 106.692114),
-      LatLng(10.766061, 106.693763),
-      LatLng(10.767175, 106.694711),
-      LatLng(10.763685, 106.703361),
-      LatLng(10.759927, 106.712708),
-      LatLng(10.752257, 106.724319),
-      LatLng(10.737708, 106.727986), // Điểm giao hàng (Delivery)
-    ];
-
-    // Đoạn 3: Giao hàng → Kho
-    final segment3Points = [
-      LatLng(10.737708, 106.727986), // Điểm giao hàng (Delivery)
-      LatLng(10.737780, 106.726109),
-      LatLng(10.738044, 106.721726),
-      LatLng(10.730408, 106.718331),
-      LatLng(10.729134, 106.709263),
-      LatLng(10.728346, 106.682313),
-      LatLng(10.736747, 106.671363),
-      LatLng(10.762709, 106.660146), // Kho (Carrier)
-    ];
-
-    routeSegments.add(
-      RouteSegment(name: 'Kho → Lấy hàng', points: segment1Points),
-    );
-    routeSegments.add(
-      RouteSegment(name: 'Lấy hàng → Giao hàng', points: segment2Points),
-    );
-    routeSegments.add(
-      RouteSegment(name: 'Giao hàng → Kho', points: segment3Points),
-    );
-
-    // Tạo indices
-    _pointIndices = List.generate(
-      3,
-      (i) => List.generate(routeSegments[i].points.length, (j) => j),
-    );
-
-    // Set initial location
-    currentLocation = routeSegments[0].points.first;
-    currentBearing = 0;
-    _currentPointIndices = [0];
-
-    // Set vehicle ID nếu chưa có
-    if (_currentVehicleId.isEmpty) {
-      _currentVehicleId = 'a2222222-2222-2222-2222-222222222222';
-    }
-
-    // Set license plate number nếu chưa có
-    if (_currentLicensePlateNumber.isEmpty) {
-      _currentLicensePlateNumber = '51B-00005';
-    }
-
-    notifyListeners();
-  }
+  // NOTE: useSampleRouteData() method removed - no longer needed
+  // All route data now comes from backend API via parseRouteFromOrder()
 
   void startSimulation({
     required Function(LatLng, double?) onLocationUpdate,
@@ -323,6 +254,7 @@ class NavigationViewModel extends ChangeNotifier {
     }
 
     _isSimulating = true;
+    _currentSimulationSpeed = simulationSpeed; // Lưu tốc độ simulation
     debugPrint('✅ Simulation state set to true');
 
     // Lưu trữ callback để có thể sử dụng lại khi resume
@@ -336,12 +268,19 @@ class NavigationViewModel extends ChangeNotifier {
       _currentPointIndices = List.generate(routeSegments.length, (_) => 0);
       currentLocation = routeSegments[0].points.first;
 
-      // Calculate initial bearing if we have at least 2 points
+      // Calculate initial bearing and speed if we have at least 2 points
       if (routeSegments[0].points.length > 1) {
         final nextPoint = routeSegments[0].points[1];
         currentBearing = _calculateBearing(currentLocation!, nextPoint);
+        
+        // Calculate initial speed based on first segment
+        final distance = _calculateDistance(currentLocation!, nextPoint);
+        final totalTimeInSeconds = (_simulationInterval * _interpolationSteps / simulationSpeed) / 1000.0;
+        currentSpeed = (distance / totalTimeInSeconds) * 3.6;
+        debugPrint('🚗 Initial speed calculated: ${currentSpeed.toStringAsFixed(1)} km/h');
       } else {
         currentBearing = 0;
+        currentSpeed = 0.0;
       }
 
       // Notify immediately with initial position
@@ -395,24 +334,46 @@ class NavigationViewModel extends ChangeNotifier {
       return;
     }
 
-    // Calculate next position
-    final currentPoint = points[currentPointIndex];
-    final nextPoint = points[currentPointIndex + 1];
+    // Get current and next route points
+    final currentRoutePoint = points[currentPointIndex];
+    final nextRoutePoint = points[currentPointIndex + 1];
 
-    // Calculate bearing between current and next point
-    currentBearing = _calculateBearing(currentPoint, nextPoint);
+    // Initialize interpolation if starting new segment
+    if (_startPoint == null || _endPoint == null || 
+        _startPoint != currentRoutePoint || _endPoint != nextRoutePoint) {
+      _startPoint = currentRoutePoint;
+      _endPoint = nextRoutePoint;
+      _interpolationProgress = 0.0;
+      
+      // Calculate bearing between route points
+      currentBearing = _calculateBearing(_startPoint!, _endPoint!);
+      
+      // Calculate speed based on segment distance and total time to traverse it
+      // Total time = _simulationInterval * _interpolationSteps / _currentSimulationSpeed
+      final segmentDistance = _calculateDistance(_startPoint!, _endPoint!);
+      final totalTimeInSeconds = (_simulationInterval * _interpolationSteps / _currentSimulationSpeed) / 1000.0;
+      currentSpeed = (segmentDistance / totalTimeInSeconds) * 3.6; // km/h
+    }
 
-    // Calculate distance between points
-    final distance = _calculateDistance(currentPoint, nextPoint);
+    // Interpolate between start and end points
+    final lat = _startPoint!.latitude + 
+        (_endPoint!.latitude - _startPoint!.latitude) * _interpolationProgress;
+    final lng = _startPoint!.longitude + 
+        (_endPoint!.longitude - _startPoint!.longitude) * _interpolationProgress;
+    
+    currentLocation = LatLng(lat, lng);
+    
+    // Advance interpolation
+    _interpolationProgress += 1.0 / _interpolationSteps;
+    
+    // If interpolation complete, move to next route point
+    if (_interpolationProgress >= 1.0) {
+      _currentPointIndices[currentSegmentIndex]++;
+      _startPoint = null; // Reset for next segment
+      _endPoint = null;
+    }
 
-    // Calculate speed based on distance (km/h)
-    currentSpeed = distance * 3.6; // m/s to km/h
-
-    // Move to next point
-    currentLocation = nextPoint;
-    _currentPointIndices[currentSegmentIndex]++;
-
-    // Notify listeners with new location
+    // Notify listeners with interpolated location
     onLocationUpdate(currentLocation!, currentBearing);
     notifyListeners();
   }
@@ -440,6 +401,7 @@ class NavigationViewModel extends ChangeNotifier {
       // End of simulation
       _simulationTimer?.cancel();
       _isSimulating = false;
+      currentSpeed = 0.0; // Reset tốc độ khi kết thúc
     }
 
     notifyListeners();
@@ -453,6 +415,7 @@ class NavigationViewModel extends ChangeNotifier {
 
     _simulationTimer?.cancel();
     _simulationTimer = null; // ✅ IMPORTANT: Set to null after cancel
+    currentSpeed = 0.0; // Reset tốc độ khi pause
 
     debugPrint('✅ Timer cancelled and set to null');
     notifyListeners();
@@ -467,8 +430,26 @@ class NavigationViewModel extends ChangeNotifier {
 
     if (_isSimulating && _simulationTimer == null) {
       debugPrint('✅ Resuming simulation timer...');
+      
+      // Recalculate speed based on current position
+      if (currentLocation != null && 
+          currentSegmentIndex < routeSegments.length &&
+          routeSegments[currentSegmentIndex].points.isNotEmpty) {
+        final currentSegment = routeSegments[currentSegmentIndex];
+        final currentPointIndex = _currentPointIndices[currentSegmentIndex];
+        
+        if (currentPointIndex < currentSegment.points.length - 1) {
+          final nextPoint = currentSegment.points[currentPointIndex + 1];
+          final distance = _calculateDistance(currentLocation!, nextPoint);
+          final totalTimeInSeconds = (_simulationInterval * _interpolationSteps / _currentSimulationSpeed) / 1000.0;
+          currentSpeed = (distance / totalTimeInSeconds) * 3.6;
+          debugPrint('🚗 Speed recalculated on resume: ${currentSpeed.toStringAsFixed(1)} km/h');
+        }
+      }
+      
+      final interval = (_simulationInterval / _currentSimulationSpeed).round();
       _simulationTimer = Timer.periodic(
-        Duration(milliseconds: _simulationInterval.round()),
+        Duration(milliseconds: interval),
         (timer) {
           if (_locationUpdateCallback != null &&
               _segmentCompleteCallback != null) {
@@ -479,7 +460,7 @@ class NavigationViewModel extends ChangeNotifier {
           }
         },
       );
-      debugPrint('✅ Simulation timer resumed');
+      debugPrint('✅ Simulation timer resumed with interval: ${interval}ms');
       notifyListeners();
     } else {
       debugPrint(
@@ -493,6 +474,8 @@ class NavigationViewModel extends ChangeNotifier {
   Function(int, bool)? _segmentCompleteCallback;
 
   void updateSimulationSpeed(double speed) {
+    _currentSimulationSpeed = speed; // Cập nhật tốc độ simulation
+    
     if (_simulationTimer != null) {
       _simulationTimer!.cancel();
 
@@ -512,11 +495,17 @@ class NavigationViewModel extends ChangeNotifier {
     _simulationTimer?.cancel();
     _simulationTimer = null;
     _isSimulating = false;
+    _currentSimulationSpeed = 1.0; // Reset về default
 
     routeSegments = [];
     _pointIndices = [];
     currentSegmentIndex = 0;
     _currentPointIndices = [];
+    
+    // Reset interpolation variables
+    _startPoint = null;
+    _endPoint = null;
+    _interpolationProgress = 0.0;
 
     currentLocation = null;
     currentBearing = null;

@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 
 import '../../../../app/app_routes.dart';
-import '../../../../core/services/integrated_location_service.dart';
+import '../../../../core/services/global_location_manager.dart';
 import '../../../../core/services/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
+import '../../../../core/utils/driver_role_checker.dart';
+import '../../../../domain/entities/order_with_details.dart';
+import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../presentation/theme/app_colors.dart';
-import '../../../features/auth/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/order_detail_viewmodel.dart';
 import '../viewmodels/order_list_viewmodel.dart';
 import '../widgets/order_detail/index.dart';
@@ -25,7 +27,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final OrderDetailViewModel _viewModel;
   late final AuthViewModel _authViewModel;
   late final OrderListViewModel _orderListViewModel;
-  late final IntegratedLocationService _integratedLocationService;
+  late final GlobalLocationManager _globalLocationManager;
 
   @override
   void initState() {
@@ -33,7 +35,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _viewModel = getIt<OrderDetailViewModel>();
     _authViewModel = getIt<AuthViewModel>();
     _orderListViewModel = getIt<OrderListViewModel>();
-    _integratedLocationService = IntegratedLocationService.instance;
+    _globalLocationManager = getIt<GlobalLocationManager>();
+    
+    // Register this screen with GlobalLocationManager
+    _globalLocationManager.registerScreen('OrderDetailScreen');
+    
     _loadOrderDetails();
 
     // Rebuild UI periodically to check WebSocket status
@@ -56,6 +62,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   void dispose() {
+    // Unregister this screen from GlobalLocationManager
+    _globalLocationManager.unregisterScreen('OrderDetailScreen');
+    
     // Tải lại danh sách đơn hàng khi màn hình chi tiết bị đóng
     _orderListViewModel.getDriverOrders();
     super.dispose();
@@ -190,8 +199,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             right: 16,
             child: Builder(
               builder: (context) {
-                final isConnected = _integratedLocationService.isActive;
-                debugPrint('🔍 FAB - Integrated tracking active: $isConnected');
+                // Use GlobalLocationManager to check if tracking is active for this order
+                final isConnected = _globalLocationManager.isTrackingOrder(orderWithDetails.id);
+                debugPrint('🔍 FAB - Global tracking active for order ${orderWithDetails.id}: $isConnected');
 
                 return FloatingActionButton.extended(
                   onPressed: () {
@@ -259,6 +269,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ? StartDeliverySection(order: orderWithDetails)
                   : ElevatedButton(
                       onPressed: () async {
+                        // Kiểm tra driver role trước khi cho phép thực hiện action
+                        if (!DriverRoleChecker.canPerformActions(orderWithDetails, _authViewModel)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(DriverRoleChecker.getSecondaryDriverActionMessage()),
+                              backgroundColor: Colors.orange,
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                          return;
+                        }
+
                         final result = await Navigator.pushNamed(
                           context,
                           AppRoutes.preDeliveryDocumentation,
@@ -269,8 +291,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           // Reload order details to reflect status change
                           _loadOrderDetails();
 
-                          // If we're in simulation mode (tracking active), navigate back to continue simulation
-                          if (_integratedLocationService.isActive) {
+                          // If tracking is active, navigate back to continue
+                          if (_globalLocationManager.isGlobalTrackingActive) {
                             Navigator.of(context).pushNamed(
                               AppRoutes.navigation,
                               arguments: {

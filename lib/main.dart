@@ -8,7 +8,6 @@ import 'app/app_routes.dart';
 import 'core/services/hot_reload_helper.dart';
 import 'core/services/index.dart';
 import 'core/services/vietmap_service.dart';
-import 'core/services/integrated_location_service.dart';
 import 'presentation/common_widgets/vietmap/vietmap_viewmodel.dart';
 import 'presentation/features/auth/index.dart';
 
@@ -29,35 +28,9 @@ void main() async {
   await setupServiceLocator();
   debugPrint('✅ Service locator setup complete');
 
-  // Attempt to recover location tracking if app was killed during tracking
-  debugPrint('🔄 Checking for location tracking recovery...');
-  try {
-    final wasTrackingActive = await IntegratedLocationService.instance
-        .wasTrackingActiveBeforeKill();
-    if (wasTrackingActive) {
-      debugPrint(
-        '📍 Previous tracking session detected, attempting recovery...',
-      );
-      final recovered = await IntegratedLocationService.instance
-          .attemptRecovery();
-      if (recovered) {
-        debugPrint('✅ Location tracking recovered successfully');
-
-        // Process background location queue
-        await IntegratedLocationService.instance
-            .processBackgroundLocationQueue();
-      } else {
-        debugPrint('⚠️ Location tracking recovery failed');
-      }
-    } else {
-      debugPrint('ℹ️ No previous tracking session to recover');
-
-      // Still process background queue in case there are pending locations
-      await IntegratedLocationService.instance.processBackgroundLocationQueue();
-    }
-  } catch (e) {
-    debugPrint('❌ Error during recovery check: $e');
-  }
+  // NOTE: Recovery features removed as part of architecture simplification
+  // GlobalLocationManager now handles all location tracking directly
+  debugPrint('ℹ️ Location tracking will be managed by GlobalLocationManager');
 
   // Đặt navigatorKey cho AuthViewModel
   AuthViewModel.setNavigatorKey(navigatorKey);
