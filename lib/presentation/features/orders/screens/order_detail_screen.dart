@@ -297,19 +297,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 return FloatingActionButton.extended(
                   onPressed: () {
                     if (isConnected) {
-                      // Return to navigation screen (already has active connection)
-                      // Pop current screen first, then navigate to navigation
-                      
-                      Navigator.of(context).pop(); // Pop OrderDetailScreen
-                      
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.navigation,
-                        arguments: {
-                          'orderId': orderWithDetails.id,
-                          'isSimulationMode': _globalLocationManager.isSimulationMode,
-                        },
-                      );
+                      // CRITICAL: Just pop back to existing NavigationScreen
+                      // DO NOT create new NavigationScreen with pushNamed
+                      debugPrint('🔙 Returning to existing NavigationScreen');
+                      Navigator.of(context).pop(); // Pop OrderDetailScreen only
                     } else {
                       // Go to route details to start navigation
                       Navigator.pushNamed(
@@ -387,19 +378,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           // Reload order details to reflect status change
                           _loadOrderDetails();
 
-                          // If tracking is active, navigate back to continue
+                          // If tracking is active, just pop back to NavigationScreen
+                          // DO NOT create new NavigationScreen with pushNamed
                           if (_globalLocationManager.isGlobalTrackingActive &&
                               _globalLocationManager.currentOrderId == orderWithDetails.id) {
-                            // Pop current screen and navigate to navigation screen
-                            Navigator.of(context).pop(); // Pop OrderDetailScreen
-                            
-                            Navigator.of(context).pushNamed(
-                              AppRoutes.navigation,
-                              arguments: {
-                                'orderId': orderWithDetails.id,
-                                'isSimulationMode': _globalLocationManager.isSimulationMode,
-                              },
-                            );
+                            debugPrint('✅ Seal confirmed, popping back to NavigationScreen with result = true');
+                            Navigator.of(context).pop(true); // Pop with result to signal resume
                           }
                         }
                       },

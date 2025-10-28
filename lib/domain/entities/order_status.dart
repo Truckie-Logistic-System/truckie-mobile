@@ -51,7 +51,7 @@ enum OrderStatus {
       case OrderStatus.onDelivered:
         return 'Đang giao hàng';
       case OrderStatus.ongoingDelivered:
-        return 'Đang trong quá trình giao';
+        return 'Sắp giao hàng tới';
       case OrderStatus.delivered:
         return 'Đã giao hàng';
       case OrderStatus.inTroubles:

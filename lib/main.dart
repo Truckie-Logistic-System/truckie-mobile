@@ -26,11 +26,11 @@ void main() async {
   // Khởi tạo service locator (includes enhanced location services)
   debugPrint('🔧 Setting up service locator...');
   await setupServiceLocator();
-  debugPrint('✅ Service locator setup complete');
+  // debugPrint('✅ Service locator setup complete');
 
   // NOTE: Recovery features removed as part of architecture simplification
   // GlobalLocationManager now handles all location tracking directly
-  debugPrint('ℹ️ Location tracking will be managed by GlobalLocationManager');
+  // debugPrint('ℹ️ Location tracking will be managed by GlobalLocationManager');
 
   // Đặt navigatorKey cho AuthViewModel
   AuthViewModel.setNavigatorKey(navigatorKey);

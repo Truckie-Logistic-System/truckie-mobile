@@ -41,6 +41,7 @@ class GlobalLocationManager {
   DateTime? _trackingStartTime;
   bool _isPrimaryDriver = true;
   bool _isSimulationMode = false; // Track simulation mode for reconnection
+  bool _shouldResumeSimulation = false; // Flag to resume simulation after action confirmation
   
   // Screen tracking để biết màn hình nào đang active
   String? _currentScreen;
@@ -72,8 +73,15 @@ class GlobalLocationManager {
   DateTime? get trackingStartTime => _trackingStartTime;
   bool get isPrimaryDriver => _isPrimaryDriver;
   bool get isSimulationMode => _isSimulationMode;
+  bool get shouldResumeSimulation => _shouldResumeSimulation;
   String? get currentScreen => _currentScreen;
   Set<String> get activeScreens => Set.unmodifiable(_activeScreens);
+  
+  // Setter for resume flag
+  void setShouldResumeSimulation(bool value) {
+    debugPrint('🔄 GlobalLocationManager: setShouldResumeSimulation = $value');
+    _shouldResumeSimulation = value;
+  }
   
   // Streams
   Stream<Map<String, dynamic>> get globalLocationStream => _globalLocationController.stream;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/entities/order_detail.dart';
 import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
@@ -10,10 +11,13 @@ import '../../../../app/app_routes.dart';
 import '../../../../core/services/global_location_manager.dart';
 import '../../../../core/services/navigation_state_service.dart';
 import '../../../../app/di/service_locator.dart';
+import '../../../../data/datasources/api_client.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
+import '../../../../presentation/features/orders/viewmodels/order_detail_viewmodel.dart';
 import '../../../../presentation/utils/driver_role_checker.dart';
 import '../viewmodels/navigation_viewmodel.dart';
+import '../widgets/map/image_based_3d_truck_marker.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String orderId;
@@ -29,7 +33,7 @@ class NavigationScreen extends StatefulWidget {
   State<NavigationScreen> createState() => _NavigationScreenState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen> {
+class _NavigationScreenState extends State<NavigationScreen> with WidgetsBindingObserver, RouteAware {
   late final NavigationViewModel _viewModel;
   late final GlobalLocationManager _globalLocationManager;
   late final AuthViewModel _authViewModel;
@@ -61,6 +65,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
   DateTime? _lastDrawRoutesTime;
   static const _drawRoutesThrottleDuration = Duration(milliseconds: 500);
 
+  // Removed didChangeDependencies - using Navigator result pattern instead
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +77,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _viewModel = getIt<NavigationViewModel>();
     _globalLocationManager = getIt<GlobalLocationManager>();
     _authViewModel = getIt<AuthViewModel>();
+
+    // Register observers
+    WidgetsBinding.instance.addObserver(this);
 
     // Register this screen with GlobalLocationManager
     _globalLocationManager.registerScreen('NavigationScreen');
@@ -85,24 +94,34 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     _loadMapStyle();
 
-    // Load order details to ensure we have latest vehicle assignment info
-    // This is important for determining isPrimaryDriver status
-    debugPrint('   - Loading order details...');
-    _loadOrderDetails().then((_) {
-      // After loading, check if we need to auto-resume
-      if (_viewModel.routeSegments.isNotEmpty) {
-        _checkAndResumeAfterAction();
-      }
-    });
-
     // Check if viewModel is already simulating (returning to active simulation)
     // Only set _isSimulating if viewModel confirms it's running
     if (_viewModel.isSimulating && widget.isSimulationMode) {
       debugPrint('   - ViewModel is simulating, setting _isSimulating = true');
       _isSimulating = true;
+      
+      // CRITICAL: Check and resume immediately if already have route segments
+      // Don't wait for _loadOrderDetails() which might be slow or fail
+      if (_viewModel.routeSegments.isNotEmpty) {
+        debugPrint('   - Route segments already loaded, checking resume immediately');
+        _checkAndResumeAfterAction();
+      }
     } else {
       debugPrint('   - ViewModel not simulating, _isSimulating = false');
     }
+
+    // Load order details to ensure we have latest vehicle assignment info
+    // This is important for determining isPrimaryDriver status
+    debugPrint('   - Loading order details...');
+    _loadOrderDetails().then((_) {
+      // After loading, check if we need to auto-resume (in case segments weren't loaded before)
+      if (_viewModel.routeSegments.isNotEmpty && _viewModel.isSimulating && !_isSimulating) {
+        debugPrint('   - Route segments loaded after init, checking resume');
+        _checkAndResumeAfterAction();
+      }
+    }).catchError((e) {
+      debugPrint('   - Error loading order details: $e');
+    });
   }
   
   // Check if we need to resume simulation after action confirmation
@@ -115,16 +134,82 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('   - currentSegmentIndex: ${_viewModel.currentSegmentIndex}');
     debugPrint('   - currentLocation: ${_viewModel.currentLocation}');
     
-    // Sync state from viewModel
+    // CRITICAL: If ViewModel is simulating but screen state is not, sync immediately
+    // This happens when NavigationScreen is recreated after action confirmation
     if (_viewModel.isSimulating && !_isSimulating) {
       debugPrint('⚠️ State mismatch: ViewModel is simulating but screen state is not');
+      debugPrint('   🔄 Syncing screen state from ViewModel...');
       _isSimulating = true;
-      _isPaused = true; // Assume paused if we just returned
+      _isPaused = false; // ViewModel is actively simulating, so NOT paused
+      
+      // IMPORTANT: Ensure timer is reset before resuming
+      // This handles case where timer might still be active from previous session
+      debugPrint('   🔄 Ensuring simulation timer is reset...');
+      _viewModel.pauseSimulation(); // Cancel any existing timer
+      
+      // Reset _isSimulating flag so startSimulation can be called
+      debugPrint('   🔄 Resetting _isSimulating flag...');
+      _viewModel.resetSimulationFlag();
+      
+      // CRITICAL: Re-register callbacks since NavigationScreen was recreated
+      // This ensures location updates and segment completion are handled properly
+      debugPrint('   🔄 Re-registering simulation callbacks...');
+      _viewModel.startSimulation(
+        onLocationUpdate: (location, bearing) {
+          debugPrint(
+            '📍 Location update (resume): ${location.latitude}, ${location.longitude}, bearing: $bearing',
+          );
+
+          // Update custom location marker
+          _updateLocationMarker(location, bearing);
+
+          // Update camera to follow vehicle
+          if (_isFollowingUser) {
+            _setCameraToNavigationMode(location);
+          }
+
+          // Send location update via GlobalLocationManager with speed and segment
+          _globalLocationManager.sendLocationUpdate(
+            location.latitude,
+            location.longitude,
+            bearing: bearing,
+            speed: _viewModel.currentSpeed,
+            segmentIndex: _viewModel.currentSegmentIndex,
+          );
+
+          // Rebuild UI to update speed display
+          if (mounted) {
+            setState(() {});
+          }
+        },
+        onSegmentComplete: (segmentIndex, isLastSegment) {
+          debugPrint('✅ Segment $segmentIndex complete (resume), isLast: $isLastSegment');
+
+          // Pause simulation when reaching any waypoint
+          _pauseSimulation();
+          _drawRoutes();
+
+          if (isLastSegment) {
+            // Reached final destination (Carrier)
+            _showCompletionMessage();
+          } else if (segmentIndex == 0) {
+            // Completed segment 0: Reached Pickup location
+            _showPickupMessage();
+          } else if (segmentIndex == 1) {
+            // Completed segment 1: Reached Delivery location
+            _showDeliveryMessage();
+          }
+        },
+        simulationSpeed: _viewModel.currentSimulationSpeed,
+      );
+      
+      debugPrint('   ▶️ Simulation restarted with callbacks');
+      return; // Exit early since we've already handled the resume
     }
     
-    // If in simulation mode and paused (likely after action confirmation), auto-resume
+    // If in simulation mode and paused (user manually paused), auto-resume
     if (widget.isSimulationMode && _isSimulating && _isPaused) {
-      debugPrint('✅ Auto-resuming simulation after action confirmation');
+      debugPrint('✅ Auto-resuming simulation after action confirmation (was paused)');
       
       // Check if we're at the end of a segment (just completed an action)
       final currentSegment = _viewModel.routeSegments.isNotEmpty && 
@@ -192,6 +277,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
     } catch (e) {
       debugPrint('⚠️ Error cleaning up map resources: $e');
     }
+
+    // Remove observers
+    WidgetsBinding.instance.removeObserver(this);
 
     // Unregister this screen from GlobalLocationManager
     _globalLocationManager.unregisterScreen('NavigationScreen');
@@ -1247,6 +1335,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
           segmentIndex: _viewModel.currentSegmentIndex, // Add segment for position restore
         );
 
+        // Check if near delivery point (3km) and update status
+        _checkAndUpdateNearDelivery(location).ignore();
+
         // Rebuild UI to update speed display
         if (mounted) {
           setState(() {});
@@ -1440,7 +1531,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
     debugPrint('⏩ Jump to next segment button pressed');
     debugPrint('   - _isSimulating: $_isSimulating');
     debugPrint('   - _isPaused: $_isPaused');
-    
+    debugPrint('   - Current segment: ${_viewModel.currentSegmentIndex}');
+
     // CRITICAL: Ensure simulation is running
     // If paused, resume it so next tick can detect completion
     if (_isSimulating && _isPaused) {
@@ -1450,8 +1542,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
     }
     
+    // Check if jumping to delivery point (segment 1) and update status
+    final isJumpingToDelivery = _viewModel.currentSegmentIndex == 1;
+    debugPrint('📊 isJumpingToDelivery: $isJumpingToDelivery (currentSegmentIndex: ${_viewModel.currentSegmentIndex})');
+    debugPrint('📊 orderWithDetails: ${_viewModel.orderWithDetails != null}');
+    
     // Jump to next segment in viewModel (await for status updates)
     await _viewModel.jumpToNextSegment();
+    
+    // CRITICAL: Update order status to ONGOING_DELIVERED when jumping to delivery
+    if (isJumpingToDelivery && _viewModel.orderWithDetails != null) {
+      debugPrint('🎯 Jumped to delivery point! Updating order status to ONGOING_DELIVERED...');
+      final orderDetailViewModel = Provider.of<OrderDetailViewModel>(
+        context,
+        listen: false,
+      );
+      await orderDetailViewModel.updateOrderStatusToOngoingDelivered();
+      _hasNotifiedNearDelivery = true; // Mark as notified to avoid duplicate updates
+    } else {
+      debugPrint('⏭️ Skipping status update: isJumpingToDelivery=$isJumpingToDelivery, hasOrderDetails=${_viewModel.orderWithDetails != null}');
+    }
     
     // Update camera to new location
     if (_viewModel.currentLocation != null) {
@@ -1548,12 +1658,22 @@ class _NavigationScreenState extends State<NavigationScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Navigate to order detail screen
-              Navigator.of(
-                context,
-              ).pushNamed(AppRoutes.orderDetail, arguments: widget.orderId);
+            onPressed: () async {
+              Navigator.of(context).pop(); // Close dialog
+              
+              // Navigate to order detail and wait for result
+              final result = await Navigator.of(context).pushNamed(
+                AppRoutes.orderDetail,
+                arguments: widget.orderId,
+              );
+              
+              // If result is true, seal was confirmed - resume simulation
+              if (result == true && mounted) {
+                debugPrint('✅ Seal confirmed, resuming simulation');
+                if (_isPaused && _isSimulating) {
+                  _resumeSimulation();
+                }
+              }
             },
             child: const Text('Xác nhận'),
           ),
@@ -1563,6 +1683,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   void _showDeliveryMessage() {
+    debugPrint('📍 _showDeliveryMessage() called');
+    
+    // CRITICAL: Update order status to ONGOING_DELIVERED when showing delivery dialog
+    // Fire and forget - don't wait for it to complete
+    debugPrint('🔄 Calling _updateOrderStatusOnDeliveryReached()...');
+    _updateOrderStatusOnDeliveryReached().then((_) {
+      debugPrint('✅ Order status update completed');
+    }).catchError((e) {
+      debugPrint('❌ Order status update error: $e');
+    });
+    
+    debugPrint('📋 Showing delivery dialog...');
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1573,18 +1705,41 @@ class _NavigationScreenState extends State<NavigationScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Navigate to order detail screen to upload photo completion
-              Navigator.of(
-                context,
-              ).pushNamed(AppRoutes.orderDetail, arguments: widget.orderId);
+            onPressed: () async {
+              Navigator.of(context).pop(); // Close dialog
+              
+              // Navigate to order detail and wait for result
+              final result = await Navigator.of(context).pushNamed(
+                AppRoutes.orderDetail,
+                arguments: widget.orderId,
+              );
+              
+              // If result is true, delivery was confirmed - resume simulation
+              if (result == true && mounted) {
+                debugPrint('✅ Delivery confirmed, resuming simulation');
+                if (_isPaused && _isSimulating) {
+                  _resumeSimulation();
+                }
+              }
             },
             child: const Text('Chụp ảnh xác nhận'),
           ),
         ],
       ),
     );
+  }
+
+  /// Update order status to ONGOING_DELIVERED when reaching delivery point
+  Future<void> _updateOrderStatusOnDeliveryReached() async {
+    debugPrint('🎯 Delivery point reached! Updating order status to ONGOING_DELIVERED...');
+    
+    try {
+      // Call ViewModel method to update status (respects MVVM architecture)
+      await _viewModel.updateToOngoingDelivered();
+      _hasNotifiedNearDelivery = true; // Mark as notified
+    } catch (e) {
+      debugPrint('❌ Error updating order status: $e');
+    }
   }
 
   Future<bool?> _showCompleteTripConfirmation() {
@@ -1645,6 +1800,64 @@ class _NavigationScreenState extends State<NavigationScreen> {
     );
   }
 
+
+  // Track if we've already notified about near delivery
+  bool _hasNotifiedNearDelivery = false;
+  static const double _nearDeliveryThresholdKm = 3.0;
+
+  /// Check if vehicle is near delivery point (within 3km) and update order status
+  Future<void> _checkAndUpdateNearDelivery(LatLng currentLocation) async {
+    // Only check if:
+    // 1. Currently in segment 1 (going to delivery point)
+    // 2. Haven't notified yet
+    // 3. Have order details
+    if (_viewModel.currentSegmentIndex != 1 || 
+        _hasNotifiedNearDelivery || 
+        _viewModel.orderWithDetails == null) {
+      return;
+    }
+
+    // Get delivery point (last point of segment 1)
+    if (_viewModel.routeSegments.length <= 1 || 
+        _viewModel.routeSegments[1].points.isEmpty) {
+      return;
+    }
+
+    final deliveryPoint = _viewModel.routeSegments[1].points.last;
+    final distanceMeters = _calculateDistance(currentLocation, deliveryPoint);
+    final distanceKm = distanceMeters / 1000;
+
+    debugPrint('📍 Distance to delivery: ${distanceKm.toStringAsFixed(2)} km');
+
+    // If within 3km threshold, update order status
+    if (distanceKm <= _nearDeliveryThresholdKm) {
+      debugPrint('🎯 Within 3km of delivery point! Updating order status to ONGOING_DELIVERED...');
+      _hasNotifiedNearDelivery = true;
+      
+      // Call OrderDetailViewModel to update status
+      final orderDetailViewModel = Provider.of<OrderDetailViewModel>(
+        context,
+        listen: false,
+      );
+      await orderDetailViewModel.updateOrderStatusToOngoingDelivered();
+      debugPrint('✅ Order status updated to ONGOING_DELIVERED');
+    }
+  }
+
+  /// Calculate distance between two points in meters
+  double _calculateDistance(LatLng start, LatLng end) {
+    const earthRadius = 6371000; // meters
+    final lat1 = start.latitude * pi / 180;
+    final lat2 = end.latitude * pi / 180;
+    final dLat = (end.latitude - start.latitude) * pi / 180;
+    final dLon = (end.longitude - start.longitude) * pi / 180;
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return earthRadius * c; // distance in meters
+  }
 
   void _toggle3DMode() {
     setState(() {
@@ -1809,7 +2022,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         ),
                       ),
 
-                    // Vehicle marker
+                    // Vehicle marker with Image-Based 3D model (8 PNG sprites)
                     if (_mapController != null &&
                         _viewModel.currentLocation != null &&
                         _isMapReady &&
@@ -1818,15 +2031,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         mapController: _mapController!,
                         markers: [
                           Marker(
-                            child: Transform.rotate(
-                              angle:
-                                  (_viewModel.currentBearing ?? 0) *
-                                  (3.14159265359 / 180),
-                              child: const Icon(
-                                Icons.local_shipping,
-                                color: AppColors.primary,
-                                size: 30,
-                              ),
+                            child: ImageBased3DTruckMarker(
+                              bearing: _viewModel.currentBearing ?? 0,
+                              size: 50, // Smaller size for better accuracy
                             ),
                             latLng: _viewModel.currentLocation!,
                           ),

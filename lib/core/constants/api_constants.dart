@@ -50,7 +50,7 @@ class ApiConstants {
 
   /// Update order status to ONGOING_DELIVERED (within 3km of delivery point)
   /// Usage: PUT /orders/{orderId}/start-ongoing-delivery
-  static const String startOngoingDelivery = '/orders';
+  static const String startOngoingDelivery = '/orders/';
 
   /// Update order status to DELIVERED (arrived at delivery point)
   /// Usage: PUT /orders/{orderId}/arrive-at-delivery

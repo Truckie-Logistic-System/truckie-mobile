@@ -28,24 +28,13 @@ class DriverRoleChecker {
     
     final primaryDriver = vehicleAssignment.primaryDriver;
     if (primaryDriver == null) {
+      debugPrint('   ❌ PRIMARY DRIVER IS NULL');
       return false;
     }
     
     // Get current user phone number (most reliable identifier)
     final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
     final primaryDriverPhone = primaryDriver.phoneNumber;
-    
-    // debugPrint('🔍 DriverRoleChecker.isPrimaryDriver:');
-    // debugPrint('   📱 CURRENT USER (from auth):');
-    // debugPrint('      - Phone: "$currentUserPhone"');
-    // debugPrint('      - Name: "${authViewModel.driver?.userResponse.fullName}"');
-    // debugPrint('      - Username: "${authViewModel.driver?.userResponse.username}"');
-    // debugPrint('   🚗 PRIMARY DRIVER (from order):');
-    // debugPrint('      - Phone: "$primaryDriverPhone"');
-    // debugPrint('      - Name: "${primaryDriver.fullName}"');
-    // debugPrint('   🚗 SECONDARY DRIVER (from order):');
-    // debugPrint('      - Phone: "${vehicleAssignment.secondaryDriver?.phoneNumber}"');
-    // debugPrint('      - Name: "${vehicleAssignment.secondaryDriver?.fullName}"');
     
     // Primary method: Compare by phone number (unique and reliable)
     if (currentUserPhone != null && 

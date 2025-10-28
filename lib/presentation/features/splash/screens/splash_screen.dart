@@ -31,8 +31,10 @@ class _SplashScreenState extends State<SplashScreen> {
     // Kiểm tra trạng thái đăng nhập và refresh token nếu cần
     if (_authViewModel.status == AuthStatus.authenticated) {
       // Nếu đã đăng nhập, thử refresh token
+      // debugPrint('🔄 [SplashScreen] Status is authenticated, forcing token refresh...');
       final refreshed = await _authViewModel.forceRefreshToken();
-      debugPrint('Token refresh result: $refreshed');
+      // debugPrint('🔄 [SplashScreen] Token refresh result: $refreshed');
+      // debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
 
       if (refreshed) {
         // Nếu refresh token thành công, chuyển đến trang chính
@@ -43,16 +45,20 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     } else if (_authViewModel.status == AuthStatus.unauthenticated) {
       // Nếu chưa đăng nhập, chuyển đến trang đăng nhập
+      // debugPrint('🔓 [SplashScreen] Status is unauthenticated, navigating to login');
       _navigateToLogin();
     } else {
       // Nếu đang trong trạng thái loading, đợi cho đến khi hoàn tất
-      _authViewModel.checkAuthStatus().then((_) {
-        if (_authViewModel.status == AuthStatus.authenticated) {
-          _navigateToMain();
-        } else {
-          _navigateToLogin();
-        }
-      });
+      // debugPrint('⏳ [SplashScreen] Status is loading, waiting for checkAuthStatus...');
+      await _authViewModel.checkAuthStatus();
+      // debugPrint('✅ [SplashScreen] checkAuthStatus completed');
+      // debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
+      
+      if (_authViewModel.status == AuthStatus.authenticated) {
+        _navigateToMain();
+      } else {
+        _navigateToLogin();
+      }
     }
   }
 

@@ -265,6 +265,8 @@ Future<void> setupServiceLocator() async {
       createVehicleFuelConsumptionUseCase: getIt<CreateVehicleFuelConsumptionUseCase>(),
       photoCompletionRepository: getIt<PhotoCompletionRepository>(),
       fuelConsumptionRepository: getIt<VehicleFuelConsumptionRepository>(),
+      updateToDeliveredUseCase: getIt<UpdateOrderToDeliveredUseCase>(),
+      updateToOngoingDeliveredUseCase: getIt<UpdateOrderToOngoingDeliveredUseCase>(),
     ),
   );
 

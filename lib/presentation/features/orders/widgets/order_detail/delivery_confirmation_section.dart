@@ -152,13 +152,10 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
             ),
           );
 
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.navigation,
-            arguments: {
-              'orderId': widget.order.id,
-              'isSimulationMode': _globalLocationManager.isSimulationMode,
-            },
-          );
+          // CRITICAL: Pop with result = true to signal NavigationScreen to resume
+          // NavigationScreen is waiting for this result via await pushNamed()
+          debugPrint('✅ Seal confirmed, popping with result = true');
+          Navigator.of(context).pop(true);
         }
       } else {
         debugPrint('❌ Lỗi: ${viewModel.photoUploadError}');

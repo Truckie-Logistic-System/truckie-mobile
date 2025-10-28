@@ -26,9 +26,9 @@ class ApiClient implements IHttpClient {
         onRequest: (options, handler) async {
           final token = _tokenStorageService.getAccessToken();
           if (token != null) {
-            debugPrint(
-              'Using token in ApiClient: ${token.substring(0, 15)}...',
-            );
+            // debugPrint(
+            //   'Using token in ApiClient: ${token.substring(0, 15)}...',
+            // );
             options.headers['Authorization'] = 'Bearer $token';
           }
           return handler.next(options);
@@ -38,7 +38,7 @@ class ApiClient implements IHttpClient {
           return handler.next(e);
         },
         onResponse: (response, handler) {
-          debugPrint('DIO RESPONSE [${response.statusCode}]');
+          // debugPrint('DIO RESPONSE [${response.statusCode}]');
           return handler.next(response);
         },
       ),

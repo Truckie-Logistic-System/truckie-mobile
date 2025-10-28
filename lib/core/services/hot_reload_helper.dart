@@ -15,7 +15,7 @@ class HotReloadHelper {
         debugPrint('AuthViewModel not available for reset: $e');
       }
 
-      debugPrint('Successfully reset instances for hot reload');
+      // debugPrint('Successfully reset instances for hot reload');
     } catch (e) {
       debugPrint('Error resetting instances for hot reload: $e');
     }

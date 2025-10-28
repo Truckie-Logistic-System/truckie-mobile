@@ -345,13 +345,14 @@ class AuthViewModel extends BaseViewModel {
         // CRITICAL: Load access token vào TokenStorageService ngay khi restore user
         // Điều này đảm bảo TokenStorageService có token ngay từ đầu
         await _loadTokenToStorage();
-        
-        status = AuthStatus.authenticated;
 
-        // Fetch driver information if user is a driver
+        // Fetch driver information if user is a driver BEFORE setting authenticated status
+        // This ensures driver info is available when UI needs to check primary driver
         if (_getDriverInfoUseCase != null && _user!.role.roleName == 'DRIVER') {
           await _fetchDriverInfo();
         }
+        
+        status = AuthStatus.authenticated;
       } catch (e) {
         // debugPrint('Error parsing stored user info: $e');
         status = AuthStatus.unauthenticated;

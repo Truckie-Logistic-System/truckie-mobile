@@ -12,6 +12,8 @@ import '../../../../domain/entities/order_detail.dart';
 import '../../../../domain/repositories/photo_completion_repository.dart';
 import '../../../../domain/repositories/vehicle_fuel_consumption_repository.dart';
 import '../../../../domain/usecases/orders/get_order_details_usecase.dart';
+import '../../../../domain/usecases/orders/update_order_to_delivered_usecase.dart';
+import '../../../../domain/usecases/orders/update_order_to_ongoing_delivered_usecase.dart';
 import '../../../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';
 import '../../../common_widgets/base_viewmodel.dart';
 
@@ -24,6 +26,8 @@ class OrderDetailViewModel extends BaseViewModel {
   final CreateVehicleFuelConsumptionUseCase _createVehicleFuelConsumptionUseCase;
   final PhotoCompletionRepository _photoCompletionRepository;
   final VehicleFuelConsumptionRepository _fuelConsumptionRepository;
+  final UpdateOrderToDeliveredUseCase _updateToDeliveredUseCase;
+  final UpdateOrderToOngoingDeliveredUseCase _updateToOngoingDeliveredUseCase;
 
   OrderDetailState _state = OrderDetailState.initial;
   StartDeliveryState _startDeliveryState = StartDeliveryState.initial;
@@ -64,10 +68,14 @@ class OrderDetailViewModel extends BaseViewModel {
     required CreateVehicleFuelConsumptionUseCase createVehicleFuelConsumptionUseCase,
     required PhotoCompletionRepository photoCompletionRepository,
     required VehicleFuelConsumptionRepository fuelConsumptionRepository,
+    required UpdateOrderToDeliveredUseCase updateToDeliveredUseCase,
+    required UpdateOrderToOngoingDeliveredUseCase updateToOngoingDeliveredUseCase,
   }) : _getOrderDetailsUseCase = getOrderDetailsUseCase,
        _createVehicleFuelConsumptionUseCase = createVehicleFuelConsumptionUseCase,
        _photoCompletionRepository = photoCompletionRepository,
-       _fuelConsumptionRepository = fuelConsumptionRepository;
+       _fuelConsumptionRepository = fuelConsumptionRepository,
+       _updateToDeliveredUseCase = updateToDeliveredUseCase,
+       _updateToOngoingDeliveredUseCase = updateToOngoingDeliveredUseCase;
 
   Future<void> getOrderDetails(String orderId) async {
     if (_state == OrderDetailState.loading) return; // Tránh gọi nhiều lần
@@ -165,25 +173,25 @@ class OrderDetailViewModel extends BaseViewModel {
   /// Kiểm tra xem đơn hàng có thể bắt đầu giao hàng không
   bool canStartDelivery() {
     if (_orderWithDetails == null) {
-      debugPrint('❌ canStartDelivery: orderWithDetails is null');
+      // debugPrint('❌ canStartDelivery: orderWithDetails is null');
       return false;
     }
     
     // Status must be FULLY_PAID
     if (_orderWithDetails!.status != 'FULLY_PAID') {
-      debugPrint('❌ canStartDelivery: status is ${_orderWithDetails!.status}, not FULLY_PAID');
+      // debugPrint('❌ canStartDelivery: status is ${_orderWithDetails!.status}, not FULLY_PAID');
       return false;
     }
     
     // Must have vehicle assignments
     if (_orderWithDetails!.vehicleAssignments.isEmpty) {
-      debugPrint('❌ canStartDelivery: no vehicle assignments');
+      // debugPrint('❌ canStartDelivery: no vehicle assignments');
       return false;
     }
     
     // Must have order details with vehicle assignment ID
     if (_orderWithDetails!.orderDetails.isEmpty) {
-      debugPrint('❌ canStartDelivery: no order details');
+      // debugPrint('❌ canStartDelivery: no order details');
       return false;
     }
     
@@ -409,8 +417,67 @@ class OrderDetailViewModel extends BaseViewModel {
       (success) {
         _isUploadingPhoto = false;
         debugPrint('✅ Photo completions uploaded successfully');
+        
+        // CRITICAL: Update order status to DELIVERED after photo confirmation
+        // This ensures the order status reflects delivery confirmation
+        _updateOrderStatusToDelivered();
+        
         notifyListeners();
         return true;
+      },
+    );
+  }
+
+  /// Update order status to ONGOING_DELIVERED when near delivery point (3km)
+  Future<void> updateOrderStatusToOngoingDelivered() async {
+    if (_orderWithDetails == null) {
+      debugPrint('❌ Cannot update status: no order details');
+      return;
+    }
+
+    // Check current status - skip if already ONGOING_DELIVERED or DELIVERED
+    final currentStatus = _orderWithDetails!.status;
+    debugPrint('📊 Current order status: $currentStatus');
+    
+    if (currentStatus == 'ONGOING_DELIVERED' || currentStatus == 'DELIVERED') {
+      debugPrint('⏭️ Order already in $currentStatus status, skipping update');
+      return;
+    }
+
+    debugPrint('🔄 Updating order status to ONGOING_DELIVERED...');
+    final result = await _updateToOngoingDeliveredUseCase(_orderWithDetails!.id);
+    
+    result.fold(
+      (failure) {
+        debugPrint('❌ Failed to update order status to ONGOING_DELIVERED: ${failure.message}');
+      },
+      (success) {
+        debugPrint('✅ Successfully updated order status to ONGOING_DELIVERED');
+        // Reload order details to reflect new status
+        getOrderDetails(_orderWithDetails!.id);
+      },
+    );
+  }
+
+  /// Update order status to DELIVERED after delivery photo confirmation
+  Future<void> _updateOrderStatusToDelivered() async {
+    if (_orderWithDetails == null) {
+      debugPrint('❌ Cannot update status: no order details');
+      return;
+    }
+
+    debugPrint('🔄 Updating order status to DELIVERED...');
+    final result = await _updateToDeliveredUseCase(_orderWithDetails!.id);
+    
+    result.fold(
+      (failure) {
+        debugPrint('❌ Failed to update order status to DELIVERED: ${failure.message}');
+        // Don't throw - photo was uploaded successfully, just status update failed
+      },
+      (success) {
+        debugPrint('✅ Successfully updated order status to DELIVERED');
+        // Reload order details to reflect new status
+        getOrderDetails(_orderWithDetails!.id);
       },
     );
   }
