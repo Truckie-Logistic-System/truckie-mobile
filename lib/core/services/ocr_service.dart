@@ -74,9 +74,8 @@ class OCRService {
       print('🔢 [LATIN-OPTIMIZED] OCR Extracted numbers: $extractedNumbers');
       
       if (extractedNumbers.isNotEmpty) {
-        // Trả về số phù hợp nhất (thường là số odometer)
-        final result = _findBestOdometerNumber(extractedNumbers);
-        print('✅ [LATIN-OPTIMIZED] OCR Best match: $result');
+        // Trả về số phù hợp nhất (đã được sort theo priority trong _extractNumbersWithContext)
+        final result = extractedNumbers.first;
         return result;
       }
       
@@ -112,8 +111,8 @@ class OCRService {
       print('🔢 [DEFAULT] OCR Extracted numbers: $extractedNumbers');
       
       if (extractedNumbers.isNotEmpty) {
-        // Trả về số phù hợp nhất (thường là số odometer)
-        final result = _findBestOdometerNumber(extractedNumbers);
+        // Trả về số phù hợp nhất (đã được sort theo priority trong _extractNumbersWithContext)
+        final result = extractedNumbers.first;
         print('✅ [DEFAULT] OCR Best match: $result');
         return result;
       }
@@ -133,9 +132,54 @@ class OCRService {
     Map<String, int> numberPriority = {}; // Lưu độ ưu tiên của mỗi số
     
     // Các từ khóa odometer (ưu tiên cao nhất)
-    final odometerKeywords = ['ODO', 'MILES', 'MILE', 'KM', 'KM/H', 'ODOMETER'];
+    final odometerKeywords = ['ODO', 'MILES', 'MILE', 'KM', 'KM/H', 'ODOMETER', 'START'];
     
-    // Tìm các dòng có chứa từ khóa odometer
+    // **STRATEGY 1: Tìm block số lớn nhất (đó là odometer display)**
+    // LCD odometer thường hiển thị số lớn nhất trong hình
+    // Xử lý cả số nguyên và số thập phân (ví dụ: 874459.2)
+    // RESPONSIVE FIX: Chấp nhận số từ 4-8 chữ số để phù hợp với các độ phân giải khác nhau
+    String largestNumber = '';
+    int largestNumberLength = 0;
+    
+    for (var block in recognizedText.blocks) {
+      String blockText = block.text;
+      // Tìm tất cả các số (bao gồm số thập phân)
+      var numberMatches = RegExp(r'\d+[.,]?\d*').allMatches(blockText);
+      for (var match in numberMatches) {
+        String num = match.group(0)!;
+        // Xóa dấu phẩy/chấm để tính độ dài
+        String cleanNum = num.replaceAll(RegExp(r'[.,]'), '');
+        
+        // RESPONSIVE FIX: Chấp nhận số từ 4 chữ số (thay vì 5) để phù hợp với Small Phone
+        if (cleanNum.length > largestNumberLength && cleanNum.length >= 4) {
+          largestNumber = num; // FIX: Lưu số gốc (có dấu thập phân), không phải số đã xóa dấu
+          largestNumberLength = cleanNum.length;
+          print('🔍 Found number in block: $num → cleaned: $cleanNum (length: $largestNumberLength)');
+        }
+      }
+    }
+    
+    // RESPONSIVE FIX: Mở rộng range từ 5-7 thành 4-8 để chấp nhận các độ phân giải khác nhau
+    if (largestNumber.isNotEmpty && largestNumberLength >= 4 && largestNumberLength <= 8) {
+      numbers.add(largestNumber);
+      numberPriority[largestNumber] = 95; // Ưu tiên rất cao
+      print('🎯 Found largest number block: $largestNumber (length: $largestNumberLength)');
+      
+      // FIX: Nếu số lớn có 6 chữ số, thử tách thành số thập phân
+      // Ví dụ: "874592" → "87459.2" (tách ở vị trí thứ 5)
+      if (largestNumberLength == 6) {
+        // Tách thành 2 phần: 5 chữ số + 1 chữ số (phần thập phân)
+        String part1 = largestNumber.substring(0, 5);
+        String part2 = largestNumber.substring(5);
+        String decimalVersion = part1 + '.' + part2;
+        
+        numbers.add(decimalVersion);
+        numberPriority[decimalVersion] = 96; // Ưu tiên cao hơn số nguyên
+        print('🎯 Detected possible decimal: $largestNumber → $decimalVersion (priority: 96)');
+      }
+    }
+    
+    // **STRATEGY 2: Tìm các dòng có chứa từ khóa odometer**
     for (var block in recognizedText.blocks) {
       for (var line in block.lines) {
         String lineText = line.text.toUpperCase();
@@ -144,17 +188,21 @@ class OCRService {
         bool hasOdometerKeyword = odometerKeywords.any((keyword) => lineText.contains(keyword));
         
         if (hasOdometerKeyword) {
-          print('🎯 Found odometer line: ${line.text}');
+          print('🎯 Found odometer keyword line: ${line.text}');
           
           // Trích xuất số từ dòng này
-          String cleanLine = line.text.replaceAll(RegExp(r'[^\d\s]'), ' ');
+          String cleanLine = line.text.replaceAll(RegExp(r'[^\d\s.,\-]'), ' ');
+          // FIX: GIỮ LẠI dấu phẩy/chấm (không xóa)
           // Ghép các số đơn lẻ (7 0 4 4 1 2 5 -> 7044125)
           String compactNumber = cleanLine.replaceAll(RegExp(r'\s+'), '');
           
-          if (compactNumber.isNotEmpty && compactNumber.length >= 5) {
+          // RESPONSIVE FIX: Chấp nhận số từ 4 chữ số (thay vì 5) để phù hợp với Small Phone
+          // Tính độ dài dựa trên số chữ số (bỏ dấu) để check
+          String cleanNumForLength = compactNumber.replaceAll(RegExp(r'[.,]'), '');
+          if (compactNumber.isNotEmpty && cleanNumForLength.length >= 4) {
             numbers.add(compactNumber);
             numberPriority[compactNumber] = 100; // Ưu tiên cao nhất
-            print('✅ Extracted from odometer line: $compactNumber');
+            print('✅ Extracted from odometer keyword line: $compactNumber');
           }
         }
       }
@@ -169,14 +217,21 @@ class OCRService {
       bool hasKeyword = odometerKeywords.any((keyword) => blockText.contains(keyword));
       
       if (hasKeyword) {
-        // Tìm số trong block này và block kế bên
-        for (int j = i - 1; j <= i + 1; j++) {
+        print('🎯 Found keyword block at index $i: $blockText');
+        // Tìm số trong block này và block kế bên (đặc biệt là block TIẾP THEO)
+        for (int j = i - 1; j <= i + 2; j++) {
           if (j >= 0 && j < recognizedText.blocks.length) {
             var nearBlock = recognizedText.blocks[j];
-            String cleanBlock = nearBlock.text.replaceAll(RegExp(r'[^\d\s]'), ' ');
+            print('🔍 Checking near block at $j: ${nearBlock.text}');
+            String cleanBlock = nearBlock.text.replaceAll(RegExp(r'[^\d\s.,\-]'), ' ');
+            // FIX: GIỮ LẠI dấu phẩy/chấm (không xóa)
+            // Chỉ xóa khoảng trắng
             String compactNumber = cleanBlock.replaceAll(RegExp(r'\s+'), '');
             
-            if (compactNumber.isNotEmpty && compactNumber.length >= 5) {
+            // RESPONSIVE FIX: Chấp nhận số từ 4 chữ số (thay vì 5) để phù hợp với Small Phone
+            // Tính độ dài dựa trên số chữ số (bỏ dấu) để check
+            String cleanNumForLength = compactNumber.replaceAll(RegExp(r'[.,]'), '');
+            if (compactNumber.isNotEmpty && cleanNumForLength.length >= 4) {
               numbers.add(compactNumber);
               numberPriority[compactNumber] = 90; // Ưu tiên cao
               print('🔍 Found number near keyword: $compactNumber');
@@ -186,28 +241,109 @@ class OCRService {
       }
     }
     
-    // Tìm tất cả các số dài (5-7 chữ số) - bao gồm cả trường hợp chỉ chụp số odometer
+    // Tìm tất cả các số dài - bao gồm cả trường hợp chỉ chụp số odometer
     var allNumbers = _extractNumbers(recognizedText.text);
+    // RESPONSIVE FIX: Mở rộng range từ 5-7 thành 4-8 để chấp nhận các độ phân giải khác nhau
     for (var num in allNumbers) {
-      if (num.length >= 5 && num.length <= 7) {
+      if (num.length >= 4 && num.length <= 8) {
         numbers.add(num);
         numberPriority[num] = 50; // Ưu tiên trung bình
+      }
+    }
+    
+    // Xử lý trường hợp số bị tách rời (ví dụ: "873 15.6" thay vì "87315.6")
+    // Tìm các cặp số gần nhau có thể ghép lại
+    // FIX: Luôn thử ghép số tách rời, không chỉ khi numbers.isEmpty
+    print('🔍 DEBUG: allNumbers = $allNumbers');
+    
+    // FIX: Tìm "873" và "15.6" trong text gốc để ghép đúng thứ tự
+    // Vì Set không giữ thứ tự, nên cần tìm lại từ text gốc
+    String fullText = recognizedText.text;
+    
+    // Tìm tất cả số (bao gồm số có dấu thập phân) theo thứ tự xuất hiện
+    var allNumbersOrdered = RegExp(r'\d+[.,]?\d*').allMatches(fullText)
+        .map((m) => m.group(0)!)
+        .toList();
+    print('🔍 DEBUG: allNumbersOrdered (by appearance) = $allNumbersOrdered');
+    
+    // Lọc số từ 2 chữ số trở lên (bao gồm số có dấu thập phân)
+    var twoDigitNumbers = allNumbersOrdered.where((num) {
+      String cleanNum = num.replaceAll(RegExp(r'[.,]'), '');
+      return cleanNum.length >= 2 && cleanNum.length <= 4;
+    }).toList();
+    print('🔍 DEBUG: twoDigitNumbers = $twoDigitNumbers');
+    
+    if (twoDigitNumbers.length >= 2) {
+      // Thử ghép các số gần nhau
+      for (int i = 0; i < twoDigitNumbers.length - 1; i++) {
+        String num1 = twoDigitNumbers[i];
+        String num2 = twoDigitNumbers[i + 1];
+        
+        // FIX: Xử lý ghép số có dấu thập phân
+        // Nếu num1 không có dấu thập phân và num2 có dấu thập phân
+        // → Ghép thành: num1 + num2 (ví dụ: "873" + "15.6" = "87315.6")
+        String combined;
+        if (!num1.contains(RegExp(r'[.,]')) && num2.contains(RegExp(r'[.,]'))) {
+          // num1 là phần nguyên, num2 là phần thập phân
+          combined = num1 + num2;
+        } else if (!num1.contains(RegExp(r'[.,]')) && !num2.contains(RegExp(r'[.,]'))) {
+          // Cả 2 đều không có dấu - kiểm tra nếu num2 < 200 (có thể là phần thập phân)
+          try {
+            int num2Value = int.parse(num2);
+            if (num2Value < 200) {
+              // num2 có thể là phần thập phân
+              // Ví dụ: "873" + "156" → num2 = 156 → "15.6" → ghép thành "87315.6"
+              // Cách: Chèn dấu thập phân vào vị trí thứ 2 từ cuối của num2
+              String num2WithDecimal;
+              if (num2.length >= 2) {
+                // Chèn dấu trước chữ số cuối cùng
+                // "156" → "15.6"
+                num2WithDecimal = num2.substring(0, num2.length - 1) + '.' + num2.substring(num2.length - 1);
+              } else {
+                num2WithDecimal = num2;
+              }
+              combined = num1 + num2WithDecimal;
+              print('🔍 DEBUG: Detected decimal: $num1 + $num2 (value=$num2Value < 200) → $num2WithDecimal → $combined');
+            } else {
+              // Ghép bình thường
+              combined = num1 + num2;
+            }
+          } catch (e) {
+            combined = num1 + num2;
+          }
+        } else {
+          // Ghép bình thường
+          combined = num1 + num2;
+        }
+        
+        String cleanCombined = combined.replaceAll(RegExp(r'[.,]'), '');
+        print('🔍 DEBUG: Trying to combine $num1 + $num2 = $combined (length: ${cleanCombined.length})');
+        
+        // RESPONSIVE FIX: Mở rộng range từ 5-7 thành 4-8 để chấp nhận các độ phân giải khác nhau
+        if (cleanCombined.length >= 4 && cleanCombined.length <= 8) {
+          numbers.add(combined);
+          // FIX: Tăng priority lên 95 (cao hơn 90 của "near keyword")
+          // Vì số ghép (đặc biệt là có dấu thập phân) thường chính xác hơn
+          numberPriority[combined] = 95;
+          print('🔢 Ghép số tách rời: $num1 + $num2 = $combined (priority: 95)');
+        }
       }
     }
     
     // Nếu vẫn chưa có số nào, thử tìm số dài nhất (fallback cho ảnh cắt)
     if (numbers.isEmpty) {
       var allNumbers = _extractNumbers(recognizedText.text);
-      var longNumbers = allNumbers.where((num) => num.length >= 4).toList();
+      // RESPONSIVE FIX: Chấp nhận số từ 3 chữ số trở lên (thay vì 4) để phù hợp với Small Phone
+      var longNumbers = allNumbers.where((num) => num.length >= 3).toList();
 
       if (longNumbers.isNotEmpty) {
         // Sắp xếp theo độ dài giảm dần
         longNumbers.sort((a, b) => b.length.compareTo(a.length));
 
-        // Lọc số hợp lệ (4-8 chữ số, không phải số quá nhỏ)
+        // RESPONSIVE FIX: Mở rộng range từ 4-8 thành 3-8 để chấp nhận các độ phân giải khác nhau
         var validLongNumbers = longNumbers.where((num) {
           String clean = num.replaceAll(RegExp(r'[.,]'), '');
-          return clean.length >= 4 && clean.length <= 8 && clean != '0' && clean != '00' && clean != '000';
+          return clean.length >= 3 && clean.length <= 8 && clean != '0' && clean != '00' && clean != '000';
         }).toList();
 
         if (validLongNumbers.isNotEmpty) {
@@ -231,43 +367,64 @@ class OCRService {
       if (priorityA != priorityB) {
         return priorityB.compareTo(priorityA); // Ưu tiên cao hơn lên trước
       }
-      // Nếu cùng độ ưu tiên, ưu tiên số dài hơn
+      
+      // Nếu cùng độ ưu tiên, so sánh giá trị số (ưu tiên số lớn hơn)
+      // FIX: 873156 > 1181, nên 873156 sẽ được chọn
+      try {
+        int intA = int.parse(a);
+        int intB = int.parse(b);
+        if (intA != intB) {
+          return intB.compareTo(intA); // Số lớn hơn lên trước
+        }
+      } catch (e) {
+        // Nếu không parse được, so sánh độ dài
+      }
+      
+      // Fallback: ưu tiên số dài hơn
       return b.length.compareTo(a.length);
     });
+    
+    print('🔢 [LATIN-OPTIMIZED] OCR Extracted numbers (sorted by priority): $sortedNumbers');
+    if (sortedNumbers.isNotEmpty) {
+      print('✅ [LATIN-OPTIMIZED] OCR Best match (by priority): ${sortedNumbers.first} (priority: ${numberPriority[sortedNumbers.first]})');
+    }
     
     return sortedNumbers;
   }
 
   /// Trích xuất tất cả các số từ text
   List<String> _extractNumbers(String text) {
-    // Làm sạch text - loại bỏ các ký tự đặc biệt nhưng giữ lại số và khoảng trắng
+    // Làm sạch text - loại bỏ các ký tự đặc biệt nhưng giữ lại số, khoảng trắng, dấu phẩy/chấm
     String cleanText = text.replaceAll(RegExp(r'[^\d\s.,\-]'), ' ');
     
-    // Xử lý các trường hợp số bị tách rời bởi khoảng trắng (ví dụ: "7 0 4 4 1 2 5")
-    // Ghép các số đơn lẻ liền kề thành một số
-    String compactText = cleanText.replaceAll(RegExp(r'(\d)\s+(?=\d)'), r'$1');
+    // FIX: Không ghép các số đơn lẻ - để chúng riêng biệt
+    // Vì chúng ta sẽ ghép chúng sau trong _extractNumbersWithContext
+    // Ví dụ: "873 15.6" → ["873", "15.6"] → ghép thành "87315.6"
     
-    // Tìm các pattern số khác nhau
+    // Tìm các pattern số khác nhau (GIỮ LẠI dấu thập phân)
     final List<RegExp> patterns = [
+      RegExp(r'\b\d+[.,]\d+\b'),       // Số có dấu phẩy/chấm (ưu tiên cao nhất)
       RegExp(r'\b\d{5,8}\b'),           // Số 5-8 chữ số (odometer thông thường)
-      RegExp(r'\b\d+[.,]\d+\b'),       // Số có dấu phẩy/chấm
       RegExp(r'\b\d{4,}\b'),           // Số từ 4 chữ số trở lên
-      RegExp(r'\b\d+\b'),              // Bất kỳ số nào
+      RegExp(r'\b\d+\b'),              // Bất kỳ số nào (bao gồm 2-3 chữ số)
     ];
     
     Set<String> numbers = {};
     
+    // Tìm từ text gốc (giữ lại dấu phẩy/chấm)
     for (RegExp pattern in patterns) {
-      final matches = pattern.allMatches(compactText);
+      final matches = pattern.allMatches(cleanText);
       numbers.addAll(matches.map((match) => match.group(0)!));
     }
     
-    // Nếu không tìm thấy số nào, thử tìm trong text gốc
+    // Nếu không tìm thấy số nào, thử tìm bất kỳ số nào (bao gồm dấu thập phân)
     if (numbers.isEmpty) {
-      final directMatches = RegExp(r'\d+').allMatches(text);
+      // FIX: Giữ lại dấu thập phân trong fallback
+      final directMatches = RegExp(r'\d+[.,]?\d*').allMatches(text);
       numbers.addAll(directMatches.map((match) => match.group(0)!));
     }
     
+    print('🔢 _extractNumbers: text=$text → numbers=$numbers');
     return numbers.toList();
   }
 
@@ -275,10 +432,10 @@ class OCRService {
   String _findBestOdometerNumber(List<String> numbers) {
     if (numbers.isEmpty) return '';
     
-    // Lọc các số hợp lệ (4-7 chữ số) - mở rộng để bao gồm trường hợp chỉ chụp số
+    // Lọc các số hợp lệ (4-8 chữ số) - mở rộng để bao gồm trường hợp chỉ chụp số
     var validNumbers = numbers.where((num) {
       String clean = num.replaceAll(RegExp(r'[.,]'), '');
-      return clean.length >= 4 && clean.length <= 7;
+      return clean.length >= 4 && clean.length <= 8;
     }).toList();
     
     // Nếu không có số hợp lệ, lấy số dài nhất
@@ -291,21 +448,34 @@ class OCRService {
       String cleanA = a.replaceAll(RegExp(r'[.,]'), '');
       String cleanB = b.replaceAll(RegExp(r'[.,]'), '');
       
-      // Ưu tiên 1: Số có 6 chữ số (odometer phổ biến nhất)
-      bool aIs6Digits = cleanA.length == 6;
-      bool bIs6Digits = cleanB.length == 6;
+      // Ưu tiên 1: Số có 6-7 chữ số (odometer phổ biến nhất)
+      bool aIsOdometerLength = cleanA.length >= 6 && cleanA.length <= 7;
+      bool bIsOdometerLength = cleanB.length >= 6 && cleanB.length <= 7;
       
-      if (aIs6Digits && !bIs6Digits) return -1;
-      if (!aIs6Digits && bIs6Digits) return 1;
+      if (aIsOdometerLength && !bIsOdometerLength) return -1;
+      if (!aIsOdometerLength && bIsOdometerLength) return 1;
       
-      // Ưu tiên 2: Số có 5-7 chữ số
-      bool aIsOdometer = cleanA.length >= 5 && cleanA.length <= 7;
-      bool bIsOdometer = cleanB.length >= 5 && cleanB.length <= 7;
+      // Ưu tiên 2: Số lớn hơn 100000 (odometer thường > 100000 km)
+      // FIX: Tăng threshold từ 10000 lên 100000 để ưu tiên số lớn hơn (873156 > 1181)
+      try {
+        int intA = int.parse(cleanA);
+        int intB = int.parse(cleanB);
+        bool aIsLarge = intA >= 100000;
+        bool bIsLarge = intB >= 100000;
+        
+        if (aIsLarge && !bIsLarge) return -1;
+        if (!aIsLarge && bIsLarge) return 1;
+        
+        // Nếu cùng category (cả 2 >= 100000 hoặc cả 2 < 100000), so sánh giá trị
+        // Ưu tiên số lớn hơn (873156 > 1181)
+        if (intA != intB) {
+          return intB.compareTo(intA);
+        }
+      } catch (e) {
+        // Bỏ qua nếu không parse được
+      }
       
-      if (aIsOdometer && !bIsOdometer) return -1;
-      if (!aIsOdometer && bIsOdometer) return 1;
-      
-      // Ưu tiên 3: Số dài hơn (trong khoảng 4-7)
+      // Ưu tiên 3: Số dài hơn (trong khoảng 4-8)
       if (cleanA.length != cleanB.length) {
         return cleanB.length.compareTo(cleanA.length);
       }
@@ -318,24 +488,31 @@ class OCRService {
         return bNonZeroCount.compareTo(aNonZeroCount);
       }
       
-      // Ưu tiên 5: Số lớn hơn
-      try {
-        int intA = int.parse(cleanA);
-        int intB = int.parse(cleanB);
-        return intB.compareTo(intA);
-      } catch (e) {
-        return 0;
-      }
+      return 0;
     });
     
     // Làm sạch và format số tốt nhất
     return _cleanNumber(validNumbers.first);
   }
 
-  /// Làm sạch số (loại bỏ dấu phẩy, chấm thừa)
+  /// Làm sạch số (chuẩn hóa dấu thập phân)
   String _cleanNumber(String number) {
-    // Loại bỏ dấu phẩy và chấm (thường là noise từ OCR)
-    return number.replaceAll(RegExp(r'[.,]'), '');
+    // FIX: Giữ lại dấu thập phân, chỉ chuẩn hóa từ dấu phẩy thành dấu chấm
+    // Ví dụ: "873,15.6" → "873.15.6" (nếu có 2 dấu) hoặc "873,15" → "873.15"
+    // Chuyển dấu phẩy thành dấu chấm
+    String normalized = number.replaceAll(',', '.');
+    
+    // Xóa dấu chấm thừa (chỉ giữ lại 1 dấu chấm)
+    // Ví dụ: "873.15.6" → "873.156" (nếu có 2 dấu chấm)
+    int lastDotIndex = normalized.lastIndexOf('.');
+    if (lastDotIndex != -1) {
+      // Có dấu chấm, xóa tất cả dấu chấm khác
+      String beforeDot = normalized.substring(0, lastDotIndex).replaceAll('.', '');
+      String afterDot = normalized.substring(lastDotIndex + 1);
+      return beforeDot + '.' + afterDot;
+    }
+    
+    return normalized;
   }
 
   /// Kiểm tra chất lượng ảnh trước khi OCR

@@ -7,6 +7,7 @@ import '../../core/errors/failures.dart';
 import '../datasources/api_client.dart';
 import '../datasources/order_data_source.dart';
 import '../../domain/entities/order.dart';
+import '../../domain/entities/order_detail_status.dart';
 import '../../domain/entities/order_with_details.dart';
 import '../../domain/repositories/order_repository.dart';
 import '../models/order_model.dart';
@@ -133,5 +134,16 @@ class OrderRepositoryImpl implements OrderRepository {
   @override
   Future<Either<Failure, bool>> updateToSuccessful(String orderId) async {
     return await _orderDataSource.updateToSuccessful(orderId);
+  }
+
+  @override
+  Future<Either<Failure, bool>> updateOrderDetailStatus({
+    required String assignmentId,
+    required OrderDetailStatus status,
+  }) async {
+    return await _orderDataSource.updateOrderDetailStatus(
+      assignmentId: assignmentId,
+      status: status,
+    );
   }
 }

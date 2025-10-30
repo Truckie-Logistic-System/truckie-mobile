@@ -23,7 +23,7 @@ class TokenStorageService {
   /// Lấy access token từ memory
   String? getAccessToken() {
     if (_accessToken == null) {
-      // debugPrint('Getting access token: null');
+      debugPrint('❌ [TokenStorageService] Getting access token: NULL!');
       return null;
     }
 
@@ -32,12 +32,12 @@ class TokenStorageService {
 
     // Log token đã được làm sạch
     if (_accessToken != cleanToken) {
-      // debugPrint('Token cleaned: removed invalid characters');
+      debugPrint('⚠️ [TokenStorageService] Token cleaned: removed invalid characters');
     }
 
-    // debugPrint(
-    //   'Getting access token: ${cleanToken.substring(0, min(15, cleanToken.length))}...',
-    // );
+    debugPrint(
+      '✅ [TokenStorageService] Getting access token: ${cleanToken.substring(0, min(15, cleanToken.length))}...',
+    );
     return cleanToken;
   }
 
@@ -49,7 +49,7 @@ class TokenStorageService {
   /// Lưu access token vào memory
   Future<void> saveAccessToken(String token) async {
     _accessToken = token;
-    // debugPrint('Access token saved to memory: ${token.substring(0, 15)}...');
+    debugPrint('✅ [TokenStorageService] Access token saved to memory: ${token.substring(0, 15)}...');
   }
 
   /// Xóa access token khỏi memory

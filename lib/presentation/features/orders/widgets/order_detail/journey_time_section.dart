@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../../core/utils/responsive_extensions.dart';
 import '../../../../../domain/entities/order_with_details.dart';
+import '../../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
 
@@ -19,18 +21,56 @@ class JourneyTimeSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final orderDetail = order.orderDetails.first;
-    final estimatedStartTime = orderDetail.estimatedStartTime;
-    final startTime = orderDetail.startTime;
-    final estimatedEndTime = orderDetail.estimatedEndTime;
-    final endTime = orderDetail.endTime;
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, _) {
+        // Get current user phone number
+        final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+        
+        // For multi-trip orders: Find the order detail that belongs to current driver's vehicle assignment
+        var orderDetail = order.orderDetails.first;
+        if (currentUserPhone != null && currentUserPhone.isNotEmpty && order.vehicleAssignments.isNotEmpty) {
+          try {
+            // Find vehicle assignment where current user is primary driver
+            final vehicleAssignment = order.vehicleAssignments.firstWhere(
+              (va) {
+                if (va.primaryDriver == null) return false;
+                return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+              },
+            );
+            
+            // Find order detail that belongs to this vehicle assignment
+            orderDetail = order.orderDetails.firstWhere(
+              (od) => od.vehicleAssignmentId == vehicleAssignment.id,
+            );
+          } catch (e) {
+            // Fallback to first order detail
+            orderDetail = order.orderDetails.first;
+          }
+        }
 
-    if (estimatedStartTime == null &&
-        startTime == null &&
-        estimatedEndTime == null &&
-        endTime == null) {
-      return const SizedBox.shrink();
-    }
+        final estimatedStartTime = orderDetail.estimatedStartTime;
+        final startTime = orderDetail.startTime;
+        final estimatedEndTime = orderDetail.estimatedEndTime;
+        final endTime = orderDetail.endTime;
+
+        if (estimatedStartTime == null &&
+            startTime == null &&
+            estimatedEndTime == null &&
+            endTime == null) {
+          return const SizedBox.shrink();
+        }
+
+        return _buildContent(estimatedStartTime, startTime, estimatedEndTime, endTime);
+      },
+    );
+  }
+
+  Widget _buildContent(
+    DateTime? estimatedStartTime,
+    DateTime? startTime,
+    DateTime? estimatedEndTime,
+    DateTime? endTime,
+  ) {
 
     return Card(
       elevation: 2,

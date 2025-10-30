@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dartz/dartz.dart';
 
 import '../../core/errors/exceptions.dart';
@@ -15,5 +16,18 @@ class PhotoCompletionRepositoryImpl implements PhotoCompletionRepository {
     // This method is deprecated - use uploadPhotoCompletion from datasource directly
     // For now, return a simple implementation
     return const Right(true);
+  }
+
+  @override
+  Future<Either<Failure, bool>> uploadMultiplePhotoCompletion({
+    required List<File> imageFiles,
+    required String vehicleAssignmentId,
+    String? description,
+  }) async {
+    return dataSource.uploadMultiplePhotoCompletion(
+      imageFiles: imageFiles,
+      vehicleAssignmentId: vehicleAssignmentId,
+      description: description,
+    );
   }
 }

@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'package:get_it/get_it.dart';
+import 'token_storage_service.dart';
+import '../../data/datasources/api_client.dart';
 
 enum WebSocketConnectionStatus { disconnected, connecting, connected, error }
 
@@ -39,6 +42,54 @@ class VehicleWebSocketService {
   String? get lastError => _lastError;
 
   String _cleanToken(String raw) => raw.replaceAll('#', '').trim();
+
+  /// Try to refresh token when 401 error occurs
+  Future<String?> _tryRefreshToken() async {
+    try {
+      debugPrint('🔄 Attempting to refresh token due to 401 error...');
+      
+      final tokenStorageService = GetIt.instance<TokenStorageService>();
+      final refreshToken = await tokenStorageService.getRefreshToken();
+      
+      if (refreshToken == null || refreshToken.isEmpty) {
+        debugPrint('❌ No refresh token available');
+        return null;
+      }
+      
+      debugPrint('✅ Refresh token found, calling refresh API...');
+      
+      // CRITICAL: Call actual refresh token API
+      try {
+        final apiClient = GetIt.instance<ApiClient>();
+        // SECURITY: Refresh token is now in HttpOnly cookie (not in request body)
+        // Mobile sends request with withCredentials: true to include cookies
+        final response = await apiClient.dio.post('/auths/mobile/token/refresh');
+        
+        if (response.data['success'] == true && response.data['data'] != null) {
+          final tokenData = response.data['data'];
+          final newAccessToken = tokenData['authToken'] ?? tokenData['accessToken'];
+          
+          // Save new access token
+          await tokenStorageService.saveAccessToken(newAccessToken);
+          
+          // SECURITY: New refresh token is automatically set in HttpOnly cookie by backend
+          // No need to manually save it
+          
+          debugPrint('✅ Token refresh successful, new access token obtained');
+          return newAccessToken;
+        } else {
+          debugPrint('❌ Token refresh API returned error: ${response.data['message']}');
+          return null;
+        }
+      } catch (apiError) {
+        debugPrint('❌ Token refresh API call failed: $apiError');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ Error during token refresh: $e');
+      return null;
+    }
+  }
 
   Future<void> connect({
     required String jwtToken,
@@ -133,20 +184,26 @@ class VehicleWebSocketService {
 
           _storedOnError?.call(errorMsg);
 
-          // CRITICAL: Always try to reconnect on STOMP errors
-          if (_storedJwtToken != null && _currentVehicleId != null) {
-            debugPrint('🔄 STOMP error - scheduling reconnect...');
-            _scheduleReconnect(
-              _storedJwtToken!,
-              _currentVehicleId!,
-              _storedOnConnected,
-              _storedOnError,
-              _storedOnLocationBroadcast,
-            );
+          // CRITICAL: Check for 401 Unauthorized error
+          if (errorMsg.contains('401') || errorMsg.contains('Unauthorized')) {
+            debugPrint('🔐 401 Unauthorized detected - attempting token refresh...');
+            _handleUnauthorizedError();
           } else {
-            debugPrint('❌ Cannot reconnect after STOMP error: missing credentials');
-            debugPrint('   Token: ${_storedJwtToken != null ? "present" : "missing"}');
-            debugPrint('   VehicleId: ${_currentVehicleId ?? "missing"}');
+            // CRITICAL: Always try to reconnect on STOMP errors
+            if (_storedJwtToken != null && _currentVehicleId != null) {
+              debugPrint('🔄 STOMP error - scheduling reconnect...');
+              _scheduleReconnect(
+                _storedJwtToken!,
+                _currentVehicleId!,
+                _storedOnConnected,
+                _storedOnError,
+                _storedOnLocationBroadcast,
+              );
+            } else {
+              debugPrint('❌ Cannot reconnect after STOMP error: missing credentials');
+              debugPrint('   Token: ${_storedJwtToken != null ? "present" : "missing"}');
+              debugPrint('   VehicleId: ${_currentVehicleId ?? "missing"}');
+            }
           }
         },
         onWebSocketError: (error) {
@@ -159,20 +216,26 @@ class VehicleWebSocketService {
 
           _storedOnError?.call(errorMsg);
 
-          // CRITICAL: Always try to reconnect on WebSocket errors
-          if (_storedJwtToken != null && _currentVehicleId != null) {
-            debugPrint('🔄 WebSocket error - scheduling reconnect...');
-            _scheduleReconnect(
-              _storedJwtToken!,
-              _currentVehicleId!,
-              _storedOnConnected,
-              _storedOnError,
-              _storedOnLocationBroadcast,
-            );
+          // CRITICAL: Check for 401 Unauthorized error
+          if (errorMsg.contains('401') || errorMsg.contains('Unauthorized')) {
+            debugPrint('🔐 401 Unauthorized detected - attempting token refresh...');
+            _handleUnauthorizedError();
           } else {
-            debugPrint('❌ Cannot reconnect after WebSocket error: missing credentials');
-            debugPrint('   Token: ${_storedJwtToken != null ? "present" : "missing"}');
-            debugPrint('   VehicleId: ${_currentVehicleId ?? "missing"}');
+            // CRITICAL: Always try to reconnect on WebSocket errors
+            if (_storedJwtToken != null && _currentVehicleId != null) {
+              debugPrint('🔄 WebSocket error - scheduling reconnect...');
+              _scheduleReconnect(
+                _storedJwtToken!,
+                _currentVehicleId!,
+                _storedOnConnected,
+                _storedOnError,
+                _storedOnLocationBroadcast,
+              );
+            } else {
+              debugPrint('❌ Cannot reconnect after WebSocket error: missing credentials');
+              debugPrint('   Token: ${_storedJwtToken != null ? "present" : "missing"}');
+              debugPrint('   VehicleId: ${_currentVehicleId ?? "missing"}');
+            }
           }
         },
         onDisconnect: (frame) {
@@ -233,6 +296,59 @@ class VehicleWebSocketService {
         debugPrint('   VehicleId: ${_currentVehicleId ?? "missing"}');
       }
     }
+  }
+
+  /// Handle 401 Unauthorized error by attempting token refresh
+  void _handleUnauthorizedError() {
+    debugPrint('🔐 Handling 401 Unauthorized error...');
+    
+    // Disconnect current client
+    _disconnectClient();
+    
+    // Try to refresh token
+    _tryRefreshToken().then((newToken) {
+      if (newToken != null && _storedJwtToken != null && _currentVehicleId != null) {
+        debugPrint('✅ Token refreshed, attempting reconnect with new token...');
+        
+        // Update stored token with new one
+        _storedJwtToken = newToken;
+        
+        // Schedule immediate reconnect with new token
+        _scheduleReconnect(
+          newToken,
+          _currentVehicleId!,
+          _storedOnConnected,
+          _storedOnError,
+          _storedOnLocationBroadcast,
+        );
+      } else {
+        debugPrint('❌ Token refresh failed, scheduling regular reconnect...');
+        
+        // Fall back to regular reconnect with exponential backoff
+        if (_storedJwtToken != null && _currentVehicleId != null) {
+          _scheduleReconnect(
+            _storedJwtToken!,
+            _currentVehicleId!,
+            _storedOnConnected,
+            _storedOnError,
+            _storedOnLocationBroadcast,
+          );
+        }
+      }
+    }).catchError((e) {
+      debugPrint('❌ Error during token refresh: $e');
+      
+      // Fall back to regular reconnect
+      if (_storedJwtToken != null && _currentVehicleId != null) {
+        _scheduleReconnect(
+          _storedJwtToken!,
+          _currentVehicleId!,
+          _storedOnConnected,
+          _storedOnError,
+          _storedOnLocationBroadcast,
+        );
+      }
+    });
   }
 
   void _scheduleReconnect(

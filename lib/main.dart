@@ -25,8 +25,22 @@ void main() async {
 
   // Khởi tạo service locator (includes enhanced location services)
   debugPrint('🔧 Setting up service locator...');
-  await setupServiceLocator();
-  // debugPrint('✅ Service locator setup complete');
+  try {
+    await setupServiceLocator();
+    debugPrint('✅ Service locator setup complete');
+    
+    // Verify AuthViewModel is registered
+    try {
+      final authVM = getIt<AuthViewModel>();
+      debugPrint('✅ AuthViewModel verified in GetIt');
+    } catch (e) {
+      debugPrint('❌ AuthViewModel NOT found in GetIt: $e');
+      rethrow;
+    }
+  } catch (e) {
+    debugPrint('❌ Error setting up service locator: $e');
+    rethrow;
+  }
 
   // NOTE: Recovery features removed as part of architecture simplification
   // GlobalLocationManager now handles all location tracking directly
@@ -55,26 +69,26 @@ class MyApp extends StatelessWidget {
       splitScreenMode: true,
       // Use builder with context to ensure proper initialization
       builder: (context, child) {
+        // Get instances from service locator (already initialized in main())
+        final authViewModel = getIt<AuthViewModel>();
+        final vietMapService = getIt<VietMapService>();
+        
         return MultiProvider(
           providers: [
-            // Create a new AuthViewModel instance each time
-            ChangeNotifierProvider<AuthViewModel>(
-              create: (_) => getIt<AuthViewModel>(),
-              // Don't dispose the ViewModel when the provider is disposed
-              // This prevents errors during hot reload
-              lazy: false,
+            // AuthViewModel is already a LazySingleton in GetIt
+            // Access it directly without creating new instance
+            ChangeNotifierProvider<AuthViewModel>.value(
+              value: authViewModel,
             ),
             // Provide VietMapService
-            Provider<VietMapService>(
-              create: (_) => getIt<VietMapService>(),
-              lazy: false,
+            Provider<VietMapService>.value(
+              value: vietMapService,
             ),
             // Provide VietMapViewModel
             ChangeNotifierProvider<VietMapViewModel>(
               create: (context) => VietMapViewModel(
                 vietMapService: context.read<VietMapService>(),
               ),
-              lazy: false,
             ),
           ],
           child: TruckieApp(navigatorKey: navigatorKey),

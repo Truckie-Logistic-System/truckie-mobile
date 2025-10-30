@@ -46,6 +46,7 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
               ListTile(
                 leading: const Icon(Icons.photo_camera),
                 title: const Text('Chụp ảnh mới'),
+                subtitle: const Text('Chụp 1 ảnh từ camera'),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImage();
@@ -54,6 +55,7 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Chọn từ thư viện'),
+                subtitle: const Text('Chọn nhiều ảnh cùng lúc'),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImageFromGallery();
@@ -368,11 +370,31 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Đã chụp ${_confirmationImages.length} ảnh',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.grey.shade600,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Đã chọn ${_confirmationImages.length} ảnh',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${_confirmationImages.length}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 GridView.builder(
@@ -476,10 +498,19 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Chụp ảnh xác nhận',
+                        'Chụp hoặc chọn ảnh xác nhận',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Có thể chọn nhiều ảnh cùng lúc',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
                         ),
                       ),
                     ],

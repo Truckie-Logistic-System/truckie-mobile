@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:async';
 
 import '../../../../data/models/user_model.dart';
+import '../../../../data/datasources/api_client.dart';
 import '../../../../domain/entities/driver.dart';
 import '../../../../domain/entities/role.dart';
 import '../../../../domain/entities/user.dart';
@@ -28,6 +30,7 @@ class AuthViewModel extends BaseViewModel {
   Driver? _driver;
   String _errorMessage = '';
   bool _isRefreshing = false;
+  Completer<bool>? _refreshCompleter;
 
   // Static instance to handle hot reload
   static AuthViewModel? _instance;
@@ -45,6 +48,7 @@ class AuthViewModel extends BaseViewModel {
     if (_instance == null) {
       _instance = this;
       checkAuthStatus();
+      _setupUnauthorizedCallback();
     } else {
       // Copy state from existing instance
       _status = _instance!._status;
@@ -125,13 +129,12 @@ class AuthViewModel extends BaseViewModel {
       },
       (user) async {
         _user = user;
-        // Keep loading status until driver info is fetched
         notifyListeners();
 
-        // Fetch driver information if available
-        if (_getDriverInfoUseCase != null && user.role.roleName == 'DRIVER') {
-          await _fetchDriverInfo();
-        }
+        // CRITICAL: Don't fetch driver info immediately after login!
+        // This can cause API failures which trigger token refresh,
+        // and the new token gets revoked by the backend's token rotation.
+        // Driver info will be fetched on-demand when needed.
 
         // Now set authenticated status with navigation
         setStatusWithNavigation(AuthStatus.authenticated);
@@ -262,31 +265,52 @@ class AuthViewModel extends BaseViewModel {
 
   /// Force refresh token khi cần thiết
   Future<bool> forceRefreshToken() async {
-    // debugPrint('Force refreshing token...');
+    debugPrint('🔄 [forceRefreshToken] START - Check if already refreshing...');
+    debugPrint('🔄 [forceRefreshToken] Current _isRefreshing: $_isRefreshing');
+
+    // CRITICAL: If already refreshing, wait for the current refresh to complete
+    if (_isRefreshing && _refreshCompleter != null) {
+      debugPrint('🔄 [forceRefreshToken] ⏳ Already refreshing - WAIT for current refresh');
+      return await _refreshCompleter!.future;
+    }
 
     // Đánh dấu đang refresh để tránh gọi nhiều lần
     _isRefreshing = true;
+    _refreshCompleter = Completer<bool>();
+    debugPrint('🔄 [forceRefreshToken] Setting _isRefreshing = true');
     notifyListeners();
 
     final result = await _refreshTokenUseCase(NoParams());
 
-    return result.fold(
-      (failure) {
-        _isRefreshing = false;
-        // debugPrint('Force refresh token failed: ${failure.message}');
-        return false;
+    bool success = false;
+    
+    await result.fold(
+      (failure) async {
+        debugPrint('❌ [forceRefreshToken] Force refresh token failed: ${failure.message}');
+        success = false;
       },
       (tokenResponse) async {
-        _isRefreshing = false;
-
         // Cập nhật token trong user
         if (_user != null) {
           final oldToken = _user!.authToken;
           _user = tokenResponse;
 
-          // debugPrint(
-          //   'Token updated from ${oldToken.substring(0, 15)}... to ${tokenResponse.authToken.substring(0, 15)}...',
-          // );
+          debugPrint(
+            '✅ [forceRefreshToken] Token updated from ${oldToken.substring(0, 15)}... to ${tokenResponse.authToken.substring(0, 15)}...',
+          );
+
+          // CRITICAL: Save tokens to TokenStorageService FIRST!
+          // This ensures the new token is available for next API calls
+          try {
+            final tokenStorage = getIt<TokenStorageService>();
+            await tokenStorage.saveAccessToken(_user!.authToken);
+            debugPrint('✅ [forceRefreshToken] Access token saved to TokenStorageService');
+            
+            await tokenStorage.saveRefreshToken(_user!.refreshToken ?? '');
+            debugPrint('✅ [forceRefreshToken] Refresh token saved to TokenStorageService');
+          } catch (e) {
+            debugPrint('❌ [forceRefreshToken] Error saving tokens to storage: $e');
+          }
 
           // Lưu thông tin người dùng vào SharedPreferences
           try {
@@ -307,20 +331,28 @@ class AuthViewModel extends BaseViewModel {
             );
             final userJson = json.encode(userModel.toJson());
             await prefs.setString('user_info', userJson);
-            // debugPrint(
-            //   'User info saved to SharedPreferences after force refresh token',
-            // );
+            debugPrint(
+              '✅ [forceRefreshToken] User info saved to SharedPreferences',
+            );
           } catch (e) {
-            // debugPrint('Error saving user info to SharedPreferences: $e');
+            debugPrint('❌ [forceRefreshToken] Error saving user info: $e');
           }
         }
 
         // Tải lại thông tin tài xế
         await refreshDriverInfo();
 
-        return true;
+        success = true;
       },
     );
+    
+    // Reset lock and complete the completer
+    _isRefreshing = false;
+    _refreshCompleter?.complete(success);
+    _refreshCompleter = null;
+    debugPrint('🔄 [forceRefreshToken] Completed - Result: $success');
+    
+    return success;
   }
 
   Future<void> checkAuthStatus() async {
@@ -346,11 +378,10 @@ class AuthViewModel extends BaseViewModel {
         // Điều này đảm bảo TokenStorageService có token ngay từ đầu
         await _loadTokenToStorage();
 
-        // Fetch driver information if user is a driver BEFORE setting authenticated status
-        // This ensures driver info is available when UI needs to check primary driver
-        if (_getDriverInfoUseCase != null && _user!.role.roleName == 'DRIVER') {
-          await _fetchDriverInfo();
-        }
+        // CRITICAL: Don't fetch driver info during checkAuthStatus!
+        // This can cause API failures which trigger token refresh,
+        // and the new token gets revoked by the backend's token rotation.
+        // Driver info will be fetched on-demand when needed.
         
         status = AuthStatus.authenticated;
       } catch (e) {
@@ -504,10 +535,10 @@ class AuthViewModel extends BaseViewModel {
     // Đặt trạng thái đã xác thực
     status = AuthStatus.authenticated;
 
-    // Cập nhật thông tin tài xế nếu cần
-    if (_getDriverInfoUseCase != null && _user?.role.roleName == 'DRIVER') {
-      await _fetchDriverInfo();
-    }
+    // CRITICAL: Don't fetch driver info here!
+    // This will cause API failures which trigger another token refresh,
+    // leading to the new token being revoked by the backend's token rotation.
+    // Driver info will be fetched on-demand when needed.
   }
 
   // Update driver info in the view model (not calling API)
@@ -528,5 +559,20 @@ class AuthViewModel extends BaseViewModel {
   // Reset the view model for hot reload
   static void resetInstance() {
     _instance = null;
+  }
+
+  /// Setup callback for 401 Unauthorized errors
+  /// When API returns 401, the callback will automatically logout the user
+  void _setupUnauthorizedCallback() {
+    try {
+      final apiClient = getIt<ApiClient>();
+      apiClient.setOnUnauthorizedCallback(() async {
+        debugPrint('401 Unauthorized - Logging out user');
+        await logout();
+      });
+      debugPrint('Unauthorized callback setup successfully');
+    } catch (e) {
+      debugPrint('Error setting up unauthorized callback: $e');
+    }
   }
 }

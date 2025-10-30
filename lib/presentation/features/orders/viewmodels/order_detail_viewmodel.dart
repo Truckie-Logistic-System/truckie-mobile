@@ -16,6 +16,8 @@ import '../../../../domain/usecases/orders/update_order_to_delivered_usecase.dar
 import '../../../../domain/usecases/orders/update_order_to_ongoing_delivered_usecase.dart';
 import '../../../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';
 import '../../../common_widgets/base_viewmodel.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../auth/viewmodels/auth_viewmodel.dart';
 
 enum OrderDetailState { initial, loading, loaded, error }
 
@@ -28,6 +30,7 @@ class OrderDetailViewModel extends BaseViewModel {
   final VehicleFuelConsumptionRepository _fuelConsumptionRepository;
   final UpdateOrderToDeliveredUseCase _updateToDeliveredUseCase;
   final UpdateOrderToOngoingDeliveredUseCase _updateToOngoingDeliveredUseCase;
+  final AuthViewModel _authViewModel;
 
   OrderDetailState _state = OrderDetailState.initial;
   StartDeliveryState _startDeliveryState = StartDeliveryState.initial;
@@ -70,15 +73,35 @@ class OrderDetailViewModel extends BaseViewModel {
     required VehicleFuelConsumptionRepository fuelConsumptionRepository,
     required UpdateOrderToDeliveredUseCase updateToDeliveredUseCase,
     required UpdateOrderToOngoingDeliveredUseCase updateToOngoingDeliveredUseCase,
+    required AuthViewModel authViewModel,
   }) : _getOrderDetailsUseCase = getOrderDetailsUseCase,
        _createVehicleFuelConsumptionUseCase = createVehicleFuelConsumptionUseCase,
        _photoCompletionRepository = photoCompletionRepository,
        _fuelConsumptionRepository = fuelConsumptionRepository,
        _updateToDeliveredUseCase = updateToDeliveredUseCase,
-       _updateToOngoingDeliveredUseCase = updateToOngoingDeliveredUseCase;
+       _updateToOngoingDeliveredUseCase = updateToOngoingDeliveredUseCase,
+       _authViewModel = authViewModel;
+
+  /// Get current user phone number from AuthViewModel
+  String? _getCurrentUserPhoneNumber() {
+    try {
+      final driver = _authViewModel.driver;
+      if (driver != null) {
+        final phoneNumber = driver.userResponse?.phoneNumber;
+        if (phoneNumber != null && phoneNumber.isNotEmpty) {
+          // debugPrint('✅ Got current user phone: $phoneNumber');
+          return phoneNumber;
+        }
+      }
+      debugPrint('⚠️ Could not get current user phone from AuthViewModel');
+    } catch (e) {
+      debugPrint('❌ Error getting current user phone: $e');
+    }
+    return null;
+  }
 
   Future<void> getOrderDetails(String orderId) async {
-    if (_state == OrderDetailState.loading) return; // Tránh gọi nhiều lần
+    if (_state == OrderDetailState.loading) return; 
 
     _state = OrderDetailState.loading;
     notifyListeners();
@@ -120,30 +143,25 @@ class OrderDetailViewModel extends BaseViewModel {
   void _parseRouteSegments() {
     _routeSegments = [];
 
-    if (_orderWithDetails == null || _orderWithDetails!.orderDetails.isEmpty) {
+    if (_orderWithDetails == null) {
       return;
     }
 
-    final orderDetail = _orderWithDetails!.orderDetails.first;
-    final vehicleAssignmentId = orderDetail.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return;
-    }
-
-    VehicleAssignment? vehicleAssignment;
-    try {
-      vehicleAssignment = _orderWithDetails!.vehicleAssignments.firstWhere(
-        (va) => va.id == vehicleAssignmentId,
-      );
-    } catch (e) {
-      vehicleAssignment = null;
-    }
-    
+    // Get current user's vehicle assignment (for multi-trip orders)
+    final vehicleAssignment = getCurrentUserVehicleAssignment();
     if (vehicleAssignment == null || vehicleAssignment.journeyHistories.isEmpty) {
       return;
     }
 
-    final journeyHistory = vehicleAssignment.journeyHistories.first;
+    // Select the active journey (prefer ACTIVE status, fallback to first)
+    JourneyHistory journeyHistory;
+    try {
+      journeyHistory = vehicleAssignment.journeyHistories.firstWhere(
+        (j) => j.status == 'ACTIVE',
+      );
+    } catch (e) {
+      journeyHistory = vehicleAssignment.journeyHistories.first;
+    }
 
     for (var segment in journeyHistory.journeySegments) {
       try {
@@ -171,15 +189,12 @@ class OrderDetailViewModel extends BaseViewModel {
   }
 
   /// Kiểm tra xem đơn hàng có thể bắt đầu giao hàng không
+  /// Dựa trên OrderDetail Status của trip hiện tại, không chỉ dựa vào Order Status
+  /// Điều này cho phép nhiều trip độc lập - Driver B có thể start trip 2 
+  /// ngay cả khi Order đang PICKING_UP (do Trip 1 đã start)
   bool canStartDelivery() {
     if (_orderWithDetails == null) {
       // debugPrint('❌ canStartDelivery: orderWithDetails is null');
-      return false;
-    }
-    
-    // Status must be FULLY_PAID
-    if (_orderWithDetails!.status != 'FULLY_PAID') {
-      // debugPrint('❌ canStartDelivery: status is ${_orderWithDetails!.status}, not FULLY_PAID');
       return false;
     }
     
@@ -192,6 +207,29 @@ class OrderDetailViewModel extends BaseViewModel {
     // Must have order details with vehicle assignment ID
     if (_orderWithDetails!.orderDetails.isEmpty) {
       // debugPrint('❌ canStartDelivery: no order details');
+      return false;
+    }
+    
+    // CRITICAL: Check OrderDetail Status of current driver's trip, not Order Status
+    // This allows multi-trip orders where Trip 2 can start even if Order is PICKING_UP
+    // because Trip 1 already started
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      // debugPrint('❌ canStartDelivery: cannot get current trip detail status');
+      return false;
+    }
+    
+    // Can start delivery if current trip's OrderDetail status is ASSIGNED_TO_DRIVER
+    // Order Status might be FULLY_PAID or PICKING_UP (if another trip started)
+    if (detailStatus != 'ASSIGNED_TO_DRIVER') {
+      // debugPrint('❌ canStartDelivery: detail status is $detailStatus, not ASSIGNED_TO_DRIVER');
+      return false;
+    }
+    
+    // Order must be FULLY_PAID or PICKING_UP (another trip might have started)
+    final orderStatus = _orderWithDetails!.status;
+    if (orderStatus != 'FULLY_PAID' && orderStatus != 'PICKING_UP') {
+      // debugPrint('❌ canStartDelivery: order status is $orderStatus, not FULLY_PAID or PICKING_UP');
       return false;
     }
     
@@ -211,38 +249,141 @@ class OrderDetailViewModel extends BaseViewModel {
     }
   }
 
-  /// Kiểm tra xem đơn hàng có thể xác nhận đóng gói và seal không
-  bool canConfirmPreDelivery() {
-    if (_orderWithDetails == null) return false;
-    return _orderWithDetails!.status == 'PICKING_UP';
-  }
-
-  /// Kiểm tra xem đơn hàng có thể xác nhận giao hàng không (chụp ảnh khách nhận hàng)
-  /// This is shown when arriving at delivery point (status ONGOING_DELIVERED)
-  bool canConfirmDelivery() {
-    if (_orderWithDetails == null) return false;
-    // Show photo confirmation section when status is ONGOING_DELIVERED
-    // After photo upload, backend will change status to DELIVERED
-    return _orderWithDetails!.status == 'ONGOING_DELIVERED';
-  }
-
-  /// Kiểm tra xem có thể upload odometer cuối không (khi đã về carrier)
-  /// This is shown when status is DELIVERED (after photo upload)
-  bool canUploadFinalOdometer() {
-    if (_orderWithDetails == null) return false;
-    // Allow odometer upload when order is DELIVERED
-    // This happens after photo confirmation is done and backend updated status
-    return _orderWithDetails!.status == 'DELIVERED';
-  }
-
-  /// Lấy ID của vehicle assignment
-  String? getVehicleAssignmentId() {
+  /// Lấy OrderDetail Status của trip hiện tại (trip của driver hiện tại)
+  /// Dùng phone number để match với primary driver
+  String? getCurrentTripOrderDetailStatus() {
     if (_orderWithDetails == null || _orderWithDetails!.orderDetails.isEmpty) {
       return null;
     }
 
-    final orderDetail = _orderWithDetails!.orderDetails.first;
-    return orderDetail.vehicleAssignmentId;
+    // Get current user phone number
+    final currentUserPhone = _getCurrentUserPhoneNumber();
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      return null;
+    }
+
+    // Find vehicle assignment where current user is primary driver
+    VehicleAssignment? userVehicleAssignment;
+    try {
+      userVehicleAssignment = _orderWithDetails!.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) return false;
+          return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Could not find vehicle assignment for current user');
+      return null;
+    }
+
+    if (userVehicleAssignment == null) {
+      return null;
+    }
+
+    // Find order detail that belongs to this vehicle assignment
+    try {
+      final orderDetail = _orderWithDetails!.orderDetails.firstWhere(
+        (od) => od.vehicleAssignmentId == userVehicleAssignment?.id,
+      );
+      return orderDetail.status;
+    } catch (e) {
+      debugPrint('❌ Could not find order detail for vehicle assignment');
+      return null;
+    }
+  }
+
+  /// Kiểm tra xem có thể bắt đầu lấy hàng không
+  /// Dựa trên OrderDetail Status của trip hiện tại, không phải Order Status
+  bool canStartPickup() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) return false;
+    
+    // Can start pickup if detail status is ASSIGNED_TO_DRIVER or FULLY_PAID
+    return detailStatus == 'ASSIGNED_TO_DRIVER' || detailStatus == 'FULLY_PAID';
+  }
+
+  /// Kiểm tra xem đơn hàng có thể xác nhận đóng gói và seal không
+  /// Dựa trên OrderDetail Status của trip hiện tại
+  bool canConfirmPreDelivery() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      // Fallback to Order Status if detail status not found
+      return _orderWithDetails!.status == 'PICKING_UP';
+    }
+    
+    // Can confirm pre-delivery if detail status is PICKING_UP
+    return detailStatus == 'PICKING_UP';
+  }
+
+  /// Kiểm tra xem đơn hàng có thể xác nhận giao hàng không (chụp ảnh khách nhận hàng)
+  /// Dựa trên OrderDetail Status của trip hiện tại
+  bool canConfirmDelivery() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      // Fallback to Order Status if detail status not found
+      return _orderWithDetails!.status == 'ONGOING_DELIVERED';
+    }
+    
+    // Can confirm delivery if detail status is ONGOING_DELIVERED
+    return detailStatus == 'ONGOING_DELIVERED';
+  }
+
+  /// Kiểm tra xem có thể upload odometer cuối không (khi đã về carrier)
+  /// Dựa trên OrderDetail Status của trip hiện tại
+  bool canUploadFinalOdometer() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      // Fallback to Order Status if detail status not found
+      return _orderWithDetails!.status == 'DELIVERED';
+    }
+    
+    // Can upload final odometer if detail status is DELIVERED or SUCCESSFUL
+    return detailStatus == 'DELIVERED' || detailStatus == 'SUCCESSFUL';
+  }
+
+  /// Lấy vehicle assignment của driver hiện tại (primary driver)
+  /// Dùng cho multi-trip orders để hiển thị đúng thông tin chuyến của driver
+  VehicleAssignment? getCurrentUserVehicleAssignment() {
+    if (_orderWithDetails == null || _orderWithDetails!.vehicleAssignments.isEmpty) {
+      return null;
+    }
+
+    // Get current user phone number
+    final currentUserPhone = _getCurrentUserPhoneNumber();
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      return null;
+    }
+
+    // Find vehicle assignment where current user is primary driver
+    try {
+      return _orderWithDetails!.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) return false;
+          return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Could not find vehicle assignment for current user: $e');
+      // Fallback to first vehicle assignment if not found
+      return _orderWithDetails!.vehicleAssignments.isNotEmpty 
+          ? _orderWithDetails!.vehicleAssignments.first 
+          : null;
+    }
+  }
+
+  /// Lấy ID của vehicle assignment của driver hiện tại
+  /// Dùng cho multi-trip orders để lấy ID chuyến của driver
+  String? getVehicleAssignmentId() {
+    final vehicleAssignment = getCurrentUserVehicleAssignment();
+    return vehicleAssignment?.id;
   }
 
   /// Bắt đầu giao hàng
@@ -325,10 +466,8 @@ class OrderDetailViewModel extends BaseViewModel {
       return false;
     }
 
-    // Get vehicle assignment ID from first order detail
-    final vehicleAssignmentId = _orderWithDetails!.orderDetails.isNotEmpty
-        ? _orderWithDetails!.orderDetails.first.vehicleAssignmentId
-        : null;
+    // Get vehicle assignment ID from current user's vehicle assignment
+    final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) {
       debugPrint('❌ Cannot upload photo: no vehicle assignment ID');
@@ -381,10 +520,8 @@ class OrderDetailViewModel extends BaseViewModel {
       return false;
     }
 
-    // Get vehicle assignment ID from first order detail
-    final vehicleAssignmentId = _orderWithDetails!.orderDetails.isNotEmpty
-        ? _orderWithDetails!.orderDetails.first.vehicleAssignmentId
-        : null;
+    // Get vehicle assignment ID from current user's vehicle assignment
+    final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) {
       debugPrint('❌ Cannot upload photos: no vehicle assignment ID');
@@ -398,13 +535,12 @@ class OrderDetailViewModel extends BaseViewModel {
     notifyListeners();
 
     debugPrint('📸 Uploading ${imageFiles.length} photo completions...');
-    // Upload first photo as placeholder - should create proper use case
-    final Either<Failure, bool> result = imageFiles.isNotEmpty 
-        ? await _photoCompletionRepository.uploadPhoto(
-            vehicleAssignmentId,
-            imageFiles.first.path,
-          )
-        : Right(true);
+    // Upload all photos using the correct API endpoint
+    final Either<Failure, bool> result = await _photoCompletionRepository.uploadMultiplePhotoCompletion(
+      imageFiles: imageFiles,
+      vehicleAssignmentId: vehicleAssignmentId,
+      description: 'Photo completion at delivery',
+    );
 
     return result.fold(
       (failure) {
@@ -418,9 +554,10 @@ class OrderDetailViewModel extends BaseViewModel {
         _isUploadingPhoto = false;
         debugPrint('✅ Photo completions uploaded successfully');
         
-        // CRITICAL: Update order status to DELIVERED after photo confirmation
-        // This ensures the order status reflects delivery confirmation
-        _updateOrderStatusToDelivered();
+        // NOTE: Backend handles status update automatically
+        // When photo is uploaded, backend updates:
+        // 1. OrderDetail status to DELIVERED (this trip)
+        // 2. Order status (aggregated from all trips)
         
         notifyListeners();
         return true;
@@ -459,36 +596,11 @@ class OrderDetailViewModel extends BaseViewModel {
     );
   }
 
-  /// Update order status to DELIVERED after delivery photo confirmation
-  Future<void> _updateOrderStatusToDelivered() async {
-    if (_orderWithDetails == null) {
-      debugPrint('❌ Cannot update status: no order details');
-      return;
-    }
-
-    debugPrint('🔄 Updating order status to DELIVERED...');
-    final result = await _updateToDeliveredUseCase(_orderWithDetails!.id);
-    
-    result.fold(
-      (failure) {
-        debugPrint('❌ Failed to update order status to DELIVERED: ${failure.message}');
-        // Don't throw - photo was uploaded successfully, just status update failed
-      },
-      (success) {
-        debugPrint('✅ Successfully updated order status to DELIVERED');
-        // Reload order details to reflect new status
-        getOrderDetails(_orderWithDetails!.id);
-      },
-    );
-  }
-
   /// Load fuel consumption data to get ID for odometer update
   Future<void> loadFuelConsumptionData() async {
     if (_orderWithDetails == null) return;
 
-    final vehicleAssignmentId = _orderWithDetails!.orderDetails.isNotEmpty
-        ? _orderWithDetails!.orderDetails.first.vehicleAssignmentId
-        : null;
+    final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) return;
 

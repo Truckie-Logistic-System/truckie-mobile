@@ -21,6 +21,7 @@ import '../presentation/features/splash/screens/splash_screen.dart';
 
 class AppRoutes {
   // Route names
+  static const String testLogin = '/test-login';
   static const String root = '/';
   static const String splash = '/splash';
   static const String login = '/login';
@@ -132,6 +133,7 @@ class AppRoutes {
         final Map<String, dynamic> args =
             settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
+          settings: settings, // CRITICAL: Set settings to enable popUntil by route name
           builder: (_) => ResponsiveWrapper(
             child: NavigationScreen(
               orderId: args['orderId'] as String,

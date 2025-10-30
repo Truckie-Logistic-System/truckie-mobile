@@ -7,6 +7,7 @@ import '../../core/errors/exceptions.dart';
 import 'api_client.dart';
 import '../../core/services/token_storage_service.dart';
 import '../../domain/entities/user.dart';
+import '../../domain/entities/role.dart';
 import '../models/auth_response_model.dart';
 import '../models/token_response_model.dart';
 import '../models/user_model.dart';
@@ -56,7 +57,7 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<User> login(String username, String password) async {
     try {
-      // debugPrint('Attempting login for user: $username');
+      debugPrint('🔐 [login] START - Attempting login for user: $username');
 
       // Sử dụng endpoint mobile
       final response = await _apiClient.dio.post('/auths/mobile', data: {
@@ -64,23 +65,29 @@ class AuthDataSourceImpl implements AuthDataSource {
         'password': password,
       });
 
-      // debugPrint('Login response received: $response');
+      debugPrint('🔐 [login] Response received from backend');
 
       if (response.data['success'] != true) {
-        // debugPrint('Login failed: ${response.data['message']}');
+        debugPrint('❌ [login] Login failed: ${response.data['message']}');
         throw ServerException(
           message: response.data['message'] ?? 'Đăng nhập thất bại',
           statusCode: response.statusCode ?? 400,
         );
       }
 
-      // debugPrint('Login successful, processing user data');
+      debugPrint('✅ [login] Login successful, processing user data');
       final authResponseModel = AuthResponseModel.fromJson(response.data['data']);
       final authResponse = authResponseModel.toEntity();
 
+      debugPrint('✅ [login] Access token: ${authResponse.authToken.substring(0, 20)}...');
+      debugPrint('✅ [login] Refresh token: ${authResponse.refreshToken.substring(0, 20)}...');
+
       // Lưu tokens
       await tokenStorageService.saveAccessToken(authResponse.authToken);
+      debugPrint('✅ [login] Access token saved to memory');
+      
       await tokenStorageService.saveRefreshToken(authResponse.refreshToken);
+      debugPrint('✅ [login] Refresh token saved to secure storage');
 
       final user = User(
         id: authResponse.user.id,
@@ -97,9 +104,11 @@ class AuthDataSourceImpl implements AuthDataSource {
       );
 
       await saveUserInfo(user);
+      debugPrint('✅ [login] User info saved to SharedPreferences');
+      debugPrint('✅ [login] Login completed successfully');
       return user;
     } catch (e) {
-      // debugPrint('Login exception: ${e.toString()}');
+      debugPrint('❌ [login] Login exception: ${e.toString()}');
       if (e is ServerException) {
         rethrow;
       }
@@ -122,35 +131,76 @@ class AuthDataSourceImpl implements AuthDataSource {
       }
 
       // Sử dụng endpoint mobile
+      debugPrint('🔄 [refreshToken] Calling /auths/mobile/token/refresh');
+      debugPrint('🔄 [refreshToken] Refresh token: ${refreshToken.substring(0, 20)}...');
+      
       final response = await _apiClient.dio.post('/auths/mobile/token/refresh', data: {
         'refreshToken': refreshToken,
       });
 
-      // debugPrint('Refresh token response received: $response');
+      debugPrint('🔄 [refreshToken] Response received from backend');
 
       if (response.data['success'] == true && response.data['data'] != null) {
         final tokenData = response.data['data'];
         final newAccessToken = tokenData['accessToken'];
-        final newRefreshToken = tokenData['refreshToken'] ?? refreshToken;
-
-        // Lưu tokens mới
-        await tokenStorageService.saveAccessToken(newAccessToken);
-        await tokenStorageService.saveRefreshToken(newRefreshToken);
-
-        // Lấy và cập nhật thông tin người dùng với token mới
-        final userJson = sharedPreferences.getString('user_info');
-        if (userJson != null) {
-          final userMap = json.decode(userJson) as Map<String, dynamic>;
-          userMap['authToken'] = newAccessToken;
-          userMap['refreshToken'] = newRefreshToken;
-          await sharedPreferences.setString('user_info', json.encode(userMap));
-          
-          // Return updated user
-          final userModel = UserModel.fromJson(userMap);
-          return userModel.toEntity();
+        
+        // CRITICAL: Backend MUST return new refresh token (token rotation)
+        // Do NOT fallback to old token - that would break token rotation!
+        final newRefreshToken = tokenData['refreshToken'];
+        
+        if (newAccessToken == null || newAccessToken.isEmpty) {
+          debugPrint('❌ [refreshToken] ERROR: Backend did not return new access token!');
+          throw ServerException(
+            message: 'Backend did not return new access token',
+            statusCode: 500,
+          );
         }
         
-        throw ServerException(message: 'Không tìm thấy thông tin người dùng');
+        if (newRefreshToken == null || newRefreshToken.isEmpty) {
+          debugPrint('❌ [refreshToken] ERROR: Backend did not return new refresh token!');
+          debugPrint('❌ [refreshToken] This breaks token rotation - old token will be revoked!');
+          throw ServerException(
+            message: 'Backend did not return new refresh token - token rotation failed',
+            statusCode: 500,
+          );
+        }
+
+        debugPrint('✅ [refreshToken] Token rotation successful');
+        debugPrint('✅ [refreshToken] New access token: ${newAccessToken.substring(0, 20)}...');
+        debugPrint('✅ [refreshToken] New refresh token: ${newRefreshToken.substring(0, 20)}...');
+
+        // CRITICAL: Save both tokens FIRST - access token AND refresh token
+        // This ensures we always have the latest refresh token from backend
+        // Even if something fails later, tokens are already saved
+        try {
+          await tokenStorageService.saveAccessToken(newAccessToken);
+          await tokenStorageService.saveRefreshToken(newRefreshToken);
+          debugPrint('✅ [refreshToken] Tokens saved to storage');
+        } catch (e) {
+          debugPrint('❌ [refreshToken] ERROR saving tokens: $e');
+          rethrow;
+        }
+
+        // CRITICAL: Tokens are already saved! Just return success
+        // User info will be updated by AuthViewModel.forceRefreshToken()
+        debugPrint('✅ [refreshToken] Tokens saved successfully - returning success');
+        
+        // Create minimal user with new tokens for return value
+        // AuthViewModel will update the full user info
+        return User(
+          id: 'temp_id',
+          username: 'temp_username',
+          fullName: 'Temporary User',
+          email: 'temp@example.com',
+          phoneNumber: '',
+          gender: false,
+          dateOfBirth: '',
+          imageUrl: '',
+          status: 'ACTIVE',
+          role: Role(id: '', roleName: 'DRIVER', description: '', isActive: true),
+          authToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        );
       } else {
         throw ServerException(
           message: response.data['message'] ?? 'Làm mới token thất bại',

@@ -28,31 +28,24 @@ class _SplashScreenState extends State<SplashScreen> {
     // Đợi một chút để hiển thị splash screen
     await Future.delayed(const Duration(milliseconds: 500));
 
-    // Kiểm tra trạng thái đăng nhập và refresh token nếu cần
+    // Kiểm tra trạng thái đăng nhập
     if (_authViewModel.status == AuthStatus.authenticated) {
-      // Nếu đã đăng nhập, thử refresh token
-      // debugPrint('🔄 [SplashScreen] Status is authenticated, forcing token refresh...');
-      final refreshed = await _authViewModel.forceRefreshToken();
-      // debugPrint('🔄 [SplashScreen] Token refresh result: $refreshed');
-      // debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
-
-      if (refreshed) {
-        // Nếu refresh token thành công, chuyển đến trang chính
-        _navigateToMain();
-      } else {
-        // Nếu refresh token thất bại, chuyển đến trang đăng nhập
-        _navigateToLogin();
-      }
+      // CRITICAL: Don't call forceRefreshToken() right after login!
+      // Token was just obtained from login, and calling refresh immediately
+      // will cause the backend to revoke the new token (token rotation)
+      // Just navigate to main screen directly
+      debugPrint('✅ [SplashScreen] User is authenticated, navigating to main');
+      _navigateToMain();
     } else if (_authViewModel.status == AuthStatus.unauthenticated) {
       // Nếu chưa đăng nhập, chuyển đến trang đăng nhập
-      // debugPrint('🔓 [SplashScreen] Status is unauthenticated, navigating to login');
+      debugPrint('🔓 [SplashScreen] Status is unauthenticated, navigating to login');
       _navigateToLogin();
     } else {
       // Nếu đang trong trạng thái loading, đợi cho đến khi hoàn tất
-      // debugPrint('⏳ [SplashScreen] Status is loading, waiting for checkAuthStatus...');
+      debugPrint('⏳ [SplashScreen] Status is loading, waiting for checkAuthStatus...');
       await _authViewModel.checkAuthStatus();
-      // debugPrint('✅ [SplashScreen] checkAuthStatus completed');
-      // debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
+      debugPrint('✅ [SplashScreen] checkAuthStatus completed');
+      debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
       
       if (_authViewModel.status == AuthStatus.authenticated) {
         _navigateToMain();

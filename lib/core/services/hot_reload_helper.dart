@@ -6,16 +6,9 @@ class HotReloadHelper {
   /// Reset all singletons that might cause issues during hot reload
   static void resetProblematicInstances() {
     try {
-      // Reset AuthViewModel using dynamic to avoid presentation layer dependency
-      try {
-        final authViewModel = getIt.get(instanceName: 'AuthViewModel');
-        // AuthViewModel reset is not needed - handled by service locator
-        debugPrint('ℹ️ AuthViewModel managed by service locator');
-      } catch (e) {
-        debugPrint('AuthViewModel not available for reset: $e');
-      }
-
-      // debugPrint('Successfully reset instances for hot reload');
+      // AuthViewModel is managed by service locator as LazySingleton
+      // No need to reset it manually - it will be recreated on demand
+      debugPrint('ℹ️ Service locator will manage AuthViewModel lifecycle');
     } catch (e) {
       debugPrint('Error resetting instances for hot reload: $e');
     }

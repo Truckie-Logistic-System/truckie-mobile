@@ -60,6 +60,9 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
 
   // Custom marker for current location
   Symbol? _currentLocationMarker;
+  
+  // Waypoint markers list
+  List<Marker> _waypointMarkers = [];
 
   // Throttle _drawRoutes to prevent buffer overflow
   DateTime? _lastDrawRoutesTime;
@@ -251,16 +254,41 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     if (order.orderDetails.isEmpty || order.vehicleAssignments.isEmpty) {
       return null;
     }
-    final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
+
+    // Get current user phone number
+    final currentUserPhone = _authViewModel.driver?.userResponse.phoneNumber;
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      debugPrint('❌ Could not get current user phone number');
       return null;
     }
-    return order.vehicleAssignments
-        .cast<VehicleAssignment?>()
-        .firstWhere(
-          (va) => va?.id == vehicleAssignmentId,
-          orElse: () => null,
-        );
+
+    debugPrint('🔍 Looking for vehicle assignment for phone: $currentUserPhone');
+    debugPrint('   Total vehicle assignments: ${order.vehicleAssignments.length}');
+
+    // Find vehicle assignment where current user is primary driver
+    try {
+      final result = order.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) {
+            debugPrint('   - VA ${va.id}: no primary driver');
+            return false;
+          }
+          final match = currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+          debugPrint('   - VA ${va.id}: primary=${va.primaryDriver!.phoneNumber}, match=$match');
+          return match;
+        },
+      );
+      debugPrint('✅ Found vehicle assignment: ${result.id}');
+      return result;
+    } catch (e) {
+      debugPrint('❌ Could not find vehicle assignment for current user: $e');
+      // Fallback to first vehicle assignment if not found
+      if (order.vehicleAssignments.isNotEmpty) {
+        debugPrint('⚠️ Using fallback: first vehicle assignment');
+        return order.vehicleAssignments.first;
+      }
+      return null;
+    }
   }
 
   void dispose() {
@@ -512,7 +540,10 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       debugPrint('⚠️ Chưa có dữ liệu route, đang tải lại...');
       _loadOrderDetails().then((_) {
         if (_viewModel.routeSegments.isNotEmpty) {
-          _drawRoutes();
+          // Delay thêm để đảm bảo style đã load xong
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _drawRoutes(clearFirst: true); // Clear on initial load
+          });
 
           // Đặt camera vào vị trí thích hợp
           if (_viewModel.routeSegments[0].points.isNotEmpty) {
@@ -577,7 +608,10 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       });
     } else {
       debugPrint('✅ Route data available, drawing routes...');
-      _drawRoutes();
+      // Delay to ensure map is fully ready before drawing routes
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _drawRoutes(clearFirst: true); // Clear on initial load
+      });
 
       // Đặt camera vào vị trí thích hợp
       // Use current location if available, otherwise use first point
@@ -712,38 +746,46 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         if (_globalLocationManager.currentOrderId == widget.orderId) {
           debugPrint('✅ Same order - WebSocket stays connected, simulation will override GPS');
           // Just register this screen, don't restart tracking
-          _globalLocationManager.registerScreen(
-            'NavigationScreen',
-            onLocationUpdate: (data) {
-              final isPrimary = _globalLocationManager.isPrimaryDriver;
-              debugPrint(
-                '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
-              );
-
-              final lat = data['latitude'] as double?;
-              final lng = data['longitude'] as double?;
-
-              if (lat != null && lng != null) {
-                final location = LatLng(lat, lng);
-                _viewModel.currentLocation = location;
-
-                if (_isFollowingUser && mounted) {
-                  _setCameraToNavigationMode(location);
-                }
-              }
-            },
-            onError: (error) {
-              debugPrint('❌ Global tracking error: $error');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Lỗi tracking: $error'),
-                    backgroundColor: Colors.red,
-                  ),
+          // CRITICAL: Only register if this is the primary driver
+          if (_globalLocationManager.isPrimaryDriver) {
+            _globalLocationManager.registerScreen(
+              'NavigationScreen',
+              onLocationUpdate: (data) {
+                final isPrimary = _globalLocationManager.isPrimaryDriver;
+                
+                debugPrint(
+                  '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
                 );
-              }
-            },
-          );
+
+                final lat = data['latitude'] as double?;
+                final lng = data['longitude'] as double?;
+
+                if (lat != null && lng != null) {
+                  final location = LatLng(lat, lng);
+
+                  // Update viewModel's current location
+                  _viewModel.currentLocation = location;
+
+                  if (_isFollowingUser && mounted) {
+                    _setCameraToNavigationMode(location);
+                  }
+                }
+              },
+              onError: (error) {
+                debugPrint('❌ Global tracking error: $error');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Lỗi tracking: $error'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+            );
+          } else {
+            debugPrint('⚠️ Secondary driver - not registering for location updates');
+          }
           
           // Close loading dialog and return success
           if (mounted) {
@@ -756,14 +798,30 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         }
       }
 
-      // Xác định driver role từ order details (dùng DriverRoleChecker như ở order detail screen)
+      // Xác định driver role từ vehicle assignment hiện tại (không phải từ order chung)
+      // CRITICAL: Với multi-trip orders, cần check xem user có phải là primary driver của CHUYẾN HIỆN TẠI
       bool isPrimaryDriver = true; // Default
-      if (_viewModel.orderWithDetails != null) {
-        // Use DriverRoleChecker để đồng nhất logic với order detail screen
-        isPrimaryDriver = DriverRoleChecker.canPerformActions(
-          _viewModel.orderWithDetails!,
-          _authViewModel,
-        );
+      if (_viewModel.orderWithDetails != null && _viewModel.vehicleAssignmentId != null) {
+        // Find the vehicle assignment for current trip
+        final currentVehicleAssignment = _viewModel.orderWithDetails!.vehicleAssignments
+            .cast<VehicleAssignment?>()
+            .firstWhere(
+              (va) => va?.id == _viewModel.vehicleAssignmentId,
+              orElse: () => null,
+            );
+        
+        if (currentVehicleAssignment != null) {
+          // Check if current user is primary driver of THIS vehicle assignment
+          final currentUserPhone = _authViewModel.driver?.userResponse.phoneNumber;
+          if (currentUserPhone != null && currentVehicleAssignment.primaryDriver != null) {
+            isPrimaryDriver = currentUserPhone.trim() == 
+                currentVehicleAssignment.primaryDriver!.phoneNumber.trim();
+            debugPrint('🔍 Primary driver check for trip ${_viewModel.vehicleAssignmentId}:');
+            debugPrint('   - Current user: $currentUserPhone');
+            debugPrint('   - Primary driver: ${currentVehicleAssignment.primaryDriver!.phoneNumber}');
+            debugPrint('   - Is primary: $isPrimaryDriver');
+          }
+        }
       }
 
       // Use GlobalLocationManager instead of direct IntegratedLocationService
@@ -783,44 +841,50 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
 
       if (success) {
         // Register callbacks for location updates
-        // Cả primary và secondary driver đều có thể nhận location updates
-        _globalLocationManager.registerScreen(
-          'NavigationScreen',
-          onLocationUpdate: (data) {
-            final isPrimary = _globalLocationManager.isPrimaryDriver;
-            debugPrint(
-              '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
-            );
-
-            // Update current location in viewModel
-            final lat = data['latitude'] as double?;
-            final lng = data['longitude'] as double?;
-
-            if (lat != null && lng != null) {
-              final location = LatLng(lat, lng);
-
-              // Update viewModel's current location
-              _viewModel.currentLocation = location;
-
-              // Update camera if following user
-              if (_isFollowingUser && mounted) {
-                _setCameraToNavigationMode(location);
-              }
-            }
-          },
-          onError: (error) {
-            debugPrint('❌ Global tracking error: $error');
-
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Lỗi tracking: $error'),
-                  backgroundColor: Colors.red,
-                ),
+        // CRITICAL: Only register if this is the primary driver
+        // This prevents secondary drivers from receiving location updates
+        // which would cause camera to focus on wrong vehicle in multi-trip orders
+        if (isPrimaryDriver) {
+          _globalLocationManager.registerScreen(
+            'NavigationScreen',
+            onLocationUpdate: (data) {
+              final isPrimary = _globalLocationManager.isPrimaryDriver;
+              debugPrint(
+                '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
               );
-            }
-          },
-        );
+
+              // Update current location in viewModel
+              final lat = data['latitude'] as double?;
+              final lng = data['longitude'] as double?;
+
+              if (lat != null && lng != null) {
+                final location = LatLng(lat, lng);
+
+                // Update viewModel's current location
+                _viewModel.currentLocation = location;
+
+                // Update camera if following user
+                if (_isFollowingUser && mounted) {
+                  _setCameraToNavigationMode(location);
+                }
+              }
+            },
+            onError: (error) {
+              debugPrint('❌ Global tracking error: $error');
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Lỗi tracking: $error'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          );
+        } else {
+          debugPrint('⚠️ Secondary driver - not registering for location updates');
+        }
       }
 
       // Close loading dialog
@@ -920,7 +984,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     debugPrint('✅ GlobalLocationManager stopped');
   }
 
-  void _drawRoutes() {
+  void _drawRoutes({bool clearFirst = false}) {
     if (_mapController == null || _viewModel.routeSegments.isEmpty) return;
 
     // Throttle to prevent excessive redrawing and buffer overflow
@@ -932,14 +996,24 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     }
     _lastDrawRoutesTime = now;
 
-    // Clear existing routes - use try-catch to handle any cleanup errors
-    try {
-      _mapController!.clearPolylines();
-      _mapController!.clearCircles();
-      // Don't clear symbols here - we manage the location marker separately
-    } catch (e) {
-      debugPrint('⚠️ Error clearing map elements: $e');
+    // If need to clear first, wait for clear to complete before drawing
+    if (clearFirst) {
+      _clearMapElementsWithDelay();
+      // Wait for clear to complete (300ms) + extra buffer (200ms)
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _drawRoutesInternal();
+      });
+    } else {
+      // Draw immediately without clearing
+      _drawRoutesInternal();
     }
+  }
+
+  void _drawRoutesInternal() {
+    if (_mapController == null || _viewModel.routeSegments.isEmpty) return;
+
+    // Clear previous waypoint markers
+    _waypointMarkers.clear();
 
     // Danh sách tất cả các điểm để tính toán bounds
     List<LatLng> allPoints = [];
@@ -978,43 +1052,92 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       _mapController!.addPolyline(
         PolylineOptions(
           geometry: optimizedPoints,
-          polylineColor: color,
-          polylineWidth: isCurrentSegment ? 5.0 : 3.0,
-          polylineOpacity: isCurrentSegment ? 1.0 : 0.6,
+          polylineColor: AppColors.primary, // Luôn dùng màu xanh dương
+          polylineWidth: 8.0, // Tăng độ dày để dễ nhìn
+          polylineOpacity: 1.0, // Đầy đủ opacity
         ),
       );
 
-      // Only draw waypoint markers (start/end), not intermediate circles
-      // This significantly reduces the number of map elements
+      // Draw waypoint markers with icons
       if (optimizedPoints.isNotEmpty) {
-        // Start point - only for first segment
+        // Start point - only for first segment (Carrier)
         if (i == 0) {
-          _mapController!.addCircle(
-            CircleOptions(
-              geometry: optimizedPoints.first,
-              circleRadius: 8.0,
-              circleColor: color,
-              circleStrokeWidth: 2.0,
-              circleStrokeColor: Colors.white,
-              circleOpacity: 1.0,
+          _waypointMarkers.add(
+            Marker(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                child: const Icon(
+                  Icons.warehouse,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              latLng: optimizedPoints.first,
             ),
           );
         }
 
-        // End point - for all segments
-        _mapController!.addCircle(
-          CircleOptions(
-            geometry: optimizedPoints.last,
-            circleRadius: 8.0,
-            circleColor: color,
-            circleStrokeWidth: 2.0,
-            circleStrokeColor: Colors.white,
-            circleOpacity: 1.0,
+        // End point markers with different colors and icons based on segment
+        Color endPointColor;
+        IconData endPointIcon;
+        String label;
+        
+        if (i == 0) {
+          endPointColor = Colors.green; // Pickup point
+          endPointIcon = Icons.inventory_2; // Goods box icon
+          label = 'Lấy hàng';
+        } else if (i == _viewModel.routeSegments.length - 1) {
+          endPointColor = Colors.orange; // Back to Carrier
+          endPointIcon = Icons.warehouse; // Warehouse icon
+          label = 'Kho';
+        } else {
+          endPointColor = Colors.red; // Delivery point
+          endPointIcon = Icons.local_shipping; // Delivery icon
+          label = 'Giao hàng';
+        }
+
+        _waypointMarkers.add(
+          Marker(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: endPointColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    endPointIcon,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: endPointColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            latLng: optimizedPoints.last,
           ),
         );
-
-        // Remove intermediate circles completely to avoid buffer overflow
-        // The polyline is sufficient to show the route
       }
     }
 
@@ -1091,6 +1214,28 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         ),
       );
     }
+  }
+
+  /// Clear map elements with delay to avoid VietmapGL style loading issues
+  /// Error: "Calling getSourceAs when a newer style is loading/has loaded"
+  void _clearMapElementsWithDelay() {
+    Future.delayed(const Duration(milliseconds: 300), () async {
+      if (_mapController == null) return;
+      
+      try {
+        await _mapController!.clearPolylines();
+        debugPrint('✅ Cleared polylines');
+      } catch (e) {
+        debugPrint('⚠️ Error clearing polylines: $e');
+      }
+      
+      try {
+        await _mapController!.clearCircles();
+        debugPrint('✅ Cleared circles');
+      } catch (e) {
+        debugPrint('⚠️ Error clearing circles: $e');
+      }
+    });
   }
 
   Future<void> _updateLocationMarker(LatLng location, double? bearing) async {
@@ -1903,11 +2048,15 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // When back button is pressed, go to order detail instead of order list
-        Navigator.of(context).pushReplacementNamed(
-          AppRoutes.orderDetail,
-          arguments: widget.orderId,
-        );
+        // When back button is pressed, try to pop, if not possible go to order detail
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed(
+            AppRoutes.orderDetail,
+            arguments: widget.orderId,
+          );
+        }
         return false; // Prevent default back behavior
       },
       child: Scaffold(
@@ -1918,11 +2067,15 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              // Navigate to order detail when back button is pressed
-              Navigator.of(context).pushReplacementNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
+              // Try to pop, if not possible go to order detail
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.of(context).pushReplacementNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+              }
             },
           ),
           actions: [
@@ -2023,6 +2176,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                       ),
 
                     // Vehicle marker with Image-Based 3D model (8 PNG sprites)
+                    // + Waypoint markers with icons
                     if (_mapController != null &&
                         _viewModel.currentLocation != null &&
                         _isMapReady &&
@@ -2030,6 +2184,9 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                       MarkerLayer(
                         mapController: _mapController!,
                         markers: [
+                          // Waypoint markers
+                          ..._waypointMarkers,
+                          // Vehicle marker
                           Marker(
                             child: ImageBased3DTruckMarker(
                               bearing: _viewModel.currentBearing ?? 0,

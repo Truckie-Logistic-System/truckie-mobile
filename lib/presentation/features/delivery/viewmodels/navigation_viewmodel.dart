@@ -7,10 +7,13 @@ import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 import '../../../../app/di/service_locator.dart';
 import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/entities/order_detail.dart';
+import '../../../../domain/entities/order_detail_status.dart';
 import '../../../../domain/usecases/orders/get_order_details_usecase.dart';
 import '../../../../domain/usecases/orders/update_order_to_ongoing_delivered_usecase.dart';
 import '../../../../domain/usecases/orders/update_order_to_delivered_usecase.dart';
 import '../../../../domain/usecases/orders/update_order_to_successful_usecase.dart';
+import '../../../../domain/usecases/orders/update_order_detail_status_usecase.dart';
+import '../../auth/viewmodels/auth_viewmodel.dart';
 
 class RouteSegment {
   final String name;
@@ -26,6 +29,9 @@ class NavigationViewModel extends ChangeNotifier {
       getIt<UpdateOrderToOngoingDeliveredUseCase>();
   final UpdateOrderToSuccessfulUseCase _updateToSuccessfulUseCase =
       getIt<UpdateOrderToSuccessfulUseCase>();
+  final UpdateOrderDetailStatusUseCase _updateOrderDetailStatusUseCase =
+      getIt<UpdateOrderDetailStatusUseCase>();
+  final AuthViewModel _authViewModel = getIt<AuthViewModel>();
 
   OrderWithDetails? orderWithDetails;
   List<RouteSegment> routeSegments = [];
@@ -37,9 +43,11 @@ class NavigationViewModel extends ChangeNotifier {
 
   String _currentVehicleId = '';
   String _currentLicensePlateNumber = '';
+  String? _vehicleAssignmentId; // NEW: Store vehicle assignment ID
 
   String get currentVehicleId => _currentVehicleId;
   String get currentLicensePlateNumber => _currentLicensePlateNumber;
+  String? get vehicleAssignmentId => _vehicleAssignmentId; // NEW: Getter
 
   // Simulation variables
   Timer? _simulationTimer;
@@ -88,30 +96,61 @@ class NavigationViewModel extends ChangeNotifier {
     }
   }
 
+  /// Get current user's vehicle assignment (for multi-trip orders)
+  VehicleAssignment? _getCurrentUserVehicleAssignment(OrderWithDetails order) {
+    if (order.vehicleAssignments.isEmpty) {
+      debugPrint('❌ No vehicle assignments in order');
+      return null;
+    }
+
+    // Get current user phone number
+    debugPrint('🔍 _authViewModel.driver: ${_authViewModel.driver}');
+    debugPrint('🔍 _authViewModel.driver?.userResponse: ${_authViewModel.driver?.userResponse}');
+    final currentUserPhone = _authViewModel.driver?.userResponse.phoneNumber;
+    debugPrint('🔍 currentUserPhone: $currentUserPhone');
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      debugPrint('❌ Could not get current user phone number');
+      return null;
+    }
+
+    debugPrint('🔍 Looking for vehicle assignment for phone: $currentUserPhone');
+    debugPrint('   Total vehicle assignments: ${order.vehicleAssignments.length}');
+
+    // Find vehicle assignment where current user is primary driver
+    try {
+      final result = order.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) {
+            debugPrint('   - VA ${va.id}: no primary driver');
+            return false;
+          }
+          final match = currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+          debugPrint('   - VA ${va.id}: primary=${va.primaryDriver!.phoneNumber}, match=$match');
+          return match;
+        },
+      );
+      debugPrint('✅ Found vehicle assignment: ${result.id}');
+      return result;
+    } catch (e) {
+      debugPrint('❌ Could not find vehicle assignment for current user: $e');
+      // Fallback to first vehicle assignment if not found
+      if (order.vehicleAssignments.isNotEmpty) {
+        debugPrint('⚠️ Using fallback: first vehicle assignment');
+        return order.vehicleAssignments.first;
+      }
+      return null;
+    }
+  }
+
   void parseRouteFromOrder(OrderWithDetails order) {
+    debugPrint('🔄 parseRouteFromOrder called');
+    debugPrint('   - orderDetails.length: ${order.orderDetails.length}');
+    debugPrint('   - vehicleAssignments.length: ${order.vehicleAssignments.length}');
+    
     try {
       routeSegments = [];
       _pointIndices = [];
       currentSegmentIndex = 0;
-
-      // Extract vehicle ID and license plate number
-      if (order.orderDetails.isNotEmpty && order.vehicleAssignments.isNotEmpty) {
-        final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-        if (vehicleAssignmentId != null) {
-          VehicleAssignment? vehicleAssignment;
-          try {
-            vehicleAssignment = order.vehicleAssignments.firstWhere(
-              (va) => va.id == vehicleAssignmentId,
-            );
-          } catch (e) {
-            vehicleAssignment = null;
-          }
-          if (vehicleAssignment?.vehicle != null) {
-            _currentVehicleId = vehicleAssignment!.vehicle!.id ?? '';
-            _currentLicensePlateNumber = vehicleAssignment.vehicle!.licensePlateNumber;
-          }
-        }
-      }
 
       // Parse route data from order
       if (order.orderDetails.isEmpty || order.vehicleAssignments.isEmpty) {
@@ -119,33 +158,45 @@ class NavigationViewModel extends ChangeNotifier {
         return;
       }
 
-      final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-      if (vehicleAssignmentId == null) {
-        debugPrint('❌ Không có vehicleAssignmentId');
+      // Get current user's vehicle assignment (for multi-trip orders) - ONLY ONCE
+      final vehicleAssignment = _getCurrentUserVehicleAssignment(order);
+      if (vehicleAssignment == null) {
+        debugPrint('❌ Không có vehicle assignment cho driver hiện tại');
         return;
       }
 
-      VehicleAssignment? vehicleAssignment;
-      try {
-        vehicleAssignment = order.vehicleAssignments.firstWhere(
-          (va) => va.id == vehicleAssignmentId,
-        );
-      } catch (e) {
-        vehicleAssignment = null;
+      // Store vehicle assignment ID and vehicle info
+      _vehicleAssignmentId = vehicleAssignment.id;
+      debugPrint('📌 Stored vehicle assignment ID: $_vehicleAssignmentId');
+      
+      if (vehicleAssignment.vehicle != null) {
+        _currentVehicleId = vehicleAssignment.vehicle!.id ?? '';
+        _currentLicensePlateNumber = vehicleAssignment.vehicle!.licensePlateNumber;
+        debugPrint('📌 Vehicle: $_currentLicensePlateNumber (ID: $_currentVehicleId)');
       }
 
-      if (vehicleAssignment == null || vehicleAssignment.journeyHistories.isEmpty) {
+      if (vehicleAssignment.journeyHistories.isEmpty) {
         debugPrint('❌ Không có dữ liệu journeyHistories');
         return;
       }
 
-      final journeyHistory = vehicleAssignment.journeyHistories.first;
+      // Select the active journey (prefer ACTIVE status, fallback to first)
+      JourneyHistory journeyHistory;
+      try {
+        journeyHistory = vehicleAssignment.journeyHistories.firstWhere(
+          (j) => j.status == 'ACTIVE',
+        );
+      } catch (e) {
+        journeyHistory = vehicleAssignment.journeyHistories.first;
+      }
       final segments = journeyHistory.journeySegments;
 
       if (segments.isEmpty) {
         debugPrint('❌ Không có dữ liệu journeySegments');
         return;
       }
+
+      debugPrint('✅ Found ${segments.length} journey segments to parse');
 
       // Clear waypoints
       List<LatLng> waypoints = [];
@@ -154,6 +205,7 @@ class NavigationViewModel extends ChangeNotifier {
       bool hasValidRoute = false;
 
       for (final segment in segments) {
+        debugPrint('📍 Parsing segment: ${segment.startPointName} → ${segment.endPointName}');
         // Translate point names to Vietnamese
         final startName = _translatePointName(segment.startPointName);
         final endName = _translatePointName(segment.endPointName);
@@ -247,7 +299,12 @@ class NavigationViewModel extends ChangeNotifier {
       if (routeSegments.isNotEmpty && routeSegments[0].points.isNotEmpty) {
         currentLocation = routeSegments[0].points.first;
         currentBearing = 0;
-        _currentPointIndices = [0];
+        _currentPointIndices = List.generate(routeSegments.length, (_) => 0);
+        debugPrint('✅ Route parsed successfully: ${routeSegments.length} segments');
+        debugPrint('   - Initial location: ${currentLocation!.latitude}, ${currentLocation!.longitude}');
+        debugPrint('   - First segment has ${routeSegments[0].points.length} points');
+      } else {
+        debugPrint('❌ Route segments empty or no points in first segment');
       }
 
       notifyListeners();
@@ -267,6 +324,15 @@ class NavigationViewModel extends ChangeNotifier {
     debugPrint('🎬 NavigationViewModel.startSimulation called');
     debugPrint('   - routeSegments.length: ${routeSegments.length}');
     debugPrint('   - _isSimulating: $_isSimulating');
+    debugPrint('   - currentLocation: $currentLocation');
+    debugPrint('   - currentSegmentIndex: $currentSegmentIndex');
+    
+    if (routeSegments.isNotEmpty) {
+      debugPrint('   - routeSegments[0].points.length: ${routeSegments[0].points.length}');
+      if (routeSegments[0].points.isNotEmpty) {
+        debugPrint('   - First point: ${routeSegments[0].points.first}');
+      }
+    }
 
     if (routeSegments.isEmpty) {
       debugPrint('❌ Cannot start simulation: no route segments');
@@ -881,22 +947,28 @@ class NavigationViewModel extends ChangeNotifier {
     return earthRadius * c; // distance in meters
   }
 
-  /// Update order status to ONGOING_DELIVERED when reaching delivery point
+  /// Update OrderDetail status to ONGOING_DELIVERED when reaching delivery point
+  /// NEW: Uses vehicle assignment ID for multi-trip support
   Future<void> updateToOngoingDelivered() async {
-    if (orderWithDetails == null) {
-      debugPrint('❌ Cannot update status: no order details');
+    if (_vehicleAssignmentId == null) {
+      debugPrint('❌ Cannot update status: no vehicle assignment ID');
       return;
     }
 
-    debugPrint('🎯 Updating order status to ONGOING_DELIVERED...');
-    final result = await _updateToOngoingDeliveredUseCase(orderWithDetails!.id);
+    debugPrint('🎯 Updating OrderDetail status to ONGOING_DELIVERED...');
+    debugPrint('   - Vehicle Assignment ID: $_vehicleAssignmentId');
+    
+    final result = await _updateOrderDetailStatusUseCase(
+      assignmentId: _vehicleAssignmentId!,
+      status: OrderDetailStatus.ongoingDelivered,
+    );
     
     result.fold(
       (failure) {
-        debugPrint('❌ Failed to update order status: ${failure.message}');
+        debugPrint('❌ Failed to update OrderDetail status: ${failure.message}');
       },
       (success) {
-        debugPrint('✅ Successfully updated order status to ONGOING_DELIVERED');
+        debugPrint('✅ Successfully updated OrderDetail status to ONGOING_DELIVERED');
       },
     );
   }

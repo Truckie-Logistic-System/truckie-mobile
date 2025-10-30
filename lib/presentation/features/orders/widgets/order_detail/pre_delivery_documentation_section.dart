@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../../app/di/service_locator.dart';
 import '../../../../../domain/entities/order_detail.dart';
 import '../../../../../domain/entities/order_with_details.dart';
+import '../../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../viewmodels/pre_delivery_documentation_viewmodel.dart';
 
@@ -40,14 +41,8 @@ class _PreDeliveryDocumentationSectionState
     if (widget.order.orderDetails.isEmpty || widget.order.vehicleAssignments.isEmpty) {
       return [];
     }
-    final vehicleAssignmentId = widget.order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return [];
-    }
-    final vehicleAssignment = widget.order.vehicleAssignments.cast<VehicleAssignment?>().firstWhere(
-      (va) => va?.id == vehicleAssignmentId,
-      orElse: () => null,
-    );
+    
+    final vehicleAssignment = _getCurrentUserVehicleAssignment();
     return vehicleAssignment?.orderSeals ?? [];
   }
 
@@ -121,18 +116,39 @@ class _PreDeliveryDocumentationSectionState
     );
   }
 
+  VehicleAssignment? _getCurrentUserVehicleAssignment() {
+    if (widget.order.orderDetails.isEmpty || widget.order.vehicleAssignments.isEmpty) {
+      return null;
+    }
+    
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+    
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      return null;
+    }
+    
+    try {
+      return widget.order.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) return false;
+          return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+        },
+      );
+    } catch (e) {
+      // Fallback to first vehicle assignment
+      return widget.order.vehicleAssignments.isNotEmpty 
+          ? widget.order.vehicleAssignments.first 
+          : null;
+    }
+  }
+
   String? _getVehicleAssignmentId() {
     if (widget.order.orderDetails.isEmpty || widget.order.vehicleAssignments.isEmpty) {
       return null;
     }
-    final vehicleAssignmentId = widget.order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return null;
-    }
-    final vehicleAssignment = widget.order.vehicleAssignments.cast<VehicleAssignment?>().firstWhere(
-      (va) => va?.id == vehicleAssignmentId,
-      orElse: () => null,
-    );
+    
+    final vehicleAssignment = _getCurrentUserVehicleAssignment();
     return vehicleAssignment?.id;
   }
 

@@ -34,6 +34,7 @@ import '../../domain/usecases/orders/upload_seal_image_usecase.dart';
 import '../../domain/usecases/orders/update_order_to_ongoing_delivered_usecase.dart';
 import '../../domain/usecases/orders/update_order_to_delivered_usecase.dart';
 import '../../domain/usecases/orders/update_order_to_successful_usecase.dart';
+import '../../domain/usecases/orders/update_order_detail_status_usecase.dart';
 import '../../domain/usecases/vehicle/create_vehicle_fuel_consumption_usecase.dart';
 import '../../presentation/features/account/viewmodels/account_viewmodel.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
@@ -54,97 +55,104 @@ import '../../core/services/navigation_state_service.dart';
 final GetIt getIt = GetIt.instance;
 
 Future<void> setupServiceLocator() async {
-  // External dependencies
-  final sharedPreferences = await SharedPreferences.getInstance();
-  getIt.registerSingleton<SharedPreferences>(sharedPreferences);
+  try {
+    // Check if already setup to avoid duplicate registration on hot reload
+    if (getIt.isRegistered<SharedPreferences>()) {
+      debugPrint('ℹ️ Service locator already setup, skipping...');
+      return;
+    }
+    
+    // External dependencies
+    final sharedPreferences = await SharedPreferences.getInstance();
+    getIt.registerSingleton<SharedPreferences>(sharedPreferences);
 
-  // Token storage service
-  debugPrint('Registering TokenStorageService...');
-  final tokenStorageService = TokenStorageService();
-  getIt.registerSingleton<TokenStorageService>(tokenStorageService);
-  debugPrint('TokenStorageService registered successfully');
+    // Token storage service
+    debugPrint('Registering TokenStorageService...');
+    final tokenStorageService = TokenStorageService();
+    getIt.registerSingleton<TokenStorageService>(tokenStorageService);
+    debugPrint('TokenStorageService registered successfully');
 
-  // API Client with base URL from constants
-  debugPrint('Initializing ApiClient with base URL: ${ApiConstants.baseUrl}');
-  getIt.registerLazySingleton<ApiClient>(
-    () => ApiClient(baseUrl: ApiConstants.baseUrl),
-  );
-
-  // Register VietMapService
-  getIt.registerLazySingleton<VietMapService>(
-    () => VietMapService(apiClient: getIt<ApiClient>()),
-  );
-
-  // WebSocket services
-  // Sử dụng mock service cho testing - đổi thành false để sử dụng dịch vụ thật
-  final bool useMockWebSocket = false;
-
-  if (useMockWebSocket) {
-    getIt.registerLazySingleton<VehicleWebSocketService>(
-      () => MockVehicleWebSocketService(),
+    // API Client with base URL from constants
+    debugPrint('Initializing ApiClient with base URL: ${ApiConstants.baseUrl}');
+    getIt.registerLazySingleton<ApiClient>(
+      () => ApiClient(baseUrl: ApiConstants.baseUrl),
     );
-  } else {
-    getIt.registerLazySingleton<VehicleWebSocketService>(
-      () => VehicleWebSocketService(baseUrl: ApiConstants.wsBaseUrl),
+
+    // Register VietMapService
+    getIt.registerLazySingleton<VietMapService>(
+      () => VietMapService(apiClient: getIt<ApiClient>()),
     );
-  }
 
-  // Location tracking services - Simplified architecture
-  // Only EnhancedLocationTrackingService and GlobalLocationManager are used
+    // WebSocket services
+    // Sử dụng mock service cho testing - đổi thành false để sử dụng dịch vụ thật
+    final bool useMockWebSocket = false;
 
-  // Enhanced location tracking services
-  getIt.registerLazySingleton<LocationQueueService>(
-    () => LocationQueueService(),
-  );
+    if (useMockWebSocket) {
+      getIt.registerLazySingleton<VehicleWebSocketService>(
+        () => MockVehicleWebSocketService(),
+      );
+    } else {
+      getIt.registerLazySingleton<VehicleWebSocketService>(
+        () => VehicleWebSocketService(baseUrl: ApiConstants.wsBaseUrl),
+      );
+    }
 
-  getIt.registerLazySingleton<EnhancedLocationTrackingService>(
-    () => EnhancedLocationTrackingService(
-      webSocketService: getIt<VehicleWebSocketService>(),
-      queueService: getIt<LocationQueueService>(),
-    ),
-  );
+    // Location tracking services - Simplified architecture
+    // Only EnhancedLocationTrackingService and GlobalLocationManager are used
 
-  // Navigation state service for persistence
-  getIt.registerLazySingleton<NavigationStateService>(
-    () => NavigationStateService(getIt<SharedPreferences>()),
-  );
+    // Enhanced location tracking services
+    getIt.registerLazySingleton<LocationQueueService>(
+      () => LocationQueueService(),
+    );
 
-  // NOTE: Recovery and background services removed as part of architecture simplification
-  // GlobalLocationManager now handles all location tracking directly
+    getIt.registerLazySingleton<EnhancedLocationTrackingService>(
+      () => EnhancedLocationTrackingService(
+        webSocketService: getIt<VehicleWebSocketService>(),
+        queueService: getIt<LocationQueueService>(),
+      ),
+    );
 
-  // Initialize Global Location Manager (must be after dependencies)
-  GlobalLocationManager.initialize(
-    getIt<EnhancedLocationTrackingService>(),
-    getIt<NavigationStateService>(),
-  );
+    // Navigation state service for persistence
+    getIt.registerLazySingleton<NavigationStateService>(
+      () => NavigationStateService(getIt<SharedPreferences>()),
+    );
 
-  // Register Global Location Manager instance
-  getIt.registerSingleton<GlobalLocationManager>(GlobalLocationManager.instance);
+    // NOTE: Recovery and background services removed as part of architecture simplification
+    // GlobalLocationManager now handles all location tracking directly
 
-  // Data sources
-  getIt.registerLazySingleton<AuthDataSourceImpl>(
-    () => AuthDataSourceImpl(
-      apiClient: getIt<ApiClient>(),
-      sharedPreferences: getIt<SharedPreferences>(),
-      tokenStorageService: getIt<TokenStorageService>(),
-    ),
-  );
+    // Initialize Global Location Manager (must be after dependencies)
+    GlobalLocationManager.initialize(
+      getIt<EnhancedLocationTrackingService>(),
+      getIt<NavigationStateService>(),
+    );
 
-  getIt.registerLazySingleton<DriverDataSourceImpl>(
-    () => DriverDataSourceImpl(apiClient: getIt<ApiClient>()),
-  );
+    // Register Global Location Manager instance
+    getIt.registerSingleton<GlobalLocationManager>(GlobalLocationManager.instance);
 
-  getIt.registerLazySingleton<OrderDataSource>(
-    () => OrderDataSourceImpl(getIt<ApiClient>()),
-  );
+    // Data sources
+    getIt.registerLazySingleton<AuthDataSourceImpl>(
+      () => AuthDataSourceImpl(
+        apiClient: getIt<ApiClient>(),
+        sharedPreferences: getIt<SharedPreferences>(),
+        tokenStorageService: getIt<TokenStorageService>(),
+      ),
+    );
 
-  getIt.registerLazySingleton<PhotoCompletionDataSource>(
-    () => PhotoCompletionDataSourceImpl(getIt<ApiClient>()),
-  );
+    getIt.registerLazySingleton<DriverDataSourceImpl>(
+      () => DriverDataSourceImpl(apiClient: getIt<ApiClient>()),
+    );
 
-  getIt.registerLazySingleton<VehicleFuelConsumptionDataSource>(
-    () => VehicleFuelConsumptionDataSourceImpl(getIt<ApiClient>()),
-  );
+    getIt.registerLazySingleton<OrderDataSource>(
+      () => OrderDataSourceImpl(getIt<ApiClient>()),
+    );
+
+    getIt.registerLazySingleton<PhotoCompletionDataSource>(
+      () => PhotoCompletionDataSourceImpl(getIt<ApiClient>()),
+    );
+
+    getIt.registerLazySingleton<VehicleFuelConsumptionDataSource>(
+      () => VehicleFuelConsumptionDataSourceImpl(getIt<ApiClient>()),
+    );
 
   // Repositories
   getIt.registerLazySingleton<AuthRepository>(
@@ -233,15 +241,23 @@ Future<void> setupServiceLocator() async {
     () => UpdateOrderToSuccessfulUseCase(getIt<OrderRepository>()),
   );
 
+  getIt.registerLazySingleton<UpdateOrderDetailStatusUseCase>(
+    () => UpdateOrderDetailStatusUseCase(getIt<OrderRepository>()),
+  );
+
   // View models
-  getIt.registerFactory<AuthViewModel>(
+  // Register AuthViewModel as LazySingleton to maintain state across the app
+  debugPrint('📝 Registering AuthViewModel...');
+  getIt.registerLazySingleton<AuthViewModel>(
     () => AuthViewModel(
       loginUseCase: getIt<LoginUseCase>(),
       logoutUseCase: getIt<LogoutUseCase>(),
       refreshTokenUseCase: getIt<RefreshTokenUseCase>(),
       getDriverInfoUseCase: getIt<GetDriverInfoUseCase>(),
     ),
+    // Remove instanceName to allow direct access via getIt<AuthViewModel>()
   );
+  debugPrint('✅ AuthViewModel registered');
 
   // NOTE: LocationTrackingViewModel removed - testing feature
 
@@ -267,6 +283,7 @@ Future<void> setupServiceLocator() async {
       fuelConsumptionRepository: getIt<VehicleFuelConsumptionRepository>(),
       updateToDeliveredUseCase: getIt<UpdateOrderToDeliveredUseCase>(),
       updateToOngoingDeliveredUseCase: getIt<UpdateOrderToOngoingDeliveredUseCase>(),
+      authViewModel: getIt<AuthViewModel>(),
     ),
   );
 
@@ -276,6 +293,14 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Đăng ký NavigationViewModel as LazySingleton to preserve state
-  getIt.registerLazySingleton<NavigationViewModel>(() => NavigationViewModel());
+    // Đăng ký NavigationViewModel as Factory để mỗi NavigationScreen có instance riêng
+    // CRITICAL: Không dùng LazySingleton vì khi có 2 giả lập chạy cùng lúc,
+    // device 2 sẽ overwrite route segments của device 1
+    getIt.registerFactory<NavigationViewModel>(() => NavigationViewModel());
+    debugPrint('✅ All service locator registrations complete');
+  } catch (e) {
+    debugPrint('❌ Error during service locator setup: $e');
+    debugPrint('Stack trace: ${StackTrace.current}');
+    rethrow;
+  }
 }

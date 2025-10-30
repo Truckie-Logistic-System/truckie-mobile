@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart' hide Order;
 
 import '../../core/errors/failures.dart';
 import '../entities/order.dart';
+import '../entities/order_detail_status.dart';
 import '../entities/order_with_details.dart';
 
 abstract class OrderRepository {
@@ -19,4 +20,13 @@ abstract class OrderRepository {
   
   /// Update order status to SUCCESSFUL when driver confirms trip completion
   Future<Either<Failure, bool>> updateToSuccessful(String orderId);
+  
+  /// NEW: Update OrderDetail status for a specific vehicle assignment
+  /// This is the primary method for multi-trip orders
+  /// [assignmentId] - ID of the vehicle assignment (trip)
+  /// [status] - New status to set for all order details in this trip
+  Future<Either<Failure, bool>> updateOrderDetailStatus({
+    required String assignmentId,
+    required OrderDetailStatus status,
+  });
 }

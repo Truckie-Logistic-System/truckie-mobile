@@ -257,22 +257,48 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               SizedBox(height: 16),
 
               // Journey info section (khoảng cách, phí cầu đường, v.v.)
-              if (orderWithDetails.vehicleAssignments.isNotEmpty)
-                JourneyInfoSection(
-                  journeyHistories: orderWithDetails.vehicleAssignments.first.journeyHistories,
+              // For multi-trip orders: show only current driver's trip info
+              if (orderWithDetails.vehicleAssignments.isNotEmpty) ...[
+                Builder(
+                  builder: (context) {
+                    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
+                    if (currentUserVehicleAssignment != null && 
+                        currentUserVehicleAssignment.journeyHistories.isNotEmpty) {
+                      return Column(
+                        children: [
+                          JourneyInfoSection(
+                            journeyHistories: currentUserVehicleAssignment.journeyHistories,
+                          ),
+                          SizedBox(height: 16),
+                        ],
+                      );
+                    }
+                    return SizedBox.shrink();
+                  },
                 ),
-              if (orderWithDetails.vehicleAssignments.isNotEmpty)
-                SizedBox(height: 16),
+              ],
 
               // Seal info section
-              if (orderWithDetails.vehicleAssignments.isNotEmpty &&
-                  orderWithDetails.vehicleAssignments.first.orderSeals.isNotEmpty)
-                SealInfoSection(
-                  seals: orderWithDetails.vehicleAssignments.first.orderSeals,
+              // For multi-trip orders: show only current driver's trip seals
+              if (orderWithDetails.vehicleAssignments.isNotEmpty) ...[
+                Builder(
+                  builder: (context) {
+                    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
+                    if (currentUserVehicleAssignment != null && 
+                        currentUserVehicleAssignment.orderSeals.isNotEmpty) {
+                      return Column(
+                        children: [
+                          SealInfoSection(
+                            seals: currentUserVehicleAssignment.orderSeals,
+                          ),
+                          SizedBox(height: 16),
+                        ],
+                      );
+                    }
+                    return SizedBox.shrink();
+                  },
                 ),
-              if (orderWithDetails.vehicleAssignments.isNotEmpty &&
-                  orderWithDetails.vehicleAssignments.first.orderSeals.isNotEmpty)
-                SizedBox(height: 16),
+              ],
 
               // Final odometer upload section (when order is DELIVERED)
               if (canUploadFinalOdometer)
@@ -297,10 +323,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 return FloatingActionButton.extended(
                   onPressed: () {
                     if (isConnected) {
-                      // CRITICAL: Just pop back to existing NavigationScreen
-                      // DO NOT create new NavigationScreen with pushNamed
+                      // CRITICAL: Pop until we reach NavigationScreen
+                      // This handles case where user came from OrderListScreen -> OrderDetailScreen
                       debugPrint('🔙 Returning to existing NavigationScreen');
-                      Navigator.of(context).pop(); // Pop OrderDetailScreen only
+                      debugPrint('   - Current route stack before pop');
+                      
+                      // Pop until we find NavigationScreen or reach root
+                      Navigator.of(context).popUntil((route) {
+                        debugPrint('   - Checking route: ${route.settings.name}');
+                        // Stop at NavigationScreen or if we're at root
+                        return route.settings.name == AppRoutes.navigation || 
+                               route.isFirst;
+                      });
                     } else {
                       // Go to route details to start navigation
                       Navigator.pushNamed(

@@ -23,36 +23,57 @@ class OrderDetailsSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // Get vehicleAssignmentId from first orderDetail
-    final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return const SizedBox.shrink();
-    }
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, _) {
+        // Get current user phone number
+        final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+        if (currentUserPhone == null || currentUserPhone.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
-    // Find matching vehicleAssignment from order level
-    final vehicleAssignment = order.vehicleAssignments.cast<VehicleAssignment?>().firstWhere(
-      (va) => va?.id == vehicleAssignmentId,
-      orElse: () => null,
-    );
-    
-    if (vehicleAssignment == null) {
-      return Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-        child: Padding(
-          padding: EdgeInsets.all(16.r),
-          child: Text(
-            'Chưa có thông tin phân công xe',
-            style: AppTextStyles.bodyMedium.copyWith(
-              fontStyle: FontStyle.italic,
-              color: AppColors.textSecondary,
+        // For multi-trip orders: Find the vehicle assignment where current user is primary driver
+        VehicleAssignment? vehicleAssignment;
+        try {
+          vehicleAssignment = order.vehicleAssignments.firstWhere(
+            (va) {
+              if (va.primaryDriver == null) return false;
+              return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+            },
+          );
+        } catch (e) {
+          // Fallback: try to find by orderDetail vehicleAssignmentId
+          final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
+          if (vehicleAssignmentId != null) {
+            try {
+              vehicleAssignment = order.vehicleAssignments.firstWhere(
+                (va) => va.id == vehicleAssignmentId,
+              );
+            } catch (e) {
+              vehicleAssignment = null;
+            }
+          }
+        }
+        
+        if (vehicleAssignment == null) {
+          return Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+            child: Padding(
+              padding: EdgeInsets.all(16.r),
+              child: Text(
+                'Chưa có thông tin phân công xe',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
-          ),
-        ),
-      );
-    }
+          );
+        }
 
-    return _buildVehicleAssignmentCard(context, vehicleAssignment);
+        return _buildVehicleAssignmentCard(context, vehicleAssignment);
+      },
+    );
   }
 
   Widget _buildVehicleAssignmentCard(

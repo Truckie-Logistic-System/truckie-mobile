@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../../core/utils/responsive_extensions.dart';
 import '../../../../../domain/entities/order_detail.dart';
 import '../../../../../domain/entities/order_with_details.dart';
+import '../../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
 
@@ -16,81 +18,126 @@ class PackageSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-      child: Padding(
-        padding: EdgeInsets.all(16.r),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Thông tin hàng hóa', style: AppTextStyles.titleMedium),
-            SizedBox(height: 12.h),
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, _) {
+        // Get current user phone number
+        final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+        
+        // For multi-trip orders: Find all order details that belong to current driver's vehicle assignment
+        List<OrderDetail> currentOrderDetails = [];
+        if (currentUserPhone != null && currentUserPhone.isNotEmpty && order.vehicleAssignments.isNotEmpty) {
+          try {
+            // Find vehicle assignment where current user is primary driver
+            final vehicleAssignment = order.vehicleAssignments.firstWhere(
+              (va) {
+                if (va.primaryDriver == null) return false;
+                return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+              },
+            );
             
-            // Hiển thị tracking code của order detail (quan trọng để phân biệt)
-            if (order.orderDetails.isNotEmpty) ...[
-              _buildTrackingCodeRow(
-                context: context,
-                code: order.orderDetails.first.trackingCode,
-              ),
-              SizedBox(height: 12.h),
-            ],
-            
-            Row(
+            // Find ALL order details that belong to this vehicle assignment
+            currentOrderDetails = order.orderDetails
+                .where((od) => od.vehicleAssignmentId == vehicleAssignment.id)
+                .toList();
+          } catch (e) {
+            // Fallback to all order details
+            currentOrderDetails = order.orderDetails;
+          }
+        } else {
+          // Fallback to all order details
+          currentOrderDetails = order.orderDetails;
+        }
+
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+          child: Padding(
+            padding: EdgeInsets.all(16.r),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.description,
-                  size: 16.r,
-                  color: AppColors.textSecondary,
-                ),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: Text(
-                    'Mô tả: ${order.packageDescription}',
-                    style: AppTextStyles.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 8.h),
-            Row(
-              children: [
-                Icon(
-                  Icons.format_list_numbered,
-                  size: 16.r,
-                  color: AppColors.textSecondary,
-                ),
-                SizedBox(width: 8.w),
-                Text(
-                  'Số lượng: ${order.totalQuantity}',
-                  style: AppTextStyles.bodyMedium,
-                ),
-              ],
-            ),
-            if (order.notes.isNotEmpty) ...[
-              SizedBox(height: 8.h),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.note, size: 16.r, color: AppColors.textSecondary),
-                  SizedBox(width: 8.w),
-                  Expanded(
-                    child: Text(
-                      'Ghi chú: ${order.notes}',
+                Text('Thông tin hàng hóa', style: AppTextStyles.titleMedium),
+                SizedBox(height: 12.h),
+                
+                // Hiển thị tất cả order details của chuyến xe hiện tại
+                if (currentOrderDetails.isNotEmpty) ...[
+                  ...currentOrderDetails.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final orderDetail = entry.value;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (index > 0) ...[
+                          SizedBox(height: 16.h),
+                          Divider(color: AppColors.border),
+                          SizedBox(height: 12.h),
+                        ],
+                        _buildTrackingCodeRow(
+                          context: context,
+                          code: orderDetail.trackingCode,
+                        ),
+                        SizedBox(height: 8.h),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.description,
+                              size: 16.r,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(width: 8.w),
+                            Expanded(
+                              child: Text(
+                                'Mô tả: ${orderDetail.description}',
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8.h),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.scale,
+                              size: 16.r,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(width: 8.w),
+                            Text(
+                              'Trọng lượng: ${orderDetail.weightBaseUnit} ${orderDetail.unit}',
+                              style: AppTextStyles.bodyMedium,
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12.h),
+                      ],
+                    );
+                  }).toList(),
+                ],
+                
+                SizedBox(height: 8.h),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.format_list_numbered,
+                      size: 16.r,
+                      color: AppColors.textSecondary,
+                    ),
+                    SizedBox(width: 8.w),
+                    Text(
+                      'Số lượng: ${currentOrderDetails.length}',
                       style: AppTextStyles.bodyMedium,
                     ),
-                  ),
+                  ],
+                ),
+                if (currentOrderDetails.isNotEmpty && currentOrderDetails.first.orderSize != null) ...[
+                  SizedBox(height: 16.h),
+                  _buildSizeInfo(currentOrderDetails.first.orderSize!),
                 ],
-              ),
-            ],
-            if (order.orderDetails.isNotEmpty &&
-                order.orderDetails.first.orderSize != null) ...[
-              SizedBox(height: 16.h),
-              _buildSizeInfo(order.orderDetails.first.orderSize!),
-            ],
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

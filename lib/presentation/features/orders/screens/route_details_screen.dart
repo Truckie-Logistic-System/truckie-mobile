@@ -27,6 +27,9 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
 
   // ScrollController for the segment selector
   final ScrollController _scrollController = ScrollController();
+  
+  // Waypoint markers list
+  List<Marker> _waypointMarkers = [];
 
   // Màu sắc cho các đoạn đường
   final List<Color> _routeColors = [
@@ -157,9 +160,20 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
                 setState(() {
                   _isMapInitialized = true;
                 });
-                _drawAllRoutes();
+                // Draw routes with delay to ensure map is fully ready
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  _drawAllRoutes();
+                });
               },
             ),
+            
+            // Waypoint markers layer
+            if (_mapController != null && _waypointMarkers.isNotEmpty)
+              MarkerLayer(
+                mapController: _mapController!,
+                markers: [..._waypointMarkers],
+                ignorePointer: true,
+              ),
 
             // Segment selector
             Positioned(
@@ -587,6 +601,9 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       await _mapController!.clearLines();
       await _mapController!.clearSymbols();
       await _mapController!.clearCircles();
+      
+      // Clear previous waypoint markers
+      _waypointMarkers.clear();
 
       // Danh sách tất cả các điểm để tính toán bounds
       List<LatLng> allPoints = [];
@@ -622,30 +639,88 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
         final startPoint = route.first;
         final endPoint = route.last;
 
-        // Thêm circle marker cho điểm đầu
-        await _mapController!.addCircle(
-          CircleOptions(
-            geometry: startPoint,
-            circleRadius: isSelected ? 10.0 : 8.0,
-            circleColor: color,
-            circleStrokeWidth: 2.0,
-            circleStrokeColor: Colors.white,
-            circleOpacity: opacity,
-          ),
-        );
+        // Thêm marker cho điểm đầu (Carrier - Kho)
+        if (i == 0) {
+          _waypointMarkers.add(
+            Marker(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                child: const Icon(
+                  Icons.warehouse,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              latLng: startPoint,
+            ),
+          );
+        }
 
-        // Thêm circle marker cho điểm cuối
-        await _mapController!.addCircle(
-          CircleOptions(
-            geometry: endPoint,
-            circleRadius: isSelected ? 10.0 : 8.0,
-            circleColor: color,
-            circleStrokeWidth: 2.0,
-            circleStrokeColor: Colors.white,
-            circleOpacity: opacity,
+        // Thêm marker cho điểm cuối
+        Color endMarkerColor;
+        IconData endMarkerIcon;
+        String endMarkerLabel;
+        
+        if (i == 0) {
+          endMarkerColor = Colors.green; // Pickup
+          endMarkerIcon = Icons.inventory_2;
+          endMarkerLabel = 'Lấy hàng';
+        } else if (i == widget.viewModel.routeSegments.length - 1) {
+          endMarkerColor = Colors.orange; // Back to Carrier
+          endMarkerIcon = Icons.warehouse;
+          endMarkerLabel = 'Kho';
+        } else {
+          endMarkerColor = Colors.red; // Delivery
+          endMarkerIcon = Icons.local_shipping;
+          endMarkerLabel = 'Giao hàng';
+        }
+
+        _waypointMarkers.add(
+          Marker(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: endMarkerColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    endMarkerIcon,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: endMarkerColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    endMarkerLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            latLng: endPoint,
           ),
         );
       }
+
+      // Rebuild UI to render markers
+      setState(() {});
 
       // Di chuyển camera để hiển thị toàn bộ tuyến đường hoặc đoạn đường đang chọn
       if (_selectedSegmentIndex >= 0 &&

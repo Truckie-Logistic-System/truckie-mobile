@@ -22,39 +22,41 @@ class VehicleSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // Get vehicleAssignmentId from first orderDetail
-    final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return const SizedBox.shrink();
-    }
-
-    // Find matching vehicleAssignment from order level
-    final vehicleAssignment = order.vehicleAssignments.cast<VehicleAssignment?>().firstWhere(
-      (va) => va?.id == vehicleAssignmentId,
-      orElse: () => null,
-    );
-
-    if (vehicleAssignment == null || vehicleAssignment.vehicle == null) {
-      return const SizedBox.shrink();
-    }
-
-    final vehicle = vehicleAssignment.vehicle!;
-    final primaryDriver = vehicleAssignment.primaryDriver;
-    final secondaryDriver = vehicleAssignment.secondaryDriver;
-
     return Consumer<AuthViewModel>(
       builder: (context, authViewModel, _) {
-        // Use phone number for reliable matching (ID có thể khác giữa auth và order response)
+        // Get current user phone number
         final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+        if (currentUserPhone == null || currentUserPhone.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // For multi-trip orders: Find the vehicle assignment where current user is primary driver
+        final vehicleAssignment = order.vehicleAssignments.cast<VehicleAssignment?>().firstWhere(
+          (va) {
+            if (va == null) return false;
+            final primaryDriver = va.primaryDriver;
+            if (primaryDriver == null) return false;
+            return currentUserPhone.trim() == primaryDriver.phoneNumber.trim();
+          },
+          orElse: () => null,
+        );
+
+        if (vehicleAssignment == null || vehicleAssignment.vehicle == null) {
+          return const SizedBox.shrink();
+        }
+
+        final vehicle = vehicleAssignment.vehicle!;
+        final primaryDriver = vehicleAssignment.primaryDriver;
+        final secondaryDriver = vehicleAssignment.secondaryDriver;
+
+        // Use phone number for reliable matching (ID có thể khác giữa auth và order response)
         final isPrimaryDriver =
             primaryDriver != null && 
-            currentUserPhone != null &&
             currentUserPhone.isNotEmpty &&
             primaryDriver.phoneNumber.isNotEmpty &&
             currentUserPhone.trim() == primaryDriver.phoneNumber.trim();
         final isSecondaryDriver =
             secondaryDriver != null && 
-            currentUserPhone != null &&
             currentUserPhone.isNotEmpty &&
             secondaryDriver.phoneNumber.isNotEmpty &&
             currentUserPhone.trim() == secondaryDriver.phoneNumber.trim();

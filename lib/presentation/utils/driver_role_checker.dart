@@ -6,92 +6,61 @@ import '../features/auth/viewmodels/auth_viewmodel.dart';
 class DriverRoleChecker {
   /// Kiểm tra xem user hiện tại có phải là primary driver của order không
   /// Sử dụng phone number làm unique identifier (ID có thể khác giữa auth và order response)
+  /// Với multi-trip orders, tìm vehicle assignment của user hiện tại
   static bool isPrimaryDriver(OrderWithDetails order, AuthViewModel authViewModel) {
     if (order.orderDetails.isEmpty || order.vehicleAssignments.isEmpty) {
       return false;
     }
     
-    final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return false;
-    }
-    
-    final vehicleAssignment = order.vehicleAssignments
-        .cast<dynamic>()
-        .firstWhere(
-          (va) => va?.id == vehicleAssignmentId,
-          orElse: () => null,
-        );
-    if (vehicleAssignment == null) {
-      return false;
-    }
-    
-    final primaryDriver = vehicleAssignment.primaryDriver;
-    if (primaryDriver == null) {
-      debugPrint('   ❌ PRIMARY DRIVER IS NULL');
-      return false;
-    }
-    
     // Get current user phone number (most reliable identifier)
     final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
-    final primaryDriverPhone = primaryDriver.phoneNumber;
-    
-    // Primary method: Compare by phone number (unique and reliable)
-    if (currentUserPhone != null && 
-        currentUserPhone.isNotEmpty &&
-        primaryDriverPhone.isNotEmpty &&
-        currentUserPhone.trim() == primaryDriverPhone.trim()) {
-      // debugPrint('   ✅ MATCHED: Current user IS PRIMARY DRIVER');
-      return true;
-    }
-    
-    // Check if current user is secondary driver
-    final secondaryDriverPhone = vehicleAssignment.secondaryDriver?.phoneNumber;
-    if (currentUserPhone != null && 
-        currentUserPhone.isNotEmpty &&
-        secondaryDriverPhone != null &&
-        secondaryDriverPhone.isNotEmpty &&
-        currentUserPhone.trim() == secondaryDriverPhone.trim()) {
-      debugPrint('   ⚠️ Current user IS SECONDARY DRIVER (not primary)');
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
       return false;
     }
-
-    debugPrint('   ❌ NOT MATCHED: Current user is NEITHER primary nor secondary driver');
-    return false;
+    
+    // For multi-trip orders: Find the vehicle assignment where current user is primary driver
+    // Instead of just using first orderDetail, check all assignments
+    final userVehicleAssignment = order.vehicleAssignments.cast<dynamic>().firstWhere(
+      (va) {
+        if (va == null) return false;
+        final primaryDriver = va.primaryDriver;
+        if (primaryDriver == null) return false;
+        return currentUserPhone.trim() == primaryDriver.phoneNumber.trim();
+      },
+      orElse: () => null,
+    );
+    
+    if (userVehicleAssignment == null) {
+      debugPrint('   ❌ NOT MATCHED: Current user is not primary driver of any vehicle assignment');
+      return false;
+    }
+    
+    // debugPrint('   ✅ MATCHED: Current user IS PRIMARY DRIVER');
+    return true;
   }
   
   /// Kiểm tra xem user hiện tại có phải là secondary driver của order không
   /// Sử dụng phone number làm unique identifier
+  /// Với multi-trip orders, tìm vehicle assignment của user hiện tại
   static bool isSecondaryDriver(OrderWithDetails order, AuthViewModel authViewModel) {
     if (order.orderDetails.isEmpty || order.vehicleAssignments.isEmpty) return false;
     
-    final vehicleAssignmentId = order.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) return false;
-    
-    final vehicleAssignment = order.vehicleAssignments
-        .cast<dynamic>()
-        .firstWhere(
-          (va) => va?.id == vehicleAssignmentId,
-          orElse: () => null,
-        );
-    if (vehicleAssignment == null) return false;
-    
-    final secondaryDriver = vehicleAssignment.secondaryDriver;
-    if (secondaryDriver == null) return false;
-    
     // Get current user phone number (most reliable identifier)
     final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
-    final secondaryDriverPhone = secondaryDriver.phoneNumber;
+    if (currentUserPhone == null || currentUserPhone.isEmpty) return false;
     
-    // Compare by phone number (unique and reliable)
-    if (currentUserPhone != null && 
-        currentUserPhone.isNotEmpty &&
-        secondaryDriverPhone.isNotEmpty &&
-        currentUserPhone.trim() == secondaryDriverPhone.trim()) {
-      return true;
-    }
+    // For multi-trip orders: Find the vehicle assignment where current user is secondary driver
+    final userVehicleAssignment = order.vehicleAssignments.cast<dynamic>().firstWhere(
+      (va) {
+        if (va == null) return false;
+        final secondaryDriver = va.secondaryDriver;
+        if (secondaryDriver == null) return false;
+        return currentUserPhone.trim() == secondaryDriver.phoneNumber.trim();
+      },
+      orElse: () => null,
+    );
     
-    return false;
+    return userVehicleAssignment != null;
   }
   
   /// Kiểm tra xem user hiện tại có được phép thực hiện actions trên order không

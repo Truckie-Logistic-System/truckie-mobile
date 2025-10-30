@@ -197,7 +197,7 @@ class JourneyInfoSection extends StatelessWidget {
                 ),
                 SizedBox(height: 4.h),
                 Text(
-                  '${segment.distanceMeters} m',
+                  '${segment.distanceMeters} km',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                   ),
