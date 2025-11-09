@@ -164,7 +164,18 @@ class EnhancedLocationTrackingService {
         }
       },
       onLocationBroadcast: (data) {
-        debugPrint('📍 Enhanced location broadcast: $data');
+        // CRITICAL: Verify this location update is for OUR vehicle only
+        // This prevents camera focus issues in multi-trip orders
+        final broadcastVehicleId = data['vehicleId']?.toString();
+        
+        if (broadcastVehicleId != null && broadcastVehicleId != vehicleId) {
+          debugPrint('⚠️ IGNORED: Location broadcast for different vehicle');
+          debugPrint('   Expected: $vehicleId, Got: $broadcastVehicleId');
+          debugPrint('   This prevents auto-focus issues in multi-trip orders');
+          return; // Ignore locations from other vehicles
+        }
+        
+        debugPrint('📍 Enhanced location broadcast (vehicleId: $vehicleId): $data');
         _locationUpdatesController.add(data);
         onLocationUpdate?.call(data);
       },

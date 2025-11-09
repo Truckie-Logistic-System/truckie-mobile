@@ -15,6 +15,7 @@ import '../../data/repositories/order_repository_impl.dart';
 import '../../data/repositories/vehicle_repository_impl.dart';
 import '../../data/repositories/photo_completion_repository_impl.dart';
 import '../../data/repositories/vehicle_fuel_consumption_repository_impl.dart';
+import '../../data/repositories/issue_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/driver_repository.dart';
 import '../../domain/repositories/loading_documentation_repository.dart';
@@ -22,6 +23,7 @@ import '../../domain/repositories/order_repository.dart';
 import '../../domain/repositories/vehicle_repository.dart';
 import '../../domain/repositories/photo_completion_repository.dart';
 import '../../domain/repositories/vehicle_fuel_consumption_repository.dart';
+import '../../domain/repositories/issue_repository.dart';
 import '../../domain/usecases/auth/change_password_usecase.dart';
 import '../../domain/usecases/auth/get_driver_info_usecase.dart';
 import '../../domain/usecases/auth/login_usecase.dart';
@@ -46,6 +48,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/services/vehicle_websocket_service.dart';
 import '../../core/services/mock_vehicle_websocket_service.dart';
 import '../../core/services/enhanced_location_tracking_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/location_queue_service.dart';
 import '../../core/services/token_storage_service.dart';
 import '../../core/services/vietmap_service.dart';
@@ -82,6 +85,11 @@ Future<void> setupServiceLocator() async {
     getIt.registerLazySingleton<VietMapService>(
       () => VietMapService(apiClient: getIt<ApiClient>()),
     );
+
+    // Register NotificationService as singleton
+    debugPrint('Registering NotificationService...');
+    getIt.registerSingleton<NotificationService>(NotificationService());
+    debugPrint('✅ NotificationService registered');
 
     // WebSocket services
     // Sử dụng mock service cho testing - đổi thành false để sử dụng dịch vụ thật
@@ -184,6 +192,10 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<VehicleFuelConsumptionRepository>(
     () => VehicleFuelConsumptionRepositoryImpl(dataSource: getIt<VehicleFuelConsumptionDataSource>()),
+  );
+
+  getIt.registerLazySingleton<IssueRepository>(
+    () => IssueRepositoryImpl(getIt<ApiClient>()),
   );
 
   // Use cases

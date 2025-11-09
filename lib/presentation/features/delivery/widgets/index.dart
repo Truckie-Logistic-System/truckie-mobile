@@ -6,3 +6,4 @@ export 'order_info_widget.dart';
 export 'dialogs/complete_delivery_dialog.dart';
 export 'dialogs/report_issue_dialog.dart';
 export 'map/index.dart';
+export 'damage_report_bottom_sheet.dart';

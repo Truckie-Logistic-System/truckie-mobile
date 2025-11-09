@@ -147,8 +147,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       ],
       child: WillPopScope(
         onWillPop: () async {
-          // Return true to indicate refresh is needed
-          Navigator.of(context).pop(true);
+          // Check if navigation is active - if yes, we came from NavigationScreen
+          debugPrint('🔙 OrderDetail back pressed');
+          
+          final isNavigationActive = _globalLocationManager.isGlobalTrackingActive &&
+                                     _globalLocationManager.currentOrderId == widget.orderId;
+          
+          if (isNavigationActive) {
+            // Came from NavigationScreen, go to main screen Orders tab
+            debugPrint('   - Navigation active, going to main screen Orders tab');
+            // Pop all routes and push MainScreen with Orders tab (index 1)
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              AppRoutes.main,
+              (route) => false, // Remove all routes
+              arguments: {'initialTab': 1}, // Orders tab
+            );
+          } else {
+            // Normal case: just pop back
+            debugPrint('   - Normal pop back');
+            Navigator.of(context).pop(true);
+          }
+          
           return false; // Prevent default pop since we handle it manually
         },
         child: Scaffold(
@@ -159,10 +178,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                // Pop back with result to trigger refresh
-                Navigator.of(context).pop(true);
+                // Check if navigation is active
+                debugPrint('🔙 OrderDetail back button pressed');
+                
+                final isNavigationActive = _globalLocationManager.isGlobalTrackingActive &&
+                                           _globalLocationManager.currentOrderId == widget.orderId;
+                
+                if (isNavigationActive) {
+                  // Came from NavigationScreen, go to main screen Orders tab
+                  debugPrint('   - Navigation active, going to main screen Orders tab');
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    AppRoutes.main,
+                    (route) => false, // Remove all routes
+                    arguments: {'initialTab': 1}, // Orders tab
+                  );
+                } else {
+                  // Normal case: just pop back
+                  debugPrint('   - Normal pop back');
+                  Navigator.of(context).pop(true);
+                }
               },
-              tooltip: 'Quay lại danh sách đơn hàng',
+              tooltip: 'Quay lại',
             ),
           actions: [
             // Thêm nút refresh
@@ -323,18 +359,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 return FloatingActionButton.extended(
                   onPressed: () {
                     if (isConnected) {
-                      // CRITICAL: Pop until we reach NavigationScreen
-                      // This handles case where user came from OrderListScreen -> OrderDetailScreen
+                      // CRITICAL: Check if NavigationScreen exists in stack
                       debugPrint('🔙 Returning to existing NavigationScreen');
-                      debugPrint('   - Current route stack before pop');
+                      debugPrint('   - Current route stack:');
                       
-                      // Pop until we find NavigationScreen or reach root
+                      // Check if NavigationScreen exists in the navigation stack
+                      bool hasNavigationScreen = false;
                       Navigator.of(context).popUntil((route) {
                         debugPrint('   - Checking route: ${route.settings.name}');
-                        // Stop at NavigationScreen or if we're at root
-                        return route.settings.name == AppRoutes.navigation || 
-                               route.isFirst;
+                        if (route.settings.name == AppRoutes.navigation) {
+                          hasNavigationScreen = true;
+                          return true; // Stop here, found NavigationScreen
+                        }
+                        if (route.isFirst) {
+                          return true; // Stop at root
+                        }
+                        return false; // Keep checking
                       });
+                      
+                      // If NavigationScreen not found, push a new one
+                      if (!hasNavigationScreen) {
+                        debugPrint('⚠️ NavigationScreen not in stack, pushing new one');
+                        Navigator.pushNamed(
+                          context,
+                          AppRoutes.navigation,
+                          arguments: {
+                            'orderId': orderWithDetails.id,
+                            'isSimulationMode': true, // Resume in simulation mode
+                          },
+                        );
+                      } else {
+                        debugPrint('✅ Found and returned to NavigationScreen');
+                      }
                     } else {
                       // Go to route details to start navigation
                       Navigator.pushNamed(
@@ -393,7 +449,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   : canUploadFinalOdometer
                       ? FinalOdometerSection(order: orderWithDetails)
                       : canConfirmDelivery
-                          ? DeliveryConfirmationSection(order: orderWithDetails)
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                DeliveryConfirmationSection(order: orderWithDetails),
+                                if (orderWithDetails.orderDetails.isNotEmpty)
+                                  DamageReportWithLocation(
+                                    order: orderWithDetails,
+                                    onReported: _loadOrderDetails,
+                                  ),
+                              ],
+                            )
                           : ElevatedButton(
                       onPressed: () async {
                         // Kiểm tra driver role trước khi cho phép thực hiện action

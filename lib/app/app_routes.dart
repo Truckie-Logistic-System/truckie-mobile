@@ -49,9 +49,14 @@ class AppRoutes {
         );
 
       case main:
+        // Accept optional initialTab argument (0=Home, 1=Orders, 2=Account)
+        final args = settings.arguments as Map<String, dynamic>?;
+        final initialTab = args?['initialTab'] as int? ?? 0;
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const ResponsiveWrapper(child: MainScreen()),
+          builder: (_) => ResponsiveWrapper(
+            child: MainScreen(initialTab: initialTab),
+          ),
         );
 
       case home:

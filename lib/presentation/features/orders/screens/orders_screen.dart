@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -28,6 +29,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   late final AuthViewModel _authViewModel;
   late final OrderListViewModel _orderListViewModel;
   String _selectedStatus = 'Tất cả';
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
@@ -41,22 +43,42 @@ class _OrdersScreenState extends State<OrdersScreen>
     // Set default filter to 'Tất cả' (which will show all orders from PICKING_UP onwards)
     _selectedStatus = 'Tất cả';
 
+    // Lắng nghe thay đổi từ ViewModel
+    _listenToViewModelChanges();
+
     // Fetch orders when the screen initializes
-    _loadOrders();
+    if (_isInitialLoad) {
+      _loadOrders();
+      _isInitialLoad = false;
+    }
   }
 
   @override
   void dispose() {
     // Hủy đăng ký observer khi widget bị hủy
     WidgetsBinding.instance.removeObserver(this);
+    _orderListViewModel.removeListener(_onViewModelChanged);
     super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Tải lại dữ liệu khi màn hình được hiển thị lại (chuyển tab)
-    _loadOrders();
+    // KHÔNG gọi _loadOrders() ở đây để tránh conflict với refresh từ tab
+    // Tab refresh sẽ được xử lý bởi MainScreen
+    debugPrint('🔄 OrdersScreen didChangeDependencies: Skipping auto load to avoid tab refresh conflict');
+  }
+
+  // Lắng nghe thay đổi từ OrderListViewModel để cập nhật UI
+  void _listenToViewModelChanges() {
+    _orderListViewModel.addListener(_onViewModelChanged);
+  }
+
+  void _onViewModelChanged() {
+    // Force rebuild để đảm bảo UI cập nhật khi có refresh từ tab
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -68,7 +90,14 @@ class _OrdersScreenState extends State<OrdersScreen>
   }
 
   Future<void> _loadOrders() async {
-    await _orderListViewModel.getDriverOrders();
+    debugPrint('🔄 OrdersScreen: Loading orders...');
+    await _orderListViewModel.superForceRefresh();
+  }
+
+  // Public method để refresh data từ bên ngoài
+  void refreshOrders() {
+    debugPrint('🔄 OrdersScreen: Manual refresh triggered');
+    _loadOrders();
   }
 
   @override
@@ -84,7 +113,10 @@ class _OrdersScreenState extends State<OrdersScreen>
           // Thêm nút refresh
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadOrders,
+            onPressed: () {
+              debugPrint('🔄 OrdersScreen: Refresh button pressed');
+              _orderListViewModel.superForceRefresh();
+            },
             tooltip: 'Làm mới',
           ),
         ],
@@ -107,7 +139,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                       SizedBox(height: 16.h),
                       Expanded(
                         child: RefreshIndicator(
-                          onRefresh: _loadOrders,
+                          onRefresh: () async {
+                            debugPrint('🔄 OrdersScreen: Pull to refresh triggered');
+                            await _orderListViewModel.superForceRefresh();
+                          },
                           color: AppColors.primary,
                           child: _buildOrdersContent(
                             context,
@@ -152,7 +187,7 @@ class _OrdersScreenState extends State<OrdersScreen>
               ),
               SizedBox(height: 16.h),
               ElevatedButton(
-                onPressed: () => viewModel.getDriverOrders(),
+                onPressed: () => viewModel.superForceRefresh(),
                 child: const Text('Thử lại'),
               ),
             ],

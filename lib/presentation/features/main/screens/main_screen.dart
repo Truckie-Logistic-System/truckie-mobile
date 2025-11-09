@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 import '../../account/screens/account_screen.dart';
@@ -10,14 +11,16 @@ import '../../../../app/di/service_locator.dart';
 import '../../../theme/app_colors.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialTab;
+  
+  const MainScreen({super.key, this.initialTab = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
   // Danh sách các màn hình tương ứng với từng tab
   late final List<Widget> _screens;
@@ -25,6 +28,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize selected index from widget parameter
+    _selectedIndex = widget.initialTab;
+    debugPrint('🏠 MainScreen initialized with tab: $_selectedIndex');
+    
     // Khởi tạo các màn hình khi widget được tạo
     _screens = [
       const HomeScreen(),
@@ -42,35 +49,47 @@ class _MainScreenState extends State<MainScreen> {
       _selectedIndex = index;
     });
 
-    // Nếu chuyển sang tab mới, fetch lại dữ liệu của tab đó
-    if (oldIndex != index) {
-      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    // Luôn fetch lại dữ liệu khi nhấn vào tab, kể cả khi nhấn lại tab hiện tại
+    // để đảm bảo data luôn mới nhất
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
 
-      if (authViewModel.status == AuthStatus.authenticated) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          switch (index) {
-            case 0:
-              // Tab Trang chủ - refresh token và driver info
+    if (authViewModel.status == AuthStatus.authenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        switch (index) {
+          case 0:
+            // Tab Trang chủ - force refresh như OrdersScreen
+            debugPrint('🔄 Tab Trang chủ: Force refreshing like OrdersScreen refresh button');
+            if (authViewModel.user != null) {
               authViewModel.forceRefreshToken().then((success) {
                 debugPrint('🔄 Tab Trang chủ: Force refresh token result: $success');
+                if (success) {
+                  authViewModel.refreshDriverInfo();
+                }
               });
-              authViewModel.refreshDriverInfo();
-              break;
-            case 1:
-              // Tab Đơn hàng - fetch lại danh sách đơn hàng
-              final orderListViewModel = getIt<OrderListViewModel>();
-              orderListViewModel.getDriverOrders();
-              debugPrint('🔄 Tab Đơn hàng: Fetch lại danh sách đơn hàng');
-              break;
-            case 2:
-              // Tab Tài khoản - refresh token
+            }
+            break;
+          case 1:
+            // Tab Đơn hàng - hoạt động Y HỆT như nút refresh trong OrdersScreen
+            final orderListViewModel = getIt<OrderListViewModel>();
+            debugPrint('🔄 Tab Đơn hàng: Triggering refresh EXACTLY like OrdersScreen refresh button');
+            
+            // Gọi trực tiếp như nút refresh, không delay
+            orderListViewModel.superForceRefresh();
+            break;
+          case 2:
+            // Tab Tài khoản - force refresh như OrdersScreen
+            debugPrint('🔄 Tab Tài khoản: Force refreshing like OrdersScreen refresh button');
+            if (authViewModel.user != null) {
               authViewModel.forceRefreshToken().then((success) {
                 debugPrint('🔄 Tab Tài khoản: Force refresh token result: $success');
+                if (success) {
+                  authViewModel.refreshDriverInfo();
+                }
               });
-              break;
-          }
-        });
-      }
+            }
+            break;
+        }
+      });
     }
   }
 
@@ -165,4 +184,5 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
-}
+
+  }

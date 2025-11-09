@@ -48,12 +48,25 @@ class _PreDeliveryDocumentationSectionState
 
   Future<void> _pickPackingProofImage(ImageSource source) async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: source,
-        imageQuality: 80,
-      );
-      if (image != null) {
-        _viewModel.addPackingProofImage(File(image.path));
+      if (source == ImageSource.gallery) {
+        // Allow multiple image selection from gallery
+        final List<XFile> images = await _picker.pickMultiImage(
+          imageQuality: 80,
+        );
+        if (images.isNotEmpty) {
+          for (final image in images) {
+            _viewModel.addPackingProofImage(File(image.path));
+          }
+        }
+      } else {
+        // Single image from camera
+        final XFile? image = await _picker.pickImage(
+          source: source,
+          imageQuality: 80,
+        );
+        if (image != null) {
+          _viewModel.addPackingProofImage(File(image.path));
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(

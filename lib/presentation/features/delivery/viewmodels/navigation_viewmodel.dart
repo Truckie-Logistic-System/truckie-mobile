@@ -685,11 +685,27 @@ class NavigationViewModel extends ChangeNotifier {
   // Lưu trữ callback để có thể sử dụng lại khi resume
   Function(LatLng, double?)? _locationUpdateCallback;
   Function(int, bool)? _segmentCompleteCallback;
+  
+  // Simulation state getter for persistence
+  Map<String, dynamic> getSimulationState() {
+    return {
+      'isSimulating': _isSimulating,
+      'currentSegmentIndex': currentSegmentIndex,
+      'currentLocation': currentLocation != null ? {
+        'latitude': currentLocation!.latitude,
+        'longitude': currentLocation!.longitude,
+      } : null,
+      'currentBearing': currentBearing,
+      'currentSpeed': currentSpeed,
+      'simulationSpeed': _currentSimulationSpeed,
+    };
+  }
 
   void updateSimulationSpeed(double speed) {
     _currentSimulationSpeed = speed; // Cập nhật tốc độ simulation
+    debugPrint('🎚️ Updating simulation speed to ${speed}x');
     
-    if (_simulationTimer != null) {
+    if (_simulationTimer != null && _isSimulating) {
       _simulationTimer!.cancel();
 
       final interval = (_simulationInterval / speed).round();
@@ -701,6 +717,7 @@ class NavigationViewModel extends ChangeNotifier {
           _updateLocation(_locationUpdateCallback!, _segmentCompleteCallback!);
         }
       });
+      debugPrint('✅ Simulation speed updated, new interval: ${interval}ms');
     }
   }
 
@@ -756,10 +773,12 @@ class NavigationViewModel extends ChangeNotifier {
     required int segmentIndex,
     required double latitude,
     required double longitude,
+    double? bearing,
   }) {
     debugPrint('🔄 Restoring simulation position:');
     debugPrint('   - Segment index: $segmentIndex');
     debugPrint('   - Position: ($latitude, $longitude)');
+    debugPrint('   - Bearing: $bearing');
     
     if (routeSegments.isEmpty) {
       debugPrint('❌ Cannot restore: no route segments');
@@ -803,23 +822,30 @@ class NavigationViewModel extends ChangeNotifier {
     // Set current point index for this segment
     _currentPointIndices[segmentIndex] = closestPointIndex;
     
-    // Set current location
-    currentLocation = segment.points[closestPointIndex];
+    // Use exact saved location for better continuity
+    currentLocation = LatLng(latitude, longitude);
     
-    // Calculate bearing if we have a next point
-    if (closestPointIndex < segment.points.length - 1) {
+    // Use saved bearing if available
+    if (bearing != null) {
+      currentBearing = bearing;
+    } else if (closestPointIndex < segment.points.length - 1) {
+      // Calculate bearing to next point
       final nextPoint = segment.points[closestPointIndex + 1];
       currentBearing = _calculateBearing(currentLocation!, nextPoint);
-      
-      // Set up interpolation
-      _startPoint = currentLocation;
-      _endPoint = nextPoint;
-      _interpolationProgress = 0.0;
     } else {
       currentBearing = 0;
     }
     
+    // Set up interpolation for smooth continuation
+    if (closestPointIndex < segment.points.length - 1) {
+      _startPoint = currentLocation;
+      _endPoint = segment.points[closestPointIndex + 1];
+      _interpolationProgress = 0.0;
+    }
+    
     debugPrint('✅ Position restored successfully');
+    debugPrint('   - Current location: ${currentLocation!.latitude}, ${currentLocation!.longitude}');
+    debugPrint('   - Current bearing: $currentBearing');
     notifyListeners();
   }
 

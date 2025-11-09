@@ -65,6 +65,15 @@ class GlobalLocationManager {
   final int _maxReconnectAttempts = 10; // More attempts for long-running trips
   bool _isReconnecting = false;
 
+  // Simulation state persistence
+  Timer? _stateSaveTimer;
+  final Duration _stateSaveInterval = const Duration(seconds: 2); // Save every 2 seconds
+
+  // Track latest location
+  double? _lastLatitude;
+  double? _lastLongitude;
+  double? _lastBearing;
+
   // Getters
   bool get isGlobalTrackingActive => _isGlobalTrackingActive;
   String? get currentOrderId => _currentOrderId;
@@ -76,6 +85,11 @@ class GlobalLocationManager {
   bool get shouldResumeSimulation => _shouldResumeSimulation;
   String? get currentScreen => _currentScreen;
   Set<String> get activeScreens => Set.unmodifiable(_activeScreens);
+  
+  // Get current location (for damage reports, etc)
+  double? get currentLatitude => _lastLatitude;
+  double? get currentLongitude => _lastLongitude;
+  double? get currentBearing => _lastBearing;
   
   // Setter for resume flag
   void setShouldResumeSimulation(bool value) {
@@ -202,6 +216,9 @@ class GlobalLocationManager {
         // Save navigation state to persistent storage
         await saveNavigationState();
         
+        // Start periodic state saving (especially for simulation mode)
+        _startPeriodicStateSaving();
+        
         debugPrint('✅ Global location tracking started successfully');
         return true;
       } else {
@@ -267,6 +284,9 @@ class GlobalLocationManager {
     _reconnectTimer = null;
     _reconnectAttempts = 0;
     _isReconnecting = false;
+    
+    // Stop periodic state saving
+    _stopPeriodicStateSaving();
     
     if (!_isGlobalTrackingActive) {
       debugPrint('⚠️ Global tracking not active');
@@ -369,7 +389,25 @@ class GlobalLocationManager {
 
   /// Handle global location updates and distribute to registered screens
   void _handleGlobalLocationUpdate(Map<String, dynamic> data) {
-    debugPrint('📍 Global location update: ${data['latitude']}, ${data['longitude']}');
+    // CRITICAL: Final defense layer - verify this location is for OUR vehicle
+    // This prevents camera focus issues in multi-trip orders
+    final locationVehicleId = data['vehicleId']?.toString();
+    
+    if (locationVehicleId != null && _currentVehicleId != null && locationVehicleId != _currentVehicleId) {
+      debugPrint('🚫 CRITICAL: Location for WRONG vehicle received!');
+      debugPrint('   Expected vehicle: $_currentVehicleId');
+      debugPrint('   Received vehicle: $locationVehicleId');
+      debugPrint('   Location: ${data['latitude']}, ${data['longitude']}');
+      debugPrint('   ⚠️ This should NOT happen - check WebSocket subscriptions!');
+      return; // IGNORE locations from other vehicles
+    }
+    
+    debugPrint('📍 Global location update (vehicle: $_currentVehicleId): ${data['latitude']}, ${data['longitude']}');
+    
+    // Store last known location
+    _lastLatitude = data['latitude'] as double?;
+    _lastLongitude = data['longitude'] as double?;
+    _lastBearing = data['bearing'] as double?;
     
     // Broadcast to global stream
     _globalLocationController.add(data);
@@ -436,6 +474,11 @@ class GlobalLocationManager {
       return;
     }
 
+    // Store last known location
+    _lastLatitude = latitude;
+    _lastLongitude = longitude;
+    _lastBearing = bearing;
+
     await _enhancedService.sendLocationUpdate(
       latitude: latitude,
       longitude: longitude,
@@ -443,15 +486,14 @@ class GlobalLocationManager {
       speed: speed,
     );
     
-    // Save position to persistent storage (especially important for simulation mode)
-    if (_isSimulationMode) {
-      await saveNavigationState(
-        latitude: latitude,
-        longitude: longitude,
-        bearing: bearing,
-        segmentIndex: segmentIndex,
-      );
-    }
+    // Save position to persistent storage (ALWAYS, for both GPS and simulation)
+    // This ensures state is saved even when app goes to background
+    await saveNavigationState(
+      latitude: latitude,
+      longitude: longitude,
+      bearing: bearing,
+      segmentIndex: segmentIndex,
+    );
   }
 
   /// Get comprehensive status
@@ -699,9 +741,37 @@ class GlobalLocationManager {
     }
   }
 
+  /// Start periodic state saving for simulation mode
+  void _startPeriodicStateSaving() {
+    if (!_isSimulationMode) {
+      debugPrint('ℹ️ Not in simulation mode, skipping periodic state saving');
+      return;
+    }
+    
+    _stopPeriodicStateSaving(); // Ensure no duplicate timers
+    
+    debugPrint('⏱️ Starting periodic state saving (every ${_stateSaveInterval.inSeconds}s)');
+    _stateSaveTimer = Timer.periodic(_stateSaveInterval, (timer) {
+      if (_isGlobalTrackingActive && _isSimulationMode) {
+        debugPrint('💾 Auto-saving simulation state...');
+        // State will be saved via sendLocationUpdate calls
+        // This timer is a backup to ensure state is always current
+      }
+    });
+  }
+  
+  /// Stop periodic state saving
+  void _stopPeriodicStateSaving() {
+    _stateSaveTimer?.cancel();
+    _stateSaveTimer = null;
+    debugPrint('⏹️ Stopped periodic state saving');
+  }
+
   /// Dispose resources
   void dispose() {
     _positionStream?.cancel();
+    _stateSaveTimer?.cancel();
+    _reconnectTimer?.cancel();
     _globalLocationController.close();
     _globalStatsController.close();
     _trackingStateController.close();

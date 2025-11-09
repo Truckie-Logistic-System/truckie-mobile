@@ -17,6 +17,15 @@ class RoleModel extends Role {
     );
   }
 
+  factory RoleModel.fromEntity(Role role) {
+    return RoleModel(
+      id: role.id,
+      roleName: role.roleName,
+      description: role.description,
+      isActive: role.isActive,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

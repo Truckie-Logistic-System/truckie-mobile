@@ -23,6 +23,12 @@ abstract class VehicleFuelConsumptionDataSource {
   
   /// Get fuel consumption by vehicle assignment ID
   Future<Either<Failure, Map<String, dynamic>>> getByVehicleAssignmentId(String vehicleAssignmentId);
+  
+  /// Update invoice image for fuel consumption
+  Future<Either<Failure, bool>> updateInvoiceImage({
+    required String fuelConsumptionId,
+    required File invoiceImage,
+  });
 }
 
 class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionDataSource {
@@ -155,8 +161,22 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         '/vehicle-fuel-consumptions/vehicle-assignment/$vehicleAssignmentId',
       );
 
+      debugPrint('========== FUEL CONSUMPTION RESPONSE DEBUG ==========');
+      debugPrint('Status Code: ${response.statusCode}');
+      debugPrint('Response Data: ${response.data}');
+      debugPrint('========== END RESPONSE DEBUG ==========');
+
       if (response.statusCode == 200) {
-        return Right(response.data);
+        final responseData = response.data;
+        if (responseData['success'] == true && responseData['data'] != null) {
+          return Right(responseData);
+        } else {
+          return Left(
+            ServerFailure(
+              message: responseData['message'] ?? 'Không tìm thấy thông tin nhiên liệu',
+            ),
+          );
+        }
       } else {
         return Left(
           ServerFailure(
@@ -165,13 +185,106 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         );
       }
     } on DioException catch (e) {
+      debugPrint('========== DIO EXCEPTION DEBUG ==========');
       debugPrint('DioException: ${e.message}');
+      debugPrint('DioException type: ${e.type}');
+      debugPrint('DioException response status: ${e.response?.statusCode}');
+      debugPrint('DioException response data: ${e.response?.data}');
+      debugPrint('========== END EXCEPTION DEBUG ==========');
+      
+      // Handle 404 Not Found specifically
+      if (e.response?.statusCode == 404) {
+        return Left(
+          ServerFailure(message: 'Chưa có bản ghi tiêu thụ nhiên liệu cho xe này'),
+        );
+      }
+      
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
+      debugPrint('ServerException: ${e.message}');
       return Left(ServerFailure(message: e.message));
     } catch (e) {
+      debugPrint('Exception: ${e.toString()}');
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, bool>> updateInvoiceImage({
+    required String fuelConsumptionId,
+    required File invoiceImage,
+  }) async {
+    try {
+      debugPrint('========== FUEL INVOICE UPLOAD DEBUG INFO ==========');
+      debugPrint('fuelConsumptionId: $fuelConsumptionId');
+      debugPrint('invoiceImage path: ${invoiceImage.path}');
+      debugPrint('invoiceImage exists: ${invoiceImage.existsSync()}');
+      debugPrint('invoiceImage size: ${invoiceImage.lengthSync()} bytes');
+
+      // Create multipart form data
+      final multipartFile = await MultipartFile.fromFile(
+        invoiceImage.path,
+        filename: 'fuel_invoice_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      
+      final formData = FormData.fromMap({
+        'id': fuelConsumptionId,
+        'companyInvoiceImage': multipartFile,
+      });
+      
+      debugPrint('Form data to send:');
+      debugPrint('  - id: $fuelConsumptionId');
+      debugPrint('  - companyInvoiceImage: ${multipartFile.filename}');
+
+      final response = await _apiClient.dio.put(
+        '/vehicle-fuel-consumptions/invoice',
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+          headers: {'Accept': '*/*'},
+        ),
+      );
+
+      debugPrint('========== RESPONSE DEBUG INFO ==========');
+      debugPrint('Status Code: ${response.statusCode}');
+      debugPrint('Response Data: ${response.data}');
+      debugPrint('========== END RESPONSE DEBUG INFO ==========');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = response.data;
+        if (responseData['success'] == true) {
+          return const Right(true);
+        } else {
+          return Left(
+            ServerFailure(
+              message: responseData['message'] ?? 'Lỗi khi cập nhật hóa đơn xăng',
+            ),
+          );
+        }
+      } else {
+        return Left(
+          ServerFailure(
+            message: 'Lỗi khi cập nhật hóa đơn xăng: ${response.statusCode}',
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      debugPrint('========== ERROR DEBUG INFO ==========');
+      debugPrint('DioException: ${e.message}');
+      debugPrint('DioException type: ${e.type}');
+      debugPrint('DioException response status: ${e.response?.statusCode}');
+      debugPrint('DioException response data: ${e.response?.data}');
+      debugPrint('========== END ERROR DEBUG INFO ==========');
+      return Left(
+        ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
+      );
+    } on ServerException catch (e) {
+      debugPrint('ServerException: ${e.message}');
+      return Left(ServerFailure(message: e.message));
+    } catch (e) {
+      debugPrint('Exception: ${e.toString()}');
       return Left(ServerFailure(message: e.toString()));
     }
   }

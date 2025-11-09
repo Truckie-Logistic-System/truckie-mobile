@@ -9,6 +9,9 @@ class ApiConstants {
   /// WebSocket base URL for development (Android Emulator)
   static const String wsBaseUrl = 'ws://10.0.2.2:8080';
 
+  /// WebSocket endpoint for vehicle tracking notifications
+  static const String wsVehicleTrackingEndpoint = '/vehicle-tracking';
+
   // ============================================================================
   // AUTHENTICATION ENDPOINTS
   // ============================================================================

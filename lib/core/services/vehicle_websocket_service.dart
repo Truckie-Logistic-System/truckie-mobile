@@ -61,21 +61,41 @@ class VehicleWebSocketService {
       // CRITICAL: Call actual refresh token API
       try {
         final apiClient = GetIt.instance<ApiClient>();
-        // SECURITY: Refresh token is now in HttpOnly cookie (not in request body)
-        // Mobile sends request with withCredentials: true to include cookies
-        final response = await apiClient.dio.post('/auths/mobile/token/refresh');
+        // Mobile app sends refreshToken in request body (not in cookie like web)
+        final requestData = {
+          'refreshToken': refreshToken,
+        };
+        debugPrint('🔄 [VehicleWebSocket] Request data: $requestData');
+        debugPrint('🔄 [VehicleWebSocket] Request data type: ${requestData.runtimeType}');
+        
+        // Try manual JSON encoding to ensure body is sent correctly
+        final response = await apiClient.dio.post(
+          '/auths/mobile/token/refresh',
+          data: jsonEncode(requestData),
+        );
         
         if (response.data['success'] == true && response.data['data'] != null) {
           final tokenData = response.data['data'];
-          final newAccessToken = tokenData['authToken'] ?? tokenData['accessToken'];
+          final newAccessToken = tokenData['accessToken'];
+          final newRefreshToken = tokenData['refreshToken'];
           
-          // Save new access token
+          if (newAccessToken == null || newAccessToken.isEmpty) {
+            debugPrint('❌ Backend did not return new access token');
+            return null;
+          }
+          
+          if (newRefreshToken == null || newRefreshToken.isEmpty) {
+            debugPrint('❌ Backend did not return new refresh token');
+            return null;
+          }
+          
+          // Save both tokens (token rotation)
           await tokenStorageService.saveAccessToken(newAccessToken);
+          await tokenStorageService.saveRefreshToken(newRefreshToken);
           
-          // SECURITY: New refresh token is automatically set in HttpOnly cookie by backend
-          // No need to manually save it
-          
-          debugPrint('✅ Token refresh successful, new access token obtained');
+          debugPrint('✅ Token refresh successful, new tokens obtained');
+          debugPrint('✅ New access token: ${newAccessToken.substring(0, 20)}...');
+          debugPrint('✅ New refresh token: ${newRefreshToken.substring(0, 20)}...');
           return newAccessToken;
         } else {
           debugPrint('❌ Token refresh API returned error: ${response.data['message']}');
@@ -166,11 +186,10 @@ class VehicleWebSocketService {
           _connectionStatus = WebSocketConnectionStatus.connected;
           _connectionStatusController.add(_connectionStatus);
 
-          // Subscribe to vehicle-specific broadcasts
+          // Subscribe ONLY to this vehicle-specific broadcasts
+          // CRITICAL: Do NOT subscribe to all vehicles to prevent camera focus issues
+          // in multi-trip orders where each driver should only see their own vehicle
           _subscribeToVehicleUpdates(vehicleId, onLocationBroadcast);
-
-          // Subscribe to all vehicles broadcasts (optional)
-          _subscribeToAllVehicles(onLocationBroadcast);
 
           onConnected?.call();
         },
@@ -409,6 +428,17 @@ class VehicleWebSocketService {
       callback: (frame) {
         try {
           final data = jsonDecode(frame.body ?? '{}') as Map<String, dynamic>;
+          
+          // CRITICAL: Verify this location update is for the correct vehicle
+          // This prevents camera focus issues if backend sends wrong vehicle data
+          final receivedVehicleId = data['vehicleId']?.toString();
+          if (receivedVehicleId != null && receivedVehicleId != vehicleId) {
+            debugPrint('⚠️ WARNING: Received location for wrong vehicle!');
+            debugPrint('   Expected: $vehicleId, Got: $receivedVehicleId');
+            debugPrint('   Ignoring this location update to prevent focus issues');
+            return;
+          }
+          
           debugPrint('📍 Vehicle $vehicleId location update: $data');
           onMessage?.call(data);
         } catch (e) {
@@ -418,9 +448,15 @@ class VehicleWebSocketService {
     );
   }
 
+  /// DEPRECATED: Do NOT use this method in driver app
+  /// This subscribes to ALL vehicles' locations which causes camera focus issues
+  /// in multi-trip orders. Each driver should ONLY see their own vehicle.
+  /// This method is kept for reference only (e.g., admin dashboard feature in future).
   void _subscribeToAllVehicles(Function(Map<String, dynamic>)? onMessage) {
     if (_client?.connected != true) return;
 
+    debugPrint('⚠️ WARNING: Subscribing to ALL vehicles - this should NOT be used in driver app!');
+    
     _client!.subscribe(
       destination: '/topic/vehicles/locations',
       callback: (frame) {

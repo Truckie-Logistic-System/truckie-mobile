@@ -8,6 +8,7 @@ import 'app/app_routes.dart';
 import 'app/di/service_locator.dart';
 import 'core/services/hot_reload_helper.dart';
 import 'core/services/vietmap_service.dart';
+import 'core/services/notification_service.dart';
 import 'presentation/common_widgets/vietmap/vietmap_viewmodel.dart';
 import 'presentation/features/auth/index.dart';
 
@@ -46,9 +47,6 @@ void main() async {
   // GlobalLocationManager now handles all location tracking directly
   // debugPrint('ℹ️ Location tracking will be managed by GlobalLocationManager');
 
-  // Đặt navigatorKey cho AuthViewModel
-  AuthViewModel.setNavigatorKey(navigatorKey);
-
   // Token refresh callback is now handled in ApiClient via interceptor
 
   runApp(const MyApp());
@@ -72,6 +70,13 @@ class MyApp extends StatelessWidget {
         // Get instances from service locator (already initialized in main())
         final authViewModel = getIt<AuthViewModel>();
         final vietMapService = getIt<VietMapService>();
+        final notificationService = getIt<NotificationService>();
+        
+        // Đặt navigatorKey cho AuthViewModel (sử dụng cùng key với TruckieApp)
+        AuthViewModel.setNavigatorKey(navigatorKey);
+        
+        // Initialize NotificationService with navigator key
+        notificationService.initialize(navigatorKey);
         
         return MultiProvider(
           providers: [

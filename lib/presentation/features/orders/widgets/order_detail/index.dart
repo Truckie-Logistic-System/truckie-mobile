@@ -1,4 +1,6 @@
 export 'address_section.dart';
+export 'damage_report_section.dart';
+export 'damage_report_with_location.dart';
 export 'driver_info.dart';
 export 'error_view.dart';
 export 'journey_time_section.dart';

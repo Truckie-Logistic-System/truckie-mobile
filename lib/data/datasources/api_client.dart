@@ -23,6 +23,10 @@ class ApiClient implements IHttpClient {
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
+        contentType: 'application/json',
+        headers: {
+          'Accept': 'application/json',
+        },
       ),
     );
 
@@ -39,6 +43,22 @@ class ApiClient implements IHttpClient {
           // Token has 1 hour validity, no need to refresh proactively.
           // Token will be refreshed on 401 error instead.
           
+          debugPrint('📤 [ApiClient] Request: ${options.method} ${options.path}');
+          
+          // CRITICAL: Do NOT add Authorization header for refresh token endpoint!
+          // The refresh token endpoint only needs refreshToken in the request body,
+          // not the expired access token in the Authorization header.
+          // Adding expired token causes 401/400 errors from backend.
+          if (options.path.contains('/auths/mobile/token/refresh')) {
+            debugPrint('🔄 [ApiClient] REFRESH TOKEN REQUEST - Skipping Authorization header');
+            debugPrint('🔄 [ApiClient] Request headers: ${options.headers}');
+            debugPrint('🔄 [ApiClient] Request body: ${options.data}');
+            debugPrint('🔄 [ApiClient] Request method: ${options.method}');
+            debugPrint('🔄 [ApiClient] Request path: ${options.path}');
+            debugPrint('🔄 [ApiClient] Full URL: ${options.uri}');
+            return handler.next(options);
+          }
+          
           final token = _tokenStorageService.getAccessToken();
           if (token != null) {
             debugPrint(
@@ -47,10 +67,6 @@ class ApiClient implements IHttpClient {
             options.headers['Authorization'] = 'Bearer $token';
           } else {
             debugPrint('❌ [ApiClient] NO TOKEN AVAILABLE! Request will fail with 401');
-          }
-          debugPrint('📤 [ApiClient] Request: ${options.method} ${options.path}');
-          if (options.path == '/auths/mobile/token/refresh') {
-            debugPrint('📤 [ApiClient] REFRESH TOKEN REQUEST - Token: ${token?.substring(0, 15) ?? "NULL"}...');
           }
           
           // Check token expiry (optional - for proactive refresh)
@@ -87,29 +103,66 @@ class ApiClient implements IHttpClient {
             // Set lock IMMEDIATELY before any async operation
             _isRefreshing = true;
             debugPrint('🔓 401 Unauthorized - Setting _isRefreshing = true');
-            debugPrint('🔓 401 Unauthorized - Calling logout callback (ONLY ONCE)');
+            debugPrint('🔓 401 Unauthorized - Calling refresh token callback (ONLY ONCE)');
             
-            // Call the callback if it's set
+            // Call the callback if it's set (callback will refresh token)
             if (_onUnauthorizedCallback != null) {
               try {
                 await _onUnauthorizedCallback!();
                 debugPrint('🔓 401 Unauthorized - Callback completed successfully');
+                
+                // After callback completes, get new token and retry the request
+                final newToken = _tokenStorageService.getAccessToken();
+                if (newToken != null) {
+                  debugPrint('✅ [401 Retry] Got new token, retrying original request');
+                  
+                  // Update the request with new token
+                  e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+                  
+                  // Retry the original request
+                  try {
+                    final response = await dio.fetch(e.requestOptions);
+                    debugPrint('✅ [401 Retry] Request succeeded with new token');
+                    _isRefreshing = false;
+                    
+                    // Process queued requests
+                    debugPrint('🔓 Processing ${_requestQueue.length} queued requests');
+                    final queue = _requestQueue.toList();
+                    _requestQueue.clear();
+                    
+                    for (final queuedError in queue) {
+                      debugPrint('🔓 Retrying queued request: ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
+                      queuedError.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+                      try {
+                        await dio.fetch(queuedError.requestOptions);
+                      } catch (retryError) {
+                        debugPrint('❌ Error retrying queued request: $retryError');
+                      }
+                    }
+                    
+                    return handler.resolve(response);
+                  } catch (retryError) {
+                    debugPrint('❌ [401 Retry] Request failed even with new token: $retryError');
+                    _isRefreshing = false;
+                    _requestQueue.clear();
+                    return handler.next(e);
+                  }
+                } else {
+                  debugPrint('❌ [401 Retry] No new token available after callback - user logged out');
+                  _isRefreshing = false;
+                  _requestQueue.clear();
+                  return handler.next(e);
+                }
               } catch (ex) {
                 debugPrint('❌ Error in unauthorized callback: $ex');
+                _isRefreshing = false;
+                _requestQueue.clear();
+                return handler.next(e);
               }
-            }
-            
-            _isRefreshing = false;
-            debugPrint('🔓 401 Unauthorized - Setting _isRefreshing = false');
-            
-            // Process queued requests
-            debugPrint('🔓 401 Unauthorized - Processing ${_requestQueue.length} queued requests');
-            final queue = _requestQueue.toList();
-            _requestQueue.clear();
-            
-            for (final queuedError in queue) {
-              debugPrint('🔓 Processing queued request: ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
-              // Just pass through - they will be retried with new token
+            } else {
+              debugPrint('⚠️ No unauthorized callback set');
+              _isRefreshing = false;
+              return handler.next(e);
             }
           }
           

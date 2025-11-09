@@ -11,6 +11,7 @@ import '../../domain/entities/role.dart';
 import '../models/auth_response_model.dart';
 import '../models/token_response_model.dart';
 import '../models/user_model.dart';
+import '../models/role_model.dart';
 
 abstract class AuthDataSource {
   /// Đăng nhập với tên đăng nhập và mật khẩu
@@ -139,6 +140,8 @@ class AuthDataSourceImpl implements AuthDataSource {
       });
 
       debugPrint('🔄 [refreshToken] Response received from backend');
+      debugPrint('🔄 [refreshToken] Response status: ${response.statusCode}');
+      debugPrint('🔄 [refreshToken] Response data: ${response.data}');
 
       if (response.data['success'] == true && response.data['data'] != null) {
         final tokenData = response.data['data'];
@@ -181,33 +184,83 @@ class AuthDataSourceImpl implements AuthDataSource {
           rethrow;
         }
 
-        // CRITICAL: Tokens are already saved! Just return success
-        // User info will be updated by AuthViewModel.forceRefreshToken()
-        debugPrint('✅ [refreshToken] Tokens saved successfully - returning success');
-        
-        // Create minimal user with new tokens for return value
-        // AuthViewModel will update the full user info
-        return User(
-          id: 'temp_id',
-          username: 'temp_username',
-          fullName: 'Temporary User',
-          email: 'temp@example.com',
-          phoneNumber: '',
-          gender: false,
-          dateOfBirth: '',
-          imageUrl: '',
-          status: 'ACTIVE',
-          role: Role(id: '', roleName: 'DRIVER', description: '', isActive: true),
-          authToken: newAccessToken,
-          refreshToken: newRefreshToken,
-        );
+        // Parse user info from backend response
+        // Backend returns user info in the refresh token response
+        final userData = tokenData['user'];
+        if (userData != null) {
+          debugPrint('✅ [refreshToken] User info found in response');
+          final userModel = UserModel.fromJson(userData);
+          final user = User(
+            id: userModel.id,
+            username: userModel.username,
+            fullName: userModel.fullName,
+            email: userModel.email,
+            phoneNumber: userModel.phoneNumber,
+            gender: userModel.gender,
+            dateOfBirth: userModel.dateOfBirth,
+            imageUrl: userModel.imageUrl,
+            status: userModel.status,
+            role: userModel.role,
+            authToken: newAccessToken,
+            refreshToken: newRefreshToken,
+          );
+          
+          // Save user info to SharedPreferences
+          await saveUserInfo(user);
+          debugPrint('✅ [refreshToken] User info saved to SharedPreferences');
+          
+          return user;
+        } else {
+          debugPrint('⚠️ [refreshToken] No user info in response - creating minimal user');
+          // Fallback: Create minimal user if backend doesn't return user info
+          return User(
+            id: 'temp_id',
+            username: 'temp_username',
+            fullName: 'Temporary User',
+            email: 'temp@example.com',
+            phoneNumber: '',
+            gender: false,
+            dateOfBirth: '',
+            imageUrl: '',
+            status: 'ACTIVE',
+            role: Role(id: '', roleName: 'DRIVER', description: '', isActive: true),
+            authToken: newAccessToken,
+            refreshToken: newRefreshToken,
+          );
+        }
       } else {
         throw ServerException(
           message: response.data['message'] ?? 'Làm mới token thất bại',
         );
       }
+    } on DioException catch (e) {
+      debugPrint('❌ [refreshToken] DioException caught');
+      debugPrint('❌ [refreshToken] Status code: ${e.response?.statusCode}');
+      debugPrint('❌ [refreshToken] Response data: ${e.response?.data}');
+      debugPrint('❌ [refreshToken] Error message: ${e.message}');
+      
+      // Handle specific error codes
+      if (e.response?.statusCode == 400) {
+        final errorMessage = e.response?.data['message'] ?? 'Refresh token không hợp lệ';
+        debugPrint('❌ [refreshToken] 400 Bad Request: $errorMessage');
+        throw ServerException(
+          message: errorMessage,
+          statusCode: 400,
+        );
+      } else if (e.response?.statusCode == 401) {
+        debugPrint('❌ [refreshToken] 401 Unauthorized: Refresh token đã hết hạn hoặc bị thu hồi');
+        throw ServerException(
+          message: 'Refresh token đã hết hạn hoặc bị thu hồi',
+          statusCode: 401,
+        );
+      }
+      
+      throw ServerException(
+        message: e.response?.data['message'] ?? 'Làm mới token thất bại',
+        statusCode: e.response?.statusCode,
+      );
     } catch (e) {
-      // debugPrint('Refresh token exception: ${e.toString()}');
+      debugPrint('❌ [refreshToken] Unexpected error: ${e.toString()}');
       if (e is ServerException) {
         rethrow;
       }
@@ -333,7 +386,7 @@ class AuthDataSourceImpl implements AuthDataSource {
         dateOfBirth: user.dateOfBirth,
         imageUrl: user.imageUrl,
         status: user.status,
-        role: user.role,
+        role: RoleModel.fromEntity(user.role),
         authToken: user.authToken,
         refreshToken: user.refreshToken,
       );

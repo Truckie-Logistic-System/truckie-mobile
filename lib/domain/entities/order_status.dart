@@ -59,7 +59,7 @@ enum OrderStatus {
       case OrderStatus.resolved:
         return 'Đã giải quyết';
       case OrderStatus.compensation:
-        return 'Đang bồi thường';
+        return 'Đã đền bù';
       case OrderStatus.successful:
         return 'Hoàn thành';
       case OrderStatus.rejectOrder:

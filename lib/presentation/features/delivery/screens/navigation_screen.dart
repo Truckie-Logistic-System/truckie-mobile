@@ -18,6 +18,15 @@ import '../../../../presentation/features/orders/viewmodels/order_detail_viewmod
 import '../../../../presentation/utils/driver_role_checker.dart';
 import '../viewmodels/navigation_viewmodel.dart';
 import '../widgets/map/image_based_3d_truck_marker.dart';
+import '../widgets/report_issue_bottom_sheet.dart';
+import '../widgets/pending_seal_replacement_banner.dart';
+import '../widgets/confirm_seal_replacement_sheet.dart';
+import '../widgets/fuel_invoice_upload_sheet.dart';
+import '../../../../domain/entities/issue.dart';
+import '../../../../domain/repositories/issue_repository.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../data/datasources/vehicle_fuel_consumption_data_source.dart';
+import 'dart:io';
 
 class NavigationScreen extends StatefulWidget {
   final String orderId;
@@ -58,6 +67,17 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   // Biến để theo dõi chế độ 3D
   bool _is3DMode = true;
 
+  // Pending seal replacements
+  List<Issue> _pendingSealReplacements = [];
+  bool _isLoadingPendingSeals = false;
+  
+  // Refresh stream subscription
+  StreamSubscription<void>? _refreshSubscription;
+  
+  // Fuel consumption state
+  String? _fuelConsumptionId;
+  bool _isLoadingFuelConsumption = false;
+
   // Custom marker for current location
   Symbol? _currentLocationMarker;
   
@@ -97,6 +117,29 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
 
     _loadMapStyle();
 
+    // 🆕 Subscribe to refresh stream from NotificationService
+    final notificationService = getIt<NotificationService>();
+    _refreshSubscription = notificationService.refreshStream.listen((_) async {
+      debugPrint('🔄 [NavigationScreen] ========================================');
+      debugPrint('🔄 [NavigationScreen] Received refresh signal!');
+      debugPrint('🔄 [NavigationScreen] Fetching pending seals...');
+      
+      await _fetchPendingSealReplacements();
+      
+      debugPrint('🔄 [NavigationScreen] After fetch: ${_pendingSealReplacements.length} pending seals');
+      debugPrint('🔄 [NavigationScreen] isSimulationMode: ${widget.isSimulationMode}');
+      
+      // Auto-resume simulation if no pending seals
+      if (_pendingSealReplacements.isEmpty && widget.isSimulationMode) {
+        debugPrint('✅ [NavigationScreen] No pending seals, auto-resuming simulation...');
+        _autoResumeSimulation();
+      } else {
+        debugPrint('⚠️ [NavigationScreen] Not resuming: pending=${_pendingSealReplacements.length}, isSimMode=${widget.isSimulationMode}');
+      }
+      
+      debugPrint('🔄 [NavigationScreen] ========================================');
+    });
+
     // Check if viewModel is already simulating (returning to active simulation)
     // Only set _isSimulating if viewModel confirms it's running
     if (_viewModel.isSimulating && widget.isSimulationMode) {
@@ -122,9 +165,279 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         debugPrint('   - Route segments loaded after init, checking resume');
         _checkAndResumeAfterAction();
       }
+      
+      // 🆕 Fetch pending seal replacements sau khi có order details
+      _fetchPendingSealReplacements();
+      
+      // Fetch fuel consumption ID sau khi có vehicle assignment ID
+      _fetchFuelConsumptionId();
     }).catchError((e) {
       debugPrint('   - Error loading order details: $e');
     });
+  }
+  
+  /// Fetch pending seal replacements for current vehicle assignment
+  Future<void> _fetchPendingSealReplacements() async {
+    if (_viewModel.vehicleAssignmentId == null || 
+        _viewModel.vehicleAssignmentId!.isEmpty) {
+      debugPrint('⚠️ Cannot fetch pending seals - no vehicle assignment');
+      return;
+    }
+
+    setState(() {
+      _isLoadingPendingSeals = true;
+    });
+
+    try {
+      final issueRepository = getIt<IssueRepository>();
+      final vehicleAssignmentId = _viewModel.vehicleAssignmentId!;
+      
+      debugPrint('📤 Fetching pending seal replacements for VA: $vehicleAssignmentId');
+      
+      final pendingIssues = await issueRepository.getPendingSealReplacements(
+        vehicleAssignmentId,
+      );
+      
+      setState(() {
+        _pendingSealReplacements = pendingIssues;
+        _isLoadingPendingSeals = false;
+      });
+      
+      debugPrint('✅ Got ${pendingIssues.length} pending seal replacement(s)');
+    } catch (e) {
+      debugPrint('❌ Error fetching pending seal replacements: $e');
+      setState(() {
+        _isLoadingPendingSeals = false;
+      });
+    }
+  }
+
+  /// Fetch fuel consumption ID by vehicle assignment
+  Future<void> _fetchFuelConsumptionId() async {
+    debugPrint('🔍 _fetchFuelConsumptionId called');
+    debugPrint('   - vehicleAssignmentId: ${_viewModel.vehicleAssignmentId}');
+    
+    if (_viewModel.vehicleAssignmentId == null || 
+        _viewModel.vehicleAssignmentId!.isEmpty) {
+      debugPrint('⚠️ Cannot fetch fuel consumption - no vehicle assignment');
+      return;
+    }
+
+    setState(() {
+      _isLoadingFuelConsumption = true;
+    });
+
+    try {
+      final dataSource = getIt<VehicleFuelConsumptionDataSource>();
+      debugPrint('📤 Calling getByVehicleAssignmentId with: ${_viewModel.vehicleAssignmentId}');
+      final result = await dataSource.getByVehicleAssignmentId(
+        _viewModel.vehicleAssignmentId!,
+      );
+      
+      result.fold(
+        (failure) {
+          debugPrint('❌ Failed to get fuel consumption: ${failure.message}');
+          setState(() {
+            _isLoadingFuelConsumption = false;
+          });
+          
+          // Show user-friendly message if no fuel consumption record found
+          if (failure.message.contains('Chưa có bản ghi tiêu thụ nhiên liệu')) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Chưa có bản ghi tiêu thụ nhiên liệu. Vui lòng tạo bản ghi trước khi upload hóa đơn.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        },
+        (response) {
+          debugPrint('📥 Fuel consumption response: $response');
+          if (response['success'] == true && response['data'] != null) {
+            setState(() {
+              _fuelConsumptionId = response['data']['id'];
+              _isLoadingFuelConsumption = false;
+            });
+            debugPrint('✅ Fuel consumption ID: $_fuelConsumptionId');
+          } else {
+            debugPrint('⚠️ Response success: ${response['success']}, data: ${response['data']}');
+            setState(() {
+              _isLoadingFuelConsumption = false;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error fetching fuel consumption: $e');
+      setState(() {
+        _isLoadingFuelConsumption = false;
+      });
+    }
+  }
+  
+  /// Show fuel invoice upload bottom sheet
+  void _showFuelInvoiceUploadSheet() {
+    debugPrint('🔍 _showFuelInvoiceUploadSheet called');
+    debugPrint('   - _fuelConsumptionId: $_fuelConsumptionId');
+    
+    if (_fuelConsumptionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy thông tin tiêu thụ nhiên liệu'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FuelInvoiceUploadSheet(
+        fuelConsumptionId: _fuelConsumptionId!,
+        onConfirm: (imageFile) async {
+          try {
+            final dataSource = getIt<VehicleFuelConsumptionDataSource>();
+            final result = await dataSource.updateInvoiceImage(
+              fuelConsumptionId: _fuelConsumptionId!,
+              invoiceImage: imageFile,
+            );
+            
+            result.fold(
+              (failure) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Lỗi: ${failure.message}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              (success) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Đã upload hóa đơn xăng thành công'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+            );
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Lỗi: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            rethrow;
+          }
+        },
+      ),
+    );
+  }
+  
+  /// Debug method to test fuel invoice upload without fuel consumption ID
+  void _debugShowFuelInvoiceUpload() {
+    debugPrint('🐛 Debug: Showing fuel invoice upload with test ID');
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FuelInvoiceUploadSheet(
+        fuelConsumptionId: 'test-id-12345',
+        onConfirm: (imageFile) async {
+          try {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🐛 Debug: Upload clicked with test ID'),
+                backgroundColor: Colors.purple,
+              ),
+            );
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Lỗi debug: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  /// Show confirm seal replacement bottom sheet
+  void _showConfirmSealSheet(Issue issue) async {
+    debugPrint('📱 [NavigationScreen] Opening confirm seal sheet for issue: ${issue.id}');
+    
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ConfirmSealReplacementSheet(
+        issue: issue,
+        onConfirm: (imageBase64) async {
+          try {
+            debugPrint('📤 [NavigationScreen] Confirming seal replacement...');
+            final issueRepository = getIt<IssueRepository>();
+            await issueRepository.confirmSealReplacement(
+              issueId: issue.id,
+              newSealAttachedImage: imageBase64,
+            );
+            
+            debugPrint('✅ [NavigationScreen] Seal replacement confirmed!');
+            // Return success to close bottom sheet and handle UI updates outside
+            return;
+          } catch (e) {
+            debugPrint('❌ [NavigationScreen] Error confirming seal: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Lỗi: $e')),
+              );
+            }
+            rethrow;
+          }
+        },
+      ),
+    );
+    
+    // After bottom sheet is closed, check result before refreshing and showing success
+    debugPrint('📱 [NavigationScreen] Bottom sheet closed, result: $result');
+    
+    if (mounted && result == true) {
+      debugPrint('✅ [NavigationScreen] Processing success result...');
+      
+      // Wait a bit for backend to update issue status
+      debugPrint('⏳ [NavigationScreen] Waiting 500ms for backend to update...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Refresh pending list
+      debugPrint('🔄 [NavigationScreen] Fetching pending seals...');
+      await _fetchPendingSealReplacements();
+      
+      debugPrint('✅ [NavigationScreen] Pending seals fetched: ${_pendingSealReplacements.length}');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Đã xác nhận gắn seal mới thành công'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      debugPrint('🔄 [NavigationScreen] Auto-resuming simulation...');
+      _autoResumeSimulation();
+    } else {
+      debugPrint('⚠️ [NavigationScreen] Not processing: mounted=$mounted, result=$result');
+    }
   }
   
   // Check if we need to resume simulation after action confirmation
@@ -162,6 +475,9 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
           debugPrint(
             '📍 Location update (resume): ${location.latitude}, ${location.longitude}, bearing: $bearing',
           );
+
+          // CRITICAL: Update viewModel's current location with simulated location
+          _viewModel.currentLocation = location;
 
           // Update custom location marker
           _updateLocationMarker(location, bearing);
@@ -291,7 +607,81 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    debugPrint('🔄 App lifecycle state changed: $state');
+    
+    if (state == AppLifecycleState.paused) {
+      // App going to background - simulation continues in background
+      debugPrint('📱 App going to background - simulation continues');
+      debugPrint('   - isSimulating: $_isSimulating');
+      debugPrint('   - ViewModel.isSimulating: ${_viewModel.isSimulating}');
+      
+      // Save current state immediately for safety
+      if (_isSimulating && _viewModel.currentLocation != null) {
+        debugPrint('💾 Saving simulation state before background...');
+        _globalLocationManager.sendLocationUpdate(
+          _viewModel.currentLocation!.latitude,
+          _viewModel.currentLocation!.longitude,
+          bearing: _viewModel.currentBearing,
+          speed: _viewModel.currentSpeed,
+          segmentIndex: _viewModel.currentSegmentIndex,
+        );
+      }
+    } else if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 App resumed from background');
+      debugPrint('   - isSimulating: $_isSimulating');
+      debugPrint('   - ViewModel.isSimulating: ${_viewModel.isSimulating}');
+      
+      // Refresh pending seals
+      _fetchPendingSealReplacements();
+      
+      // Refresh fuel consumption
+      _fetchFuelConsumptionId();
+      
+      // Check if simulation should be running
+      if (widget.isSimulationMode && _viewModel.isSimulating) {
+        debugPrint('▶️ Simulation was active - checking if needs resume...');
+        
+        // Update camera to current position
+        if (_viewModel.currentLocation != null && _mapController != null) {
+          debugPrint('📍 Updating camera to current position');
+          _setCameraToNavigationMode(_viewModel.currentLocation!);
+        }
+        
+        // Update marker
+        if (_viewModel.currentLocation != null) {
+          _updateLocationMarker(
+            _viewModel.currentLocation!,
+            _viewModel.currentBearing,
+          );
+        }
+        
+        // Simulation timer should still be running unless explicitly paused
+        // No need to restart - it continues in background
+        debugPrint('✅ Simulation continues from background');
+      } else if (widget.isSimulationMode && !_viewModel.isSimulating && _globalLocationManager.isGlobalTrackingActive) {
+        // ViewModel lost simulation state but GlobalLocationManager is tracking
+        debugPrint('⚠️ State mismatch detected - attempting to restore simulation...');
+        _checkAndResumeAfterAction();
+      }
+    } else if (state == AppLifecycleState.inactive) {
+      // App is transitioning (e.g., during navigation or receiving a call)
+      debugPrint('📱 App inactive (transitioning)');
+    } else if (state == AppLifecycleState.detached) {
+      // App is being terminated
+      debugPrint('📱 App detached (terminating)');
+    }
+  }
+
+  @override
   void dispose() {
+    debugPrint('🗑️ NavigationScreen.dispose() called');
+    debugPrint('   - _isTripComplete: $_isTripComplete');
+    debugPrint('   - _isSimulating: $_isSimulating');
+    
     // Clean up map resources to prevent buffer overflow
     try {
       if (_mapController != null) {
@@ -309,23 +699,38 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     // Remove observers
     WidgetsBinding.instance.removeObserver(this);
 
+    // 🆕 Dispose refresh subscription
+    _refreshSubscription?.cancel();
+    
     // Unregister this screen from GlobalLocationManager
     _globalLocationManager.unregisterScreen('NavigationScreen');
 
     // IMPORTANT: Don't stop tracking when just navigating away
     // Only stop when explicitly requested (trip complete, cancel, etc.)
     // This allows user to go back to order detail and return to navigation
+    // Simulation continues in background via GlobalLocationManager
 
     // Only stop if trip is complete
     if (_isTripComplete) {
-      debugPrint('🏁 Trip complete, stopping global tracking');
+      debugPrint('🏁 Trip complete, stopping global tracking and simulation');
       _globalLocationManager.stopGlobalTracking(reason: 'Trip completed');
       _viewModel.resetNavigation();
     } else {
-      debugPrint(
-        '🔄 Navigation screen disposed but global tracking continues in background',
-      );
-      // Keep tracking active for when user returns
+      debugPrint('🔄 Navigation screen disposed but tracking continues in background');
+      debugPrint('   - Simulation will continue if active');
+      debugPrint('   - State will be restored when screen is recreated');
+      
+      // Save current state one last time before dispose
+      if (_isSimulating && _viewModel.currentLocation != null) {
+        debugPrint('💾 Final state save before dispose...');
+        _globalLocationManager.sendLocationUpdate(
+          _viewModel.currentLocation!.latitude,
+          _viewModel.currentLocation!.longitude,
+          bearing: _viewModel.currentBearing,
+          speed: _viewModel.currentSpeed,
+          segmentIndex: _viewModel.currentSegmentIndex,
+        );
+      }
     }
     super.dispose();
   }
@@ -763,8 +1168,11 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                 if (lat != null && lng != null) {
                   final location = LatLng(lat, lng);
 
-                  // Update viewModel's current location
-                  _viewModel.currentLocation = location;
+                  // Update viewModel's current location ONLY if not simulating
+                  // When simulating, viewModel.currentLocation should use simulated location
+                  if (!_viewModel.isSimulating) {
+                    _viewModel.currentLocation = location;
+                  }
 
                   if (_isFollowingUser && mounted) {
                     _setCameraToNavigationMode(location);
@@ -849,9 +1257,24 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
             'NavigationScreen',
             onLocationUpdate: (data) {
               final isPrimary = _globalLocationManager.isPrimaryDriver;
-              debugPrint(
-                '📍 Global location update (${isPrimary ? "Primary" : "Secondary"} Driver): $data',
-              );
+              final vehicleIdInData = data['vehicleId']?.toString();
+              final expectedVehicleId = _viewModel.currentVehicleId;
+              
+              debugPrint('📍 [NavigationScreen] Location update received:');
+              debugPrint('   - Driver type: ${isPrimary ? "Primary" : "Secondary"}');
+              debugPrint('   - Vehicle in data: $vehicleIdInData');
+              debugPrint('   - Expected vehicle: $expectedVehicleId');
+              debugPrint('   - Location: ${data['latitude']}, ${data['longitude']}');
+              
+              // CRITICAL: Extra safety check - verify vehicle ID matches
+              if (vehicleIdInData != null && expectedVehicleId != null && 
+                  vehicleIdInData != expectedVehicleId) {
+                debugPrint('🚫🚫🚫 BLOCKED IN NAVIGATION SCREEN!');
+                debugPrint('   This location is for a DIFFERENT vehicle!');
+                debugPrint('   Expected: $expectedVehicleId');
+                debugPrint('   Got: $vehicleIdInData');
+                return; // STOP - don't update camera
+              }
 
               // Update current location in viewModel
               final lat = data['latitude'] as double?;
@@ -860,12 +1283,18 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
               if (lat != null && lng != null) {
                 final location = LatLng(lat, lng);
 
-                // Update viewModel's current location
-                _viewModel.currentLocation = location;
+                // Update viewModel's current location ONLY if not simulating
+                // When simulating, viewModel.currentLocation should use simulated location
+                if (!_viewModel.isSimulating) {
+                  _viewModel.currentLocation = location;
+                }
 
                 // Update camera if following user
                 if (_isFollowingUser && mounted) {
+                  debugPrint('   ✅ Updating camera to this location');
                   _setCameraToNavigationMode(location);
+                } else {
+                  debugPrint('   ⏸️ Not following user, camera not updated');
                 }
               }
             },
@@ -1435,14 +1864,27 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         debugPrint('   - Lat: ${savedState.currentLatitude}');
         debugPrint('   - Lng: ${savedState.currentLongitude}');
         debugPrint('   - Segment: ${savedState.currentSegmentIndex}');
+        debugPrint('   - Bearing: ${savedState.currentBearing}');
         
-        // Restore position in viewModel
+        // Restore position in viewModel with bearing
         if (savedState.currentSegmentIndex != null) {
           _viewModel.restoreSimulationPosition(
             segmentIndex: savedState.currentSegmentIndex!,
             latitude: savedState.currentLatitude!,
             longitude: savedState.currentLongitude!,
+            bearing: savedState.currentBearing,
           );
+          
+          // Update marker with restored position
+          _updateLocationMarker(
+            _viewModel.currentLocation!,
+            _viewModel.currentBearing,
+          );
+          
+          // Update camera to restored position
+          if (_isFollowingUser && _mapController != null) {
+            _setCameraToNavigationMode(_viewModel.currentLocation!);
+          }
         }
       } else {
         debugPrint('ℹ️ No saved position found to restore');
@@ -1462,6 +1904,10 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         debugPrint(
           '📍 Location update: ${location.latitude}, ${location.longitude}, bearing: $bearing',
         );
+
+        // CRITICAL: Update viewModel's current location with simulated location
+        // This ensures report incident uses simulated location, not GPS
+        _viewModel.currentLocation = location;
 
         // Update custom location marker
         _updateLocationMarker(location, bearing);
@@ -1539,6 +1985,29 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _autoResumeSimulation() async {
+    debugPrint('🔄 _autoResumeSimulation called');
+    debugPrint('   - _isSimulating: $_isSimulating');
+    debugPrint('   - _isPaused: $_isPaused');
+    debugPrint('   - ViewModel.isSimulating: ${_viewModel.isSimulating}');
+    
+    // Auto resume simulation if it was paused and running
+    if (_isPaused && _isSimulating && mounted) {
+      debugPrint('✅ Seal confirmed, auto-resuming simulation (was paused)');
+      _resumeSimulation();
+      return;
+    }
+    
+    // If simulation is in simulation mode but not actively running, restart it
+    if (widget.isSimulationMode && !_viewModel.isSimulating && mounted) {
+      debugPrint('✅ Seal confirmed, restarting simulation (was stopped)');
+      _startSimulation();
+      return;
+    }
+    
+    debugPrint('ℹ️ No auto-resume needed: _isSimulating=$_isSimulating, _isPaused=$_isPaused, viewModel.isSimulating=${_viewModel.isSimulating}');
   }
 
   void _resumeSimulation() async {
@@ -1760,34 +2229,34 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   }
 
   void _reportIncident() {
-    // TODO: Implement incident reporting logic
     debugPrint('⚠️ Report incident button pressed');
 
-    showDialog(
+    // Get vehicle assignment ID from viewModel
+    final vehicleAssignmentId = _viewModel.vehicleAssignmentId;
+    
+    if (vehicleAssignmentId == null || vehicleAssignmentId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể báo cáo sự cố: Thiếu thông tin phương tiện'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Show bottom sheet for incident reporting
+    debugPrint('📍 Opening report incident with location: ${_viewModel.currentLocation}');
+    debugPrint('   - Is simulating: ${_viewModel.isSimulating}');
+    
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Báo cáo sự cố'),
-          ],
-        ),
-        content: const Text(
-          'Chức năng báo cáo sự cố đang được phát triển.\n\n'
-          'Bạn sẽ có thể báo cáo các vấn đề như:\n'
-          '• Tai nạn giao thông\n'
-          '• Hỏng xe\n'
-          '• Thời tiết xấu\n'
-          '• Vấn đề với hàng hóa\n'
-          '• Khác',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Đóng'),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportIssueBottomSheet(
+        vehicleAssignmentId: vehicleAssignmentId,
+        currentLocation: _viewModel.currentLocation,
+        orderWithDetails: _viewModel.orderWithDetails,
       ),
     );
   }
@@ -2048,15 +2517,14 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // When back button is pressed, try to pop, if not possible go to order detail
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.orderDetail,
-            arguments: widget.orderId,
-          );
-        }
+        // Use pushReplacement to go to OrderDetail
+        // This keeps navigation stack clean and avoids splash screen
+        debugPrint('🔙 NavigationScreen back pressed - going to OrderDetail');
+        debugPrint('   - Using pushReplacementNamed');
+        Navigator.of(context).pushReplacementNamed(
+          AppRoutes.orderDetail,
+          arguments: widget.orderId,
+        );
         return false; // Prevent default back behavior
       },
       child: Scaffold(
@@ -2067,15 +2535,13 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              // Try to pop, if not possible go to order detail
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              } else {
-                Navigator.of(context).pushReplacementNamed(
-                  AppRoutes.orderDetail,
-                  arguments: widget.orderId,
-                );
-              }
+              // Use pushReplacement to go to OrderDetail
+              debugPrint('🔙 Back button pressed - going to OrderDetail');
+              debugPrint('   - Using pushReplacementNamed');
+              Navigator.of(context).pushReplacementNamed(
+                AppRoutes.orderDetail,
+                arguments: widget.orderId,
+              );
             },
           ),
           actions: [
@@ -2147,6 +2613,52 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                 ],
               ),
             ),
+            
+            // 🆕 Pending Seal Replacement Banner
+            if (_pendingSealReplacements.isNotEmpty)
+              PendingSealReplacementBanner(
+                issue: _pendingSealReplacements.first,
+                onTap: () => _showConfirmSealSheet(_pendingSealReplacements.first),
+              ),
+
+            // Loading indicator cho pending seals
+            // if (_isLoadingPendingSeals)
+            //   Container(
+            //     padding: const EdgeInsets.all(8),
+            //     color: AppColors.primary.withOpacity(0.05),
+            //     child: const Row(
+            //       mainAxisAlignment: MainAxisAlignment.center,
+            //       children: [
+            //         SizedBox(
+            //           width: 16,
+            //           height: 16,
+            //           child: CircularProgressIndicator(strokeWidth: 2),
+            //         ),
+            //         SizedBox(width: 8),
+            //         Text('Đang kiểm tra seal...'),
+            //       ],
+            //     ),
+            //   ),
+            
+            // Loading indicator cho fuel consumption
+            // if (_isLoadingFuelConsumption)
+            //   Container(
+            //     padding: const EdgeInsets.all(8),
+            //     color: Colors.green.withOpacity(0.05),
+            //     child: const Row(
+            //       mainAxisAlignment: MainAxisAlignment.center,
+            //       children: [
+            //         SizedBox(
+            //           width: 16,
+            //           height: 16,
+            //           child: CircularProgressIndicator(strokeWidth: 2),
+            //         ),
+            //         SizedBox(width: 8),
+            //         Text('Đang tải thông tin nhiên liệu...'),
+            //       ],
+            //     ),
+            //   ),
+            
             Expanded(
               child: Container(
                 color: Colors.white,
@@ -2323,6 +2835,28 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                             child: const Icon(
                               Icons.warning_amber_rounded,
                               color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Upload fuel invoice button
+                          Tooltip(
+                            message: _fuelConsumptionId != null 
+                              ? 'Upload hóa đơn xăng' 
+                              : 'Debug: Test upload (chưa có fuel consumption ID)',
+                            child: FloatingActionButton(
+                              onPressed: _fuelConsumptionId != null 
+                                ? _showFuelInvoiceUploadSheet 
+                                : _debugShowFuelInvoiceUpload,
+                              backgroundColor: _fuelConsumptionId != null 
+                                ? Colors.green 
+                                : Colors.orange,
+                              mini: true,
+                              heroTag: 'fuel',
+                              child: const Icon(
+                                Icons.local_gas_station,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],

@@ -38,6 +38,10 @@ enum OrderDetailStatus {
   /// Can occur at any stage
   inTroubles('IN_TROUBLES'),
   
+  /// OrderDetail has been compensated due to damage
+  /// Terminal status for damaged goods
+  compensation('COMPENSATION'),
+  
   /// Issues have been resolved
   /// Returns to previous normal flow
   resolved('RESOLVED'),
@@ -82,6 +86,8 @@ enum OrderDetailStatus {
         return 'Hoàn thành';
       case OrderDetailStatus.inTroubles:
         return 'Gặp sự cố';
+      case OrderDetailStatus.compensation:
+        return 'Đã đền bù';
       case OrderDetailStatus.resolved:
         return 'Đã giải quyết';
       case OrderDetailStatus.rejected:
@@ -97,7 +103,8 @@ enum OrderDetailStatus {
   bool get isTerminal {
     return this == OrderDetailStatus.successful ||
         this == OrderDetailStatus.rejected ||
-        this == OrderDetailStatus.returned;
+        this == OrderDetailStatus.returned ||
+        this == OrderDetailStatus.compensation;
   }
 
   /// Check if status indicates active delivery

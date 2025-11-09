@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../domain/entities/driver.dart';
@@ -68,6 +69,39 @@ class AccountViewModel extends BaseViewModel {
       (driver) {
         _status = AccountStatus.loaded;
         _driver = driver;
+        notifyListeners();
+      },
+    );
+  }
+
+  // Force refresh driver info - bỏ qua kiểm tra loading state
+  Future<void> refreshDriverInfo(String userId) async {
+    debugPrint('🔄 AccountViewModel: Force refreshing driver info...');
+    _status = AccountStatus.loading;
+    notifyListeners();
+
+    final result = await _getDriverInfoUseCase(const GetDriverInfoParams());
+
+    result.fold(
+      (failure) async {
+        _status = AccountStatus.error;
+        _errorMessage = failure.message;
+
+        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        final shouldRetry = await handleUnauthorizedError(failure.message);
+        if (shouldRetry) {
+          // Nếu refresh token thành công, thử lại
+          debugPrint('🔄 AccountViewModel: Token refreshed, retrying force refresh...');
+          await refreshDriverInfo(userId);
+          return;
+        }
+
+        notifyListeners();
+      },
+      (driver) {
+        _status = AccountStatus.loaded;
+        _driver = driver;
+        debugPrint('✅ AccountViewModel: Force refresh completed');
         notifyListeners();
       },
     );
