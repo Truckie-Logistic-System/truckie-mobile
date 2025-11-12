@@ -231,6 +231,9 @@ class AuthViewModel extends BaseViewModel {
   /// Returns true if local data was cleared successfully, regardless of API result
   Future<bool> logout() async {
     try {
+      // WebSocket services will be cleaned up automatically
+      // NotificationService will be disconnected below in _clearUserData()
+      
       // First clear local data
       await _clearUserData();
 
@@ -666,8 +669,11 @@ class AuthViewModel extends BaseViewModel {
       // 🆕 CRITICAL: Use driver ID instead of user ID and AWAIT connection
       await notificationService.connect(_driver!.id);
       debugPrint('✅ [AuthViewModel] Connected to notification service for driver: ${_driver!.id}');
+      
+      // NotificationService now handles ALL notifications including return goods
+      // No need for separate WebSocketService
     } catch (e) {
-      debugPrint('❌ [AuthViewModel] Error connecting to notification service: $e');
+      debugPrint('❌ [AuthViewModel] Error connecting to notification/websocket services: $e');
       debugPrint('❌ [AuthViewModel] Stack trace: ${StackTrace.current}');
     }
     

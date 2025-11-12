@@ -122,7 +122,8 @@ enum IssueCategory {
   general('GENERAL', 'Sự cố chung'),
   accident('ACCIDENT', 'Tai nạn'),
   sealReplacement('SEAL_REPLACEMENT', 'Thay thế seal'),
-  orderRejection('ORDER_REJECTION', 'Từ chối đơn hàng');
+  orderRejection('ORDER_REJECTION', 'Từ chối đơn hàng'),
+  penalty('PENALTY', 'Vi phạm giao thông');
 
   final String value;
   final String label;

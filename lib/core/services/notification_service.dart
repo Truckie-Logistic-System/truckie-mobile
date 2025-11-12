@@ -2,18 +2,24 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../utils/sound_utils.dart';
 import '../constants/api_constants.dart';
 import '../services/token_storage_service.dart';
 import '../../presentation/widgets/common/seal_assignment_notification_dialog.dart';
+import '../../presentation/widgets/common/damage_resolved_notification_dialog.dart';
+import '../../presentation/widgets/common/order_rejection_resolved_notification_dialog.dart';
 import '../../app/di/service_locator.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// Singleton service for managing WebSocket notifications
-/// Automatically connects when driver is authenticated
+/// Automatically connects when driver is authenticated 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
-  NotificationService._internal();
+  NotificationService._internal() {
+    _initializeLocalNotifications();
+  }
 
   StompClient? _stompClient;
   dynamic _currentSubscription;
@@ -36,6 +42,93 @@ class NotificationService {
       _notificationController.stream;
 
   bool get isConnected => _stompClient?.connected ?? false;
+
+  // Flutter Local Notifications
+  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  bool _localNotificationsInitialized = false;
+
+  /// Initialize flutter_local_notifications
+  Future<void> _initializeLocalNotifications() async {
+    if (_localNotificationsInitialized) return;
+
+    try {
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+
+      const DarwinInitializationSettings initializationSettingsDarwin =
+          DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsDarwin,
+      );
+
+      await _flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          debugPrint('📲 [NotificationService] Notification tapped: ${response.payload}');
+        },
+      );
+
+      _localNotificationsInitialized = true;
+      debugPrint('✅ [NotificationService] Local notifications initialized');
+    } catch (e) {
+      debugPrint('❌ [NotificationService] Error initializing local notifications: $e');
+    }
+  }
+
+  /// Show a local notification
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    bool isHighPriority = false,
+    String? payload,
+  }) async {
+    if (!_localNotificationsInitialized) {
+      await _initializeLocalNotifications();
+    }
+
+    try {
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'capstone_mobile_channel',
+        'Capstone Mobile',
+        channelDescription: 'Notifications for Capstone Mobile app',
+        importance: isHighPriority ? Importance.high : Importance.defaultImportance,
+        priority: isHighPriority ? Priority.high : Priority.defaultPriority,
+        showWhen: true,
+      );
+
+      const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        notificationDetails,
+        payload: payload,
+      );
+
+      debugPrint('✅ [NotificationService] Local notification shown: $title');
+    } catch (e) {
+      debugPrint('❌ [NotificationService] Error showing notification: $e');
+    }
+  }
 
   /// Initialize with navigator key for showing dialogs
   void initialize(GlobalKey<NavigatorState> navigatorKey) {
@@ -62,10 +155,13 @@ class NotificationService {
     // debugPrint('🔄 [NotificationService] Retry count: $_retryCount');
     // debugPrint('🔄 [NotificationService] ========================================');
 
-    // Always disconnect to ensure fresh connection
-    if (isConnected) {
-      // debugPrint('🔄 [NotificationService] Disconnecting existing connection...');
+    // CRITICAL: Always disconnect to ensure fresh connection
+    // Even if isConnected is false, the client might still exist and try to reconnect
+    if (_stompClient != null) {
+      // debugPrint('🔄 [NotificationService] Cleaning up existing client...');
       disconnect();
+      // Give old client time to fully disconnect
+      await Future.delayed(const Duration(milliseconds: 500));
     }
 
     _currentDriverId = driverId;
@@ -133,7 +229,9 @@ class NotificationService {
         onDisconnect: (StompFrame frame) {
           // debugPrint('🔌 [NotificationService] WebSocket disconnected');
         },
-        reconnectDelay: const Duration(seconds: 5),
+        // CRITICAL: Disable auto-reconnect to prevent reconnection with stale tokens
+        // We handle reconnection manually via _retryConnection() with fresh tokens
+        reconnectDelay: const Duration(seconds: 0),
         heartbeatIncoming: const Duration(seconds: 10),
         heartbeatOutgoing: const Duration(seconds: 10),
       ),
@@ -213,13 +311,49 @@ class NotificationService {
   /// Handle incoming notification
   void _handleNotification(Map<String, dynamic> notification) {
     final type = notification['type'] as String?;
+    final title = notification['title'] as String?;
+    final body = notification['message'] as String?;
+    final priority = notification['priority'] as String?;
+
+    debugPrint('========================================');
+    debugPrint('📲 [NotificationService] Handling notification');
+    debugPrint('   - Type: $type');
+    debugPrint('   - Title: $title');
+    debugPrint('   - Body: $body');
+    debugPrint('   - Priority: $priority');
+    debugPrint('   - Full notification: $notification');
+    debugPrint('========================================');
 
     switch (type) {
       case 'SEAL_ASSIGNMENT':
         _showSealAssignmentNotification(notification);
         break;
+      case 'RETURN_PAYMENT_SUCCESS':
+        _handleReturnPaymentSuccess(notification);
+        break;
+      case 'RETURN_PAYMENT_TIMEOUT':
+        _handleReturnPaymentTimeout(notification);
+        break;
+      case 'RETURN_PAYMENT_REJECTED':
+        _handleReturnPaymentRejected(notification);
+        break;
+      case 'DAMAGE_RESOLVED':
+        _handleDamageResolved(notification);
+        break;
+      case 'ORDER_REJECTION_RESOLVED':
+        _handleOrderRejectionResolved(notification);
+        break;
       default:
-        // debugPrint('⚠️ [NotificationService] Unknown notification type: $type');
+        debugPrint('⚠️ [NotificationService] Unknown notification type: $type');
+    }
+
+    // Show local notification for all types
+    if (title != null && body != null) {
+      showNotification(
+        title: title,
+        body: body,
+        isHighPriority: priority == 'HIGH' || priority == 'URGENT',
+      );
     }
   }
 
@@ -229,6 +363,9 @@ class NotificationService {
       // debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
       return;
     }
+
+    // Play sound for seal assignment notification
+    SoundUtils.playSealAssignmentSound();
 
     final issue = notification['issue'] as Map<String, dynamic>?;
 
@@ -395,10 +532,18 @@ class NotificationService {
       _currentSubscription = null;
     }
     
-    if (_stompClient?.connected ?? false) {
-      // debugPrint('🔌 [NotificationService] Disconnecting WebSocket');
-      _stompClient!.deactivate();
+    // CRITICAL: Always deactivate and null out the client
+    // This prevents zombie clients from attempting reconnection with stale tokens
+    if (_stompClient != null) {
+      try {
+        // debugPrint('🔌 [NotificationService] Deactivating WebSocket client');
+        _stompClient!.deactivate();
+      } catch (e) {
+        // debugPrint('⚠️ [NotificationService] Error deactivating client: $e');
+      }
+      _stompClient = null; // CRITICAL: Set to null to prevent reconnect attempts
     }
+    
     _currentDriverId = null;
     _retryCount = 0;
     
@@ -435,6 +580,273 @@ class NotificationService {
       // For other errors, just retry connection
       _retryConnection();
     }
+  }
+
+  /// Handle return payment success notification
+  /// Customer paid, journey is now ACTIVE, driver can proceed with return
+  void _handleReturnPaymentSuccess(Map<String, dynamic> notification) {
+    debugPrint('✅ [NotificationService] Return payment SUCCESS - Customer paid');
+    
+    final issueId = notification['issueId'] as String?;
+    final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
+    final returnJourneyId = notification['returnJourneyId'] as String?;
+    
+    // Refresh order list to show updated journey
+    _refreshOrderList();
+    
+    // Navigate to map if return journey is active
+    if (returnJourneyId != null) {
+      // TODO: Navigate to map view with return journey
+      debugPrint('🗺️ [NotificationService] Should navigate to map with return journey: $returnJourneyId');
+    }
+  }
+  
+  /// Handle return payment timeout notification
+  /// Payment deadline passed, journey remains INACTIVE
+  void _handleReturnPaymentTimeout(Map<String, dynamic> notification) {
+    debugPrint('⏰ [NotificationService] Return payment TIMEOUT - Continue original route');
+    
+    final issueId = notification['issueId'] as String?;
+    final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
+    
+    // Refresh order list
+    _refreshOrderList();
+  }
+  
+  /// Handle return payment rejected notification
+  /// Customer rejected payment, journey remains INACTIVE
+  void _handleReturnPaymentRejected(Map<String, dynamic> notification) {
+    debugPrint('❌ [NotificationService] Return payment REJECTED - Customer refused to pay');
+    
+    final issueId = notification['issueId'] as String?;
+    final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
+    
+    // Refresh order list
+    _refreshOrderList();
+  }
+  
+  /// Handle damage resolved notification
+  /// Staff resolved damage issue, driver can continue the trip
+  void _handleDamageResolved(Map<String, dynamic> notification) {
+    debugPrint('📦 [NotificationService] Damage issue RESOLVED - Driver can continue trip');
+    
+    final issue = notification['issue'] as Map<String, dynamic>?;
+    final issueId = issue?['id'] as String?;
+    
+    debugPrint('✅ [NotificationService] Damage issue $issueId resolved, showing dialog');
+    
+    // Play sound for damage resolved notification
+    SoundUtils.playDamageResolvedSound();
+    
+    // Show dialog to driver
+    _showDamageResolvedNotification(notification);
+    
+    // Refresh order list to update order detail statuses from IN_TROUBLES back to original
+    _refreshOrderList();
+    
+    // Trigger navigation screen refresh to auto-resume simulation if needed
+    triggerNavigationScreenRefresh();
+  }
+  
+  /// Show damage resolved notification dialog
+  void _showDamageResolvedNotification(Map<String, dynamic> notification) {
+    debugPrint('🔍 [NotificationService] _showDamageResolvedNotification called');
+    debugPrint('   - Navigator key null: ${_navigatorKey == null}');
+    debugPrint('   - Current context null: ${_navigatorKey?.currentContext == null}');
+    
+    if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
+      debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      return;
+    }
+
+    final issue = notification['issue'] as Map<String, dynamic>?;
+    if (issue == null) {
+      debugPrint('❌ [NotificationService] Missing issue data in notification');
+      return;
+    }
+    
+    // Get issue ID and check for duplicates
+    final issueId = issue['id'] as String?;
+    if (issueId == null) {
+      debugPrint('❌ [NotificationService] Missing issue ID in notification');
+      return;
+    }
+    
+    // Create unique notification ID
+    final timestamp = notification['timestamp'] ?? DateTime.now().toIso8601String();
+    final notificationId = '$issueId-damage-resolved-$timestamp';
+    
+    // Check if this notification was already shown
+    if (_lastNotificationId == notificationId || _shownNotifications.contains(notificationId)) {
+      debugPrint('⚠️ [NotificationService] Duplicate notification detected, skipping: $notificationId');
+      return;
+    }
+    
+    // Mark as shown
+    _lastNotificationId = notificationId;
+    _shownNotifications.add(notificationId);
+    
+    // Clean up old notifications (keep only last 10)
+    if (_shownNotifications.length > 10) {
+      final toRemove = _shownNotifications.length - 10;
+      _shownNotifications.removeAll(_shownNotifications.take(toRemove));
+    }
+    
+    debugPrint('✅ [NotificationService] New damage resolved notification, will show: $notificationId');
+    
+    debugPrint('📱 [NotificationService] Showing damage resolved notification dialog...');
+    
+    showDialog(
+      context: _navigatorKey!.currentContext!,
+      barrierDismissible: false,
+      builder: (dialogContext) => DamageResolvedNotificationDialog(
+        message: notification['message'] ?? 'Sự cố hàng hóa đã được xử lý xong. Bạn có thể tiếp tục hành trình.',
+        onConfirm: () {
+          debugPrint('✅ [NotificationService] Driver confirmed damage resolution');
+          
+          // Navigate back to navigation screen (same pattern as OrderDetailScreen)
+          if (_navigatorKey?.currentContext != null) {
+            final context = _navigatorKey!.currentContext!;
+            
+            // Try to pop back to NavigationScreen if it exists in the stack
+            bool hasNavigationScreen = false;
+            Navigator.of(context).popUntil((route) {
+              if (route.settings.name == '/navigation') {
+                hasNavigationScreen = true;
+                return true;
+              }
+              if (route.isFirst) return true;
+              return false;
+            });
+            
+            debugPrint('📍 [NotificationService] ${hasNavigationScreen ? "Found NavigationScreen in stack" : "NavigationScreen not in stack"}');
+            
+            // If NavigationScreen was found, we're already there
+            // The popUntil already brought us back to it
+            if (hasNavigationScreen) {
+              debugPrint('✅ [NotificationService] Returned to existing NavigationScreen');
+            }
+          }
+        },
+      ),
+    );
+    
+    debugPrint('🔄 [NotificationService] Dialog displayed for damage resolution');
+  }
+  
+  /// Handle order rejection resolved notification
+  /// Staff resolved ORDER_REJECTION issue, driver can proceed with return route
+  void _handleOrderRejectionResolved(Map<String, dynamic> notification) {
+    debugPrint('📦 [NotificationService] ORDER_REJECTION issue RESOLVED - Driver can proceed');
+    
+    final issue = notification['issue'] as Map<String, dynamic>?;
+    final issueId = issue?['id'] as String?;
+    
+    debugPrint('✅ [NotificationService] ORDER_REJECTION issue $issueId resolved, showing dialog');
+    
+    // Play sound for order rejection resolved notification
+    SoundUtils.playOrderRejectionResolvedSound();
+    
+    // Show dialog to driver
+    _showOrderRejectionResolvedNotification(notification);
+    
+    // Refresh order list to update order detail statuses
+    _refreshOrderList();
+    
+    // Trigger navigation screen refresh to auto-resume simulation if needed
+    triggerNavigationScreenRefresh();
+  }
+  
+  /// Show order rejection resolved notification dialog
+  void _showOrderRejectionResolvedNotification(Map<String, dynamic> notification) {
+    if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
+      debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      return;
+    }
+
+    final issue = notification['issue'] as Map<String, dynamic>?;
+    if (issue == null) {
+      debugPrint('❌ [NotificationService] Missing issue data in notification');
+      return;
+    }
+    
+    // Get issue ID and check for duplicates
+    final issueId = issue['id'] as String?;
+    if (issueId == null) {
+      debugPrint('❌ [NotificationService] Missing issue ID in notification');
+      return;
+    }
+    
+    // Create unique notification ID
+    final timestamp = notification['timestamp'] ?? DateTime.now().toIso8601String();
+    final notificationId = '$issueId-order-rejection-resolved-$timestamp';
+    
+    // Check if this notification was already shown
+    if (_lastNotificationId == notificationId || _shownNotifications.contains(notificationId)) {
+      debugPrint('⚠️ [NotificationService] Duplicate notification detected, skipping: $notificationId');
+      return;
+    }
+    
+    // Mark as shown
+    _lastNotificationId = notificationId;
+    _shownNotifications.add(notificationId);
+    
+    // Clean up old notifications (keep only last 10)
+    if (_shownNotifications.length > 10) {
+      final toRemove = _shownNotifications.length - 10;
+      _shownNotifications.removeAll(_shownNotifications.take(toRemove));
+    }
+    
+    debugPrint('✅ [NotificationService] New ORDER_REJECTION resolved notification, will show: $notificationId');
+
+    // Extract data from notification
+    final staff = issue['staff'] as Map<String, dynamic>?;
+    final returnFee = notification['returnFee'] ?? issue['finalFee'];
+    final paymentStatus = notification['paymentStatus'] ?? issue['paymentStatus'];
+    
+    // Format return fee if available
+    String? formattedReturnFee;
+    if (returnFee != null) {
+      try {
+        final amount = double.parse(returnFee.toString());
+        formattedReturnFee = '${amount.toStringAsFixed(0)}đ';
+      } catch (e) {
+        formattedReturnFee = returnFee.toString();
+      }
+    }
+    
+    debugPrint('📱 [NotificationService] Showing ORDER_REJECTION resolved notification dialog...');
+    debugPrint('   - Payment status: $paymentStatus');
+    debugPrint('   - Return fee: $formattedReturnFee');
+    
+    showDialog(
+      context: _navigatorKey!.currentContext!,
+      barrierDismissible: false,
+      builder: (context) => OrderRejectionResolvedNotificationDialog(
+        title: notification['title'] ?? 'Trả hàng đã xử lý',
+        message: notification['message'] ?? 'Vấn đề từ chối đơn hàng đã được xử lý',
+        issueId: issueId,
+        staffName: staff?['fullName'],
+        returnFee: formattedReturnFee,
+        paymentStatus: paymentStatus?.toString(),
+        onConfirm: () {
+          debugPrint('✅ [NotificationService] Driver confirmed ORDER_REJECTION resolution');
+          // Trigger navigation screen refresh
+          triggerNavigationScreenRefresh();
+        },
+      ),
+    );
+    
+    debugPrint('🔄 [NotificationService] Dialog displayed for ORDER_REJECTION resolution');
+  }
+  
+  /// Trigger order list refresh
+  /// Note: Since OrderListViewModel is registered as Factory, we cannot directly refresh
+  /// The UI will auto-refresh when user navigates to orders screen via Provider
+  void _refreshOrderList() {
+    debugPrint('🔄 [NotificationService] Order list needs refresh - will update when user opens orders screen');
+    // TODO: Implement proper event-based refresh mechanism
+    // For now, rely on UI auto-refresh when screen becomes active
   }
 
   /// Handle authentication errors by refreshing token

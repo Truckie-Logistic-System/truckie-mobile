@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../domain/entities/issue.dart';
@@ -293,6 +294,171 @@ class IssueRepositoryImpl implements IssueRepository {
       }
     } catch (e) {
       debugPrint('❌ Error reporting damage issue: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> reportPenaltyIssue({
+    required String vehicleAssignmentId,
+    required String issueTypeId,
+    required String violationType,
+    required String violationImagePath,
+    double? locationLatitude,
+    double? locationLongitude,
+  }) async {
+    try {
+      debugPrint('🚨 Reporting traffic penalty violation issue...');
+      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
+      debugPrint('   - Issue Type ID: $issueTypeId');
+      debugPrint('   - Violation Type: $violationType');
+      debugPrint('   - Violation Image: $violationImagePath');
+      debugPrint('   - Location: $locationLatitude, $locationLongitude');
+
+      // Create multipart form data
+      final formData = FormData();
+      formData.fields.add(MapEntry('vehicleAssignmentId', vehicleAssignmentId));
+      formData.fields.add(MapEntry('issueTypeId', issueTypeId));
+      formData.fields.add(MapEntry('violationType', violationType));
+      
+      if (locationLatitude != null) {
+        formData.fields.add(MapEntry('locationLatitude', locationLatitude.toString()));
+      }
+      if (locationLongitude != null) {
+        formData.fields.add(MapEntry('locationLongitude', locationLongitude.toString()));
+      }
+
+      // Add violation record image file
+      debugPrint('📤 Adding traffic violation record image: $violationImagePath');
+      formData.files.add(
+        MapEntry(
+          'trafficViolationRecordImage',
+          await MultipartFile.fromFile(
+            violationImagePath,
+            filename: violationImagePath.split('/').last,
+          ),
+        ),
+      );
+
+      final response = await _apiClient.post(
+        '/issues/penalty',
+        data: formData,
+      );
+
+      if (response.statusCode == 200 && response.data['data'] != null) {
+        debugPrint('✅ Penalty issue reported successfully');
+        debugPrint('   - Issue ID: ${response.data['data']['id']}');
+      } else {
+        throw Exception('Failed to report penalty issue');
+      }
+    } catch (e) {
+      debugPrint('❌ Error reporting penalty: $e');
+      rethrow;
+    }
+  }
+
+  // ===== ORDER_REJECTION flow methods =====
+
+  @override
+  Future<Issue> reportOrderRejection({
+    required String vehicleAssignmentId,
+    required List<String> orderDetailIds,
+    double? locationLatitude,
+    double? locationLongitude,
+  }) async {
+    try {
+      debugPrint('🚫 Reporting order rejection...');
+      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
+      debugPrint('   - Selected packages: ${orderDetailIds.length}');
+
+      final response = await _apiClient.post(
+        '/issues/order-rejection',
+        data: {
+          'vehicleAssignmentId': vehicleAssignmentId,
+          'orderDetailIds': orderDetailIds,
+          if (locationLatitude != null) 'locationLatitude': locationLatitude,
+          if (locationLongitude != null) 'locationLongitude': locationLongitude,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['data'] != null) {
+        debugPrint('✅ Order rejection reported for ${orderDetailIds.length} package(s)');
+        return Issue.fromJson(response.data['data']);
+      } else {
+        throw Exception('Failed to report order rejection');
+      }
+    } catch (e) {
+      debugPrint('❌ Error reporting order rejection: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<dynamic> getOrderRejectionDetail(String issueId) async {
+    try {
+      debugPrint('📤 Getting ORDER_REJECTION detail for issue: $issueId');
+      final response = await _apiClient.get(
+        '/issues/order-rejection/$issueId/detail',
+      );
+
+      if (response.statusCode == 200 && response.data['data'] != null) {
+        debugPrint('✅ Got ORDER_REJECTION detail');
+        return response.data['data'];
+      } else {
+        throw Exception('Failed to get order rejection detail');
+      }
+    } catch (e) {
+      debugPrint('❌ Error getting order rejection detail: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Issue> confirmReturnDelivery({
+    required String issueId,
+    required List<dynamic> returnDeliveryImages,
+  }) async {
+    try {
+      debugPrint('📦 Confirming return delivery...');
+      debugPrint('   - Issue ID: $issueId');
+      debugPrint('   - Return delivery images: ${returnDeliveryImages.length} photo(s)');
+
+      // Upload photos first
+      List<String> imageUrls = [];
+      for (var image in returnDeliveryImages) {
+        if (image is File) {
+          // Upload each image and get URL
+          final uploadResponse = await _apiClient.uploadFile(
+            '/files/upload',
+            image,
+            fieldName: 'file',
+          );
+          if (uploadResponse.statusCode == 200 && uploadResponse.data['data'] != null) {
+            imageUrls.add(uploadResponse.data['data']['url']);
+          }
+        } else if (image is String) {
+          // Already a URL
+          imageUrls.add(image);
+        }
+      }
+
+      // Confirm return delivery with image URLs
+      final response = await _apiClient.put(
+        '/issues/order-rejection/confirm-return',
+        data: {
+          'issueId': issueId,
+          'returnDeliveryImages': imageUrls,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['data'] != null) {
+        debugPrint('✅ Return delivery confirmed successfully');
+        return Issue.fromJson(response.data['data']);
+      } else {
+        throw Exception('Failed to confirm return delivery');
+      }
+    } catch (e) {
+      debugPrint('❌ Error confirming return delivery: $e');
       rethrow;
     }
   }

@@ -10,6 +10,7 @@ import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 import '../../../../app/app_routes.dart';
 import '../../../../core/services/global_location_manager.dart';
 import '../../../../core/services/navigation_state_service.dart';
+import '../../../../core/services/token_storage_service.dart';
 import '../../../../app/di/service_locator.dart';
 import '../../../../data/datasources/api_client.dart';
 import '../../../../presentation/theme/app_colors.dart';
@@ -1233,8 +1234,9 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       }
 
       // Use GlobalLocationManager instead of direct IntegratedLocationService
-      // Get JWT token from auth view model
-      final jwtToken = _authViewModel.user?.authToken;
+      // Get JWT token from TokenStorageService (always has the latest token after refresh)
+      final tokenStorage = getIt<TokenStorageService>();
+      final jwtToken = tokenStorage.getAccessToken();
       
       final success = await _globalLocationManager.startGlobalTracking(
         orderId: widget.orderId,
@@ -2188,13 +2190,19 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         _setCameraToNavigationMode(_viewModel.currentLocation!);
       }
       
-      // Send location update to server
+      // Send location update to server immediately after skip
+      debugPrint('📍 Sending new skip location to server:');
+      debugPrint('   - Lat: ${_viewModel.currentLocation!.latitude}');
+      debugPrint('   - Lng: ${_viewModel.currentLocation!.longitude}');
+      
       _globalLocationManager.sendLocationUpdate(
         _viewModel.currentLocation!.latitude,
         _viewModel.currentLocation!.longitude,
         bearing: _viewModel.currentBearing,
         speed: _viewModel.currentSpeed,
       );
+      
+      debugPrint('✅ Skip location sent to server');
     }
     
     // Redraw routes to update current segment

@@ -64,9 +64,8 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // KHÔNG gọi _loadOrders() ở đây để tránh conflict với refresh từ tab
-    // Tab refresh sẽ được xử lý bởi MainScreen
-    debugPrint('🔄 OrdersScreen didChangeDependencies: Skipping auto load to avoid tab refresh conflict');
+    // Data will be loaded in initState when screen is first created
+    debugPrint('🔄 OrdersScreen didChangeDependencies called');
   }
 
   // Lắng nghe thay đổi từ OrderListViewModel để cập nhật UI

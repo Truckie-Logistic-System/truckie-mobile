@@ -6,8 +6,6 @@ import '../../account/screens/account_screen.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../home/screens/home_screen.dart';
 import '../../orders/screens/orders_screen.dart';
-import '../../orders/viewmodels/order_list_viewmodel.dart';
-import '../../../../app/di/service_locator.dart';
 import '../../../theme/app_colors.dart';
 
 class MainScreen extends StatefulWidget {
@@ -22,75 +20,34 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   late int _selectedIndex;
 
-  // Danh sách các màn hình tương ứng với từng tab
-  late final List<Widget> _screens;
-
   @override
   void initState() {
     super.initState();
     // Initialize selected index from widget parameter
     _selectedIndex = widget.initialTab;
     debugPrint('🏠 MainScreen initialized with tab: $_selectedIndex');
-    
-    // Khởi tạo các màn hình khi widget được tạo
-    _screens = [
-      const HomeScreen(),
-      const OrdersScreen(),
-      const AccountScreen(), // Chỉ còn 3 màn hình
-    ];
   }
 
-  // Tải lại dữ liệu khi chuyển tab
-  void _onItemTapped(int index) {
-    // Lưu tab cũ để kiểm tra xem có chuyển tab không
-    final oldIndex = _selectedIndex;
+  // Tạo màn hình tương ứng với tab được chọn
+  Widget _getCurrentScreen() {
+    switch (_selectedIndex) {
+      case 0:
+        return const HomeScreen();
+      case 1:
+        return const OrdersScreen();
+      case 2:
+        return const AccountScreen();
+      default:
+        return const HomeScreen();
+    }
+  }
 
+  // Chuyển tab - screen sẽ được rebuild và fetch data mới
+  void _onItemTapped(int index) {
+    debugPrint('🔄 MainScreen: Switching to tab $index');
     setState(() {
       _selectedIndex = index;
     });
-
-    // Luôn fetch lại dữ liệu khi nhấn vào tab, kể cả khi nhấn lại tab hiện tại
-    // để đảm bảo data luôn mới nhất
-    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-
-    if (authViewModel.status == AuthStatus.authenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        switch (index) {
-          case 0:
-            // Tab Trang chủ - force refresh như OrdersScreen
-            debugPrint('🔄 Tab Trang chủ: Force refreshing like OrdersScreen refresh button');
-            if (authViewModel.user != null) {
-              authViewModel.forceRefreshToken().then((success) {
-                debugPrint('🔄 Tab Trang chủ: Force refresh token result: $success');
-                if (success) {
-                  authViewModel.refreshDriverInfo();
-                }
-              });
-            }
-            break;
-          case 1:
-            // Tab Đơn hàng - hoạt động Y HỆT như nút refresh trong OrdersScreen
-            final orderListViewModel = getIt<OrderListViewModel>();
-            debugPrint('🔄 Tab Đơn hàng: Triggering refresh EXACTLY like OrdersScreen refresh button');
-            
-            // Gọi trực tiếp như nút refresh, không delay
-            orderListViewModel.superForceRefresh();
-            break;
-          case 2:
-            // Tab Tài khoản - force refresh như OrdersScreen
-            debugPrint('🔄 Tab Tài khoản: Force refreshing like OrdersScreen refresh button');
-            if (authViewModel.user != null) {
-              authViewModel.forceRefreshToken().then((success) {
-                debugPrint('🔄 Tab Tài khoản: Force refresh token result: $success');
-                if (success) {
-                  authViewModel.refreshDriverInfo();
-                }
-              });
-            }
-            break;
-        }
-      });
-    }
   }
 
   @override
@@ -138,7 +95,7 @@ class _MainScreenState extends State<MainScreen> {
       body: SafeArea(
         // Đặt bottom: false để không tạo padding dưới cùng (vì đã xử lý trong bottomNavigationBar)
         bottom: false,
-        child: IndexedStack(index: _selectedIndex, children: _screens),
+        child: _getCurrentScreen(),
       ),
       bottomNavigationBar: Container(
         color: Colors.white,
@@ -184,5 +141,4 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
-
-  }
+}

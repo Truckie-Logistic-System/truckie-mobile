@@ -104,6 +104,9 @@ Future<void> setupServiceLocator() async {
         () => VehicleWebSocketService(baseUrl: ApiConstants.wsBaseUrl),
       );
     }
+    
+    // NotificationService handles all notifications (seal, return goods, damage, etc.)
+    // No need for separate WebSocketService
 
     // Location tracking services - Simplified architecture
     // Only EnhancedLocationTrackingService and GlobalLocationManager are used

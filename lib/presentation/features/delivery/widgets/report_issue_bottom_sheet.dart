@@ -9,6 +9,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'report_seal_replacement_bottom_sheet.dart';
 import 'damage_report_bottom_sheet.dart';
+import 'penalty_report_bottom_sheet.dart';
 
 /// Bottom sheet widget để driver báo cáo issue
 class ReportIssueBottomSheet extends StatefulWidget {
@@ -166,6 +167,33 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
       // If issue was created successfully, refresh data
       if (result != null && mounted) {
         debugPrint('✅ Damage report created, refreshing data...');
+      }
+    } else if (selectedType.issueCategory == IssueCategory.penalty) {
+      debugPrint('🚨 PENALTY category detected, showing penalty report form');
+      
+      // Close current bottom sheet
+      Navigator.pop(context);
+      
+      // Show penalty report bottom sheet
+      debugPrint('📍 [ReportIssueBottomSheet] Opening penalty report with location:');
+      debugPrint('   - Latitude: ${widget.currentLocation?.latitude}');
+      debugPrint('   - Longitude: ${widget.currentLocation?.longitude}');
+      
+      final result = await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => PenaltyReportBottomSheet(
+          vehicleAssignmentId: widget.vehicleAssignmentId,
+          issueTypeId: issueTypeId,
+          currentLatitude: widget.currentLocation?.latitude,
+          currentLongitude: widget.currentLocation?.longitude,
+        ),
+      );
+
+      // If issue was created successfully, refresh data
+      if (result != null && mounted) {
+        debugPrint('✅ Penalty report created, refreshing data...');
       }
     } else {
       // For other categories, just update selected ID

@@ -281,4 +281,27 @@ class ApiClient implements IHttpClient {
       options: options,
     );
   }
+
+  /// Upload a file to the server
+  Future<Response> uploadFile(
+    String path,
+    dynamic file, {
+    String fieldName = 'file',
+    Map<String, dynamic>? additionalData,
+    Options? options,
+  }) async {
+    FormData formData = FormData.fromMap({
+      fieldName: await MultipartFile.fromFile(
+        file.path,
+        filename: file.path.split('/').last,
+      ),
+      if (additionalData != null) ...additionalData,
+    });
+
+    return dio.post(
+      path,
+      data: formData,
+      options: options,
+    );
+  }
 }

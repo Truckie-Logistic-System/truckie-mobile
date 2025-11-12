@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:get_it/get_it.dart';
 import 'enhanced_location_tracking_service.dart';
 import 'navigation_state_service.dart';
+import 'token_storage_service.dart';
 
 /// Global Location Manager - Quản lý location tracking xuyên suốt app lifecycle
 /// Đảm bảo WebSocket connection không bị ngắt khi navigate giữa các màn hình
@@ -556,10 +558,21 @@ class GlobalLocationManager {
       // Wait a moment
       await Future.delayed(const Duration(seconds: 1));
       
+      // Get latest token from TokenStorageService
+      final tokenStorage = GetIt.instance<TokenStorageService>();
+      final jwtToken = tokenStorage.getAccessToken();
+      
+      if (jwtToken == null) {
+        debugPrint('❌ Cannot reconnect: No access token available');
+        _trackingStateController.add('RECONNECT_FAILED');
+        return false;
+      }
+      
       // Restart tracking with SAME simulation mode
       final success = await _enhancedService.startTracking(
         vehicleId: _currentVehicleId!,
         licensePlateNumber: _currentLicensePlate!,
+        jwtToken: jwtToken,
         isSimulationMode: _isSimulationMode, // ✅ Restore simulation mode!
         onLocationUpdate: _handleGlobalLocationUpdate,
         onError: _handleGlobalError,
@@ -697,10 +710,20 @@ class GlobalLocationManager {
       // Try to reconnect with saved state
       debugPrint('🔄 Attempting to restore tracking for order: ${savedState.orderId}');
       
+      // Get latest token from TokenStorageService
+      final tokenStorage = GetIt.instance<TokenStorageService>();
+      final jwtToken = tokenStorage.getAccessToken();
+      
+      if (jwtToken == null) {
+        debugPrint('❌ Cannot restore navigation: No access token available');
+        return false;
+      }
+      
       final success = await startGlobalTracking(
         orderId: savedState.orderId,
         vehicleId: savedState.vehicleId ?? '',
         licensePlateNumber: savedState.licensePlate ?? '',
+        jwtToken: jwtToken,
         isSimulationMode: savedState.isSimulationMode,
         initiatingScreen: 'AutoRestore',
       );

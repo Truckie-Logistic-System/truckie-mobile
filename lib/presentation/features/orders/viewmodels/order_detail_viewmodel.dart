@@ -349,6 +349,37 @@ class OrderDetailViewModel extends BaseViewModel {
     return detailStatus == 'DELIVERED' || detailStatus == 'SUCCESSFUL';
   }
 
+  /// Kiểm tra xem có thể báo cáo người nhận từ chối nhận hàng không
+  /// Dựa trên OrderDetail Status của trip hiện tại
+  bool canReportOrderRejection() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      return false;
+    }
+    
+    // Có thể báo cáo từ chối khi:
+    // - IN_TRANSIT: đang trên đường giao hàng
+    // - ONGOING_DELIVERED: đã tới điểm giao, đang giao hàng
+    return detailStatus == 'IN_TRANSIT' || detailStatus == 'ONGOING_DELIVERED';
+  }
+
+  /// Kiểm tra xem có thể xác nhận trả hàng về pickup không
+  /// Dựa trên OrderDetail Status của trip hiện tại
+  bool canConfirmReturnDelivery() {
+    if (_orderWithDetails == null) return false;
+    
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      return false;
+    }
+    
+    // Có thể xác nhận trả hàng khi:
+    // - RETURN_IN_TRANSIT: đang trên đường trả hàng về pickup
+    return detailStatus == 'RETURN_IN_TRANSIT';
+  }
+
   /// Lấy vehicle assignment của driver hiện tại (primary driver)
   /// Dùng cho multi-trip orders để hiển thị đúng thông tin chuyến của driver
   VehicleAssignment? getCurrentUserVehicleAssignment() {

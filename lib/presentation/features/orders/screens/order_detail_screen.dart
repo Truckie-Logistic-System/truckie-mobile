@@ -16,6 +16,7 @@ import '../viewmodels/order_list_viewmodel.dart';
 import '../widgets/order_detail/index.dart';
 import '../widgets/order_detail/delivery_confirmation_section.dart';
 import '../widgets/order_detail/final_odometer_section.dart';
+import '../../../widgets/driver/return_delivery_confirmation_button.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -245,17 +246,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final bool canConfirmPreDelivery = viewModel.canConfirmPreDelivery();
     final bool canConfirmDelivery = viewModel.canConfirmDelivery();
     final bool canUploadFinalOdometer = viewModel.canUploadFinalOdometer();
+    final bool canReportOrderRejection = viewModel.canReportOrderRejection();
+    final bool canConfirmReturnDelivery = viewModel.canConfirmReturnDelivery();
     final bool hasRouteData = viewModel.routeSegments.isNotEmpty;
+
+    // Calculate bottom section height
+    final bool hasActionButtons = canStartDelivery || canConfirmPreDelivery || canConfirmDelivery || canUploadFinalOdometer || canReportOrderRejection || canConfirmReturnDelivery;
+    final double bottomPadding = hasActionButtons || hasRouteData ? 200 : 24;
 
     return Stack(
       children: [
         SingleChildScrollView(
           padding: SystemUiService.getContentPadding(context).copyWith(
-            bottom: (canStartDelivery || canConfirmPreDelivery || canConfirmDelivery || canUploadFinalOdometer)
-                ? 100
-                : (hasRouteData
-                      ? 70
-                      : 24), // Add extra padding at bottom when buttons are visible
+            bottom: bottomPadding, // Unified padding for bottom section
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,54 +348,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         ),
 
-        // Route Details / Navigation Button
-        // Always show if has route data, but behavior changes based on WebSocket status
+        // Route Button (separate background, above action buttons)
         if (hasRouteData)
           Positioned(
-            bottom: (canStartDelivery || canConfirmPreDelivery || canConfirmDelivery || canUploadFinalOdometer) ? 120 : 16,
+            bottom: hasActionButtons ? 120 : 16, // Position above action buttons
             right: 16,
             child: Builder(
               builder: (context) {
-                // Use GlobalLocationManager to check if tracking is active for this order
                 final isConnected = _globalLocationManager.isTrackingOrder(orderWithDetails.id);
-
                 return FloatingActionButton.extended(
                   onPressed: () {
                     if (isConnected) {
-                      // CRITICAL: Check if NavigationScreen exists in stack
-                      debugPrint('🔙 Returning to existing NavigationScreen');
-                      debugPrint('   - Current route stack:');
-                      
-                      // Check if NavigationScreen exists in the navigation stack
                       bool hasNavigationScreen = false;
                       Navigator.of(context).popUntil((route) {
-                        debugPrint('   - Checking route: ${route.settings.name}');
                         if (route.settings.name == AppRoutes.navigation) {
                           hasNavigationScreen = true;
-                          return true; // Stop here, found NavigationScreen
+                          return true;
                         }
-                        if (route.isFirst) {
-                          return true; // Stop at root
-                        }
-                        return false; // Keep checking
+                        if (route.isFirst) return true;
+                        return false;
                       });
-                      
-                      // If NavigationScreen not found, push a new one
                       if (!hasNavigationScreen) {
-                        debugPrint('⚠️ NavigationScreen not in stack, pushing new one');
                         Navigator.pushNamed(
                           context,
                           AppRoutes.navigation,
                           arguments: {
                             'orderId': orderWithDetails.id,
-                            'isSimulationMode': true, // Resume in simulation mode
+                            'isSimulationMode': true,
                           },
                         );
-                      } else {
-                        debugPrint('✅ Found and returned to NavigationScreen');
                       }
                     } else {
-                      // Go to route details to start navigation
                       Navigator.pushNamed(
                         context,
                         AppRoutes.routeDetails,
@@ -401,25 +387,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     }
                   },
                   heroTag: 'routeDetailsButton',
-                  backgroundColor: isConnected
-                      ? AppColors.success
-                      : AppColors.primary,
+                  backgroundColor: isConnected ? AppColors.success : AppColors.primary,
                   elevation: 4,
                   icon: Icon(
                     isConnected ? Icons.navigation : Icons.map_outlined,
                     color: Colors.white,
+                    size: 20,
                   ),
                   label: Text(
                     isConnected ? 'Dẫn đường' : 'Lộ trình',
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 );
               },
             ),
           ),
 
-        // Action Buttons Row (white background)
-        if (canStartDelivery || canConfirmPreDelivery || canConfirmDelivery || canUploadFinalOdometer)
+        // Action Buttons Section (separate background)
+        if (hasActionButtons)
           Positioned(
             bottom: 0,
             left: 0,
@@ -444,60 +433,117 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 top: 12,
                 bottom: 12 + MediaQuery.of(context).padding.bottom,
               ),
-              child: canStartDelivery
-                  ? StartDeliverySection(order: orderWithDetails)
-                  : canUploadFinalOdometer
-                      ? FinalOdometerSection(order: orderWithDetails)
-                      : canConfirmDelivery
-                          ? Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                DeliveryConfirmationSection(order: orderWithDetails),
-                                if (orderWithDetails.orderDetails.isNotEmpty)
-                                  DamageReportWithLocation(
-                                    order: orderWithDetails,
-                                    onReported: _loadOrderDetails,
-                                  ),
-                              ],
-                            )
-                          : ElevatedButton(
-                      onPressed: () async {
-                        // Kiểm tra driver role trước khi cho phép thực hiện action
-                        if (!DriverRoleChecker.canPerformActions(orderWithDetails, _authViewModel)) {
-                          // Không hiển thị thông báo, chỉ return để thân thiện với user
-                          return;
-                        }
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Action Buttons
+                  if (hasActionButtons)
+                    canStartDelivery
+                        ? StartDeliverySection(order: orderWithDetails)
+                        : canUploadFinalOdometer
+                            ? FinalOdometerSection(order: orderWithDetails)
+                            : canConfirmDelivery
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Nút xác nhận giao hàng (ONGOING_DELIVERED)
+                                      DeliveryConfirmationSection(order: orderWithDetails),
+                                      if (orderWithDetails.orderDetails.isNotEmpty) ...[  
+                                        const SizedBox(height: 8),
+                                        // Nút báo cáo hàng hư hại
+                                        DamageReportWithLocation(
+                                          order: orderWithDetails,
+                                          onReported: _loadOrderDetails,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        // Nút báo cáo người nhận từ chối
+                                        OrderRejectionWithLocation(
+                                          order: orderWithDetails,
+                                          onReported: _loadOrderDetails,
+                                        ),
+                                      ],
+                                    ],
+                                  )
+                                : canReportOrderRejection
+                                    ? Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Nút báo cáo người nhận từ chối (IN_TRANSIT only)
+                                          OrderRejectionWithLocation(
+                                            order: orderWithDetails,
+                                            onReported: _loadOrderDetails,
+                                          ),
+                                        ],
+                                      )
+                                    : canConfirmReturnDelivery
+                                        ? Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              // Return delivery confirmation section
+                                              Text(
+                                                'Xác nhận trả hàng về pickup',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Chụp ảnh xác nhận trả hàng về điểm lấy hàng',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              ReturnDeliveryConfirmationButton(
+                                                issue: orderWithDetails.orderRejectionIssue!,
+                                                onConfirmed: _loadOrderDetails,
+                                                issueRepository: getIt(),
+                                              ),
+                                            ],
+                                          )
+                                    : ElevatedButton(
+                                        onPressed: () async {
+                                          // Kiểm tra driver role trước khi cho phép thực hiện action
+                                          if (!DriverRoleChecker.canPerformActions(orderWithDetails, _authViewModel)) {
+                                            // Không hiển thị thông báo, chỉ return để thân thiện với user
+                                            return;
+                                          }
 
-                        final result = await Navigator.pushNamed(
-                          context,
-                          AppRoutes.preDeliveryDocumentation,
-                          arguments: orderWithDetails,
-                        );
+                                          final result = await Navigator.pushNamed(
+                                            context,
+                                            AppRoutes.preDeliveryDocumentation,
+                                            arguments: orderWithDetails,
+                                          );
 
-                        if (result == true) {
-                          // Reload order details to reflect status change
-                          _loadOrderDetails();
+                                          if (result == true) {
+                                            // Reload order details to reflect status change
+                                            _loadOrderDetails();
 
-                          // If tracking is active, just pop back to NavigationScreen
-                          // DO NOT create new NavigationScreen with pushNamed
-                          if (_globalLocationManager.isGlobalTrackingActive &&
-                              _globalLocationManager.currentOrderId == orderWithDetails.id) {
-                            debugPrint('✅ Seal confirmed, popping back to NavigationScreen with result = true');
-                            Navigator.of(context).pop(true); // Pop with result to signal resume
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      child: const Text('Xác nhận hàng hóa và seal'),
-                    ),
+                                            // If tracking is active, just pop back to NavigationScreen
+                                            // DO NOT create new NavigationScreen with pushNamed
+                                            if (_globalLocationManager.isGlobalTrackingActive &&
+                                                _globalLocationManager.currentOrderId == orderWithDetails.id) {
+                                              debugPrint('✅ Seal confirmed, popping back to NavigationScreen with result = true');
+                                              Navigator.of(context).pop(true); // Pop with result to signal resume
+                                            }
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 16),
+                                          textStyle: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        child: const Text('Xác nhận hàng hóa và seal'),
+                                      ),
+                ],
+              ),
             ),
           ),
       ],

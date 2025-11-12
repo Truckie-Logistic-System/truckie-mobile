@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 
 import 'order.dart';
 import 'order_detail.dart';
+import 'order_rejection_issue.dart';
 
 class OrderWithDetails extends Equatable {
   final String id;
@@ -22,6 +23,7 @@ class OrderWithDetails extends Equatable {
   final String categoryName;
   final List<OrderDetail> orderDetails;
   final List<VehicleAssignment> vehicleAssignments; // Moved from orderDetail level
+  final OrderRejectionIssue? orderRejectionIssue; // ORDER_REJECTION issue info if exists
 
   const OrderWithDetails({
     required this.id,
@@ -42,6 +44,7 @@ class OrderWithDetails extends Equatable {
     required this.categoryName,
     required this.orderDetails,
     this.vehicleAssignments = const [], // Default empty list
+    this.orderRejectionIssue, // Optional
   });
 
   @override
@@ -64,6 +67,7 @@ class OrderWithDetails extends Equatable {
     categoryName,
     orderDetails,
     vehicleAssignments,
+    orderRejectionIssue,
   ];
 
   // Chuyển đổi từ OrderWithDetails sang Order

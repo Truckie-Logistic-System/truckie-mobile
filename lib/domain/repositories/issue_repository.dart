@@ -63,4 +63,34 @@ abstract class IssueRepository {
     double? locationLatitude,
     double? locationLongitude,
   });
+
+  /// Report traffic penalty violation issue (Driver)
+  Future<void> reportPenaltyIssue({
+    required String vehicleAssignmentId,
+    required String issueTypeId,
+    required String violationType,
+    required String violationImagePath,
+    double? locationLatitude,
+    double? locationLongitude,
+  });
+
+  // ===== ORDER_REJECTION flow methods =====
+
+  /// Report order rejection by recipient (Driver)
+  /// Driver selects packages to return, server auto-fills issue type and description
+  Future<Issue> reportOrderRejection({
+    required String vehicleAssignmentId,
+    required List<String> orderDetailIds,
+    double? locationLatitude,
+    double? locationLongitude,
+  });
+
+  /// Get ORDER_REJECTION issue detail
+  Future<dynamic> getOrderRejectionDetail(String issueId);
+
+  /// Confirm return delivery at pickup location (Driver)
+  Future<Issue> confirmReturnDelivery({
+    required String issueId,
+    required List<dynamic> returnDeliveryImages,
+  });
 }
