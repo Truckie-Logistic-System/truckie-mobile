@@ -115,11 +115,17 @@ class VehicleAssignmentModel extends VehicleAssignment {
     required super.trackingCode,
     required List<JourneyHistoryModel> super.journeyHistories,
     List<OrderSealModel> super.orderSeals = const [],
+    List<VehicleIssueModel> super.issues = const [],
+    List<PhotoCompletionModel> super.photoCompletions = const [],
+    List<VehicleSealModel> super.seals = const [],
   });
 
   factory VehicleAssignmentModel.fromJson(Map<String, dynamic> json) {
-    // Handle both 'seals' (new format) and 'orderSeals' (old format)
-    final sealsJson = json['seals'] ?? json['orderSeals'] ?? [];
+    // Handle both 'seals' (new format) and 'orderSeals' (old format for backwards compatibility)
+    final orderSealsJson = json['orderSeals'] ?? [];
+    final sealsJson = json['seals'] ?? [];
+    final issuesJson = json['issues'] ?? [];
+    final photoCompletionsJson = json['photoCompletions'] ?? [];
     
     return VehicleAssignmentModel(
       id: json['id'] ?? '',
@@ -140,8 +146,23 @@ class VehicleAssignmentModel extends VehicleAssignment {
               .toList() ??
           [],
       orderSeals:
-          (sealsJson as List<dynamic>?)
+          (orderSealsJson as List<dynamic>?)
               ?.map((e) => OrderSealModel.fromJson(e))
+              .toList() ??
+          [],
+      issues:
+          (issuesJson as List<dynamic>?)
+              ?.map((e) => VehicleIssueModel.fromJson(e))
+              .toList() ??
+          [],
+      photoCompletions:
+          (photoCompletionsJson as List<dynamic>?)
+              ?.map((e) => PhotoCompletionModel.fromJson(e))
+              .toList() ??
+          [],
+      seals:
+          (sealsJson as List<dynamic>?)
+              ?.map((e) => VehicleSealModel.fromJson(e))
               .toList() ??
           [],
     );
@@ -164,6 +185,15 @@ class VehicleAssignmentModel extends VehicleAssignment {
           .toList(),
       'orderSeals': orderSeals
           .map((e) => (e as OrderSealModel).toJson())
+          .toList(),
+      'issues': issues
+          .map((e) => (e as VehicleIssueModel).toJson())
+          .toList(),
+      'photoCompletions': photoCompletions
+          .map((e) => (e as PhotoCompletionModel).toJson())
+          .toList(),
+      'seals': seals
+          .map((e) => (e as VehicleSealModel).toJson())
           .toList(),
     };
   }
@@ -314,12 +344,12 @@ class JourneySegmentModel extends JourneySegment {
       segmentOrder: json['segmentOrder'] ?? 0,
       startPointName: json['startPointName'] ?? '',
       endPointName: json['endPointName'] ?? '',
-      startLatitude: json['startLatitude']?.toDouble() ?? 0.0,
-      startLongitude: json['startLongitude']?.toDouble() ?? 0.0,
-      endLatitude: json['endLatitude']?.toDouble() ?? 0.0,
-      endLongitude: json['endLongitude']?.toDouble() ?? 0.0,
+      startLatitude: json['startLatitude']?.toDouble(),
+      startLongitude: json['startLongitude']?.toDouble(),
+      endLatitude: json['endLatitude']?.toDouble(),
+      endLongitude: json['endLongitude']?.toDouble(),
       distanceMeters: json['distanceMeters'] ?? 0,
-      pathCoordinatesJson: json['pathCoordinatesJson'] ?? '',
+      pathCoordinatesJson: json['pathCoordinatesJson'],
       status: json['status'] ?? '',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
@@ -391,6 +421,168 @@ class OrderSealModel extends OrderSeal {
       'sealAttachedImage': sealAttachedImage,
       'sealRemovalTime': sealRemovalTime?.toIso8601String(),
       'sealRemovalReason': sealRemovalReason,
+    };
+  }
+}
+
+class VehicleIssueModel extends VehicleIssue {
+  const VehicleIssueModel({
+    required super.id,
+    required super.description,
+    super.locationLatitude,
+    super.locationLongitude,
+    required super.status,
+    required super.vehicleAssignmentId,
+    super.staff,
+    required super.issueTypeName,
+    super.issueTypeDescription,
+    super.reportedAt,
+    required super.issueCategory,
+    super.issueImages = const [],
+    super.oldSeal,
+    super.newSeal,
+    super.sealRemovalImage,
+    super.newSealAttachedImage,
+    super.newSealConfirmedAt,
+    super.paymentDeadline,
+    super.calculatedFee,
+    super.adjustedFee,
+    super.finalFee,
+    super.affectedOrderDetails,
+    super.refund,
+    super.transaction,
+  });
+
+  factory VehicleIssueModel.fromJson(Map<String, dynamic> json) {
+    return VehicleIssueModel(
+      id: json['id'] ?? '',
+      description: json['description'] ?? '',
+      locationLatitude: json['locationLatitude']?.toDouble(),
+      locationLongitude: json['locationLongitude']?.toDouble(),
+      status: json['status'] ?? '',
+      vehicleAssignmentId: json['vehicleAssignmentId'] ?? '',
+      staff: json['staff'],
+      issueTypeName: json['issueTypeName'] ?? '',
+      issueTypeDescription: json['issueTypeDescription'],
+      reportedAt: json['reportedAt'] != null
+          ? DateTime.parse(json['reportedAt'])
+          : null,
+      issueCategory: json['issueCategory'] ?? '',
+      issueImages: (json['issueImages'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList() ?? [],
+      oldSeal: json['oldSeal'],
+      newSeal: json['newSeal'],
+      sealRemovalImage: json['sealRemovalImage'],
+      newSealAttachedImage: json['newSealAttachedImage'],
+      newSealConfirmedAt: json['newSealConfirmedAt'] != null
+          ? DateTime.parse(json['newSealConfirmedAt'])
+          : null,
+      paymentDeadline: json['paymentDeadline'] != null
+          ? DateTime.parse(json['paymentDeadline'])
+          : null,
+      calculatedFee: json['calculatedFee']?.toDouble(),
+      adjustedFee: json['adjustedFee']?.toDouble(),
+      finalFee: json['finalFee']?.toDouble(),
+      affectedOrderDetails: json['affectedOrderDetails'],
+      refund: json['refund'],
+      transaction: json['transaction'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'description': description,
+      'locationLatitude': locationLatitude,
+      'locationLongitude': locationLongitude,
+      'status': status,
+      'vehicleAssignmentId': vehicleAssignmentId,
+      'staff': staff,
+      'issueTypeName': issueTypeName,
+      'issueTypeDescription': issueTypeDescription,
+      'reportedAt': reportedAt?.toIso8601String(),
+      'issueCategory': issueCategory,
+      'issueImages': issueImages,
+      'oldSeal': oldSeal,
+      'newSeal': newSeal,
+      'sealRemovalImage': sealRemovalImage,
+      'newSealAttachedImage': newSealAttachedImage,
+      'newSealConfirmedAt': newSealConfirmedAt?.toIso8601String(),
+      'paymentDeadline': paymentDeadline?.toIso8601String(),
+      'calculatedFee': calculatedFee,
+      'adjustedFee': adjustedFee,
+      'finalFee': finalFee,
+      'affectedOrderDetails': affectedOrderDetails,
+      'refund': refund,
+      'transaction': transaction,
+    };
+  }
+}
+
+class PhotoCompletionModel extends PhotoCompletion {
+  const PhotoCompletionModel({
+    required super.id,
+    required super.imageUrl,
+    super.description,
+    super.createdAt,
+    required super.vehicleAssignmentId,
+  });
+
+  factory PhotoCompletionModel.fromJson(Map<String, dynamic> json) {
+    return PhotoCompletionModel(
+      id: json['id'] ?? '',
+      imageUrl: json['imageUrl'] ?? '',
+      description: json['description'],
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      vehicleAssignmentId: json['vehicleAssignmentId'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'imageUrl': imageUrl,
+      'description': description,
+      'createdAt': createdAt?.toIso8601String(),
+      'vehicleAssignmentId': vehicleAssignmentId,
+    };
+  }
+}
+
+class VehicleSealModel extends VehicleSeal {
+  const VehicleSealModel({
+    required super.id,
+    required super.description,
+    required super.sealDate,
+    required super.status,
+    required super.sealCode,
+    super.sealAttachedImage,
+  });
+
+  factory VehicleSealModel.fromJson(Map<String, dynamic> json) {
+    return VehicleSealModel(
+      id: json['id'] ?? '',
+      description: json['description'] ?? '',
+      sealDate: json['sealDate'] != null
+          ? DateTime.parse(json['sealDate'])
+          : DateTime.now(),
+      status: json['status'] ?? '',
+      sealCode: json['sealCode'] ?? '',
+      sealAttachedImage: json['sealAttachedImage'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'description': description,
+      'sealDate': sealDate.toIso8601String(),
+      'status': status,
+      'sealCode': sealCode,
+      'sealAttachedImage': sealAttachedImage,
     };
   }
 }

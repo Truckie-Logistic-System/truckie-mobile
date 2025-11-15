@@ -12,6 +12,9 @@ class VietMapService {
   String? _cachedStyle;
   DateTime? _cacheTimestamp;
 
+  // Cache for reverse geocoding (address from lat/lng)
+  final Map<String, String> _addressCache = {};
+
   VietMapService({required IHttpClient apiClient}) : _apiClient = apiClient;
 
   // Lấy style map từ API backend
@@ -141,5 +144,50 @@ class VietMapService {
     } catch (e) {
       debugPrint('Lỗi khi xóa cache style map: $e');
     }
+  }
+
+  // Reverse geocoding: convert lat/lng thành địa chỉ
+  Future<String?> reverseGeocode(double latitude, double longitude) async {
+    // Create cache key from coordinates (rounded to 5 decimal places for cache key)
+    final cacheKey = '${latitude.toStringAsFixed(5)}_${longitude.toStringAsFixed(5)}';
+    
+    // Check cache first
+    if (_addressCache.containsKey(cacheKey)) {
+      debugPrint('🗺️ Using cached address for: $latitude, $longitude');
+      return _addressCache[cacheKey];
+    }
+
+    try {
+      debugPrint('🗺️ Reverse geocoding: $latitude, $longitude');
+      final response = await _apiClient.dio.get(
+        '/vietmap/reverse',
+        queryParameters: {
+          'lat': latitude,
+          'lng': longitude,
+        },
+      );
+
+      // Response is an array, get first item's display field
+      if (response.data != null && response.data is List && (response.data as List).isNotEmpty) {
+        final firstResult = (response.data as List)[0];
+        final address = firstResult['display'];
+        debugPrint('✅ Địa chỉ: $address');
+        
+        // Cache the address
+        _addressCache[cacheKey] = address;
+        
+        return address;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Lỗi reverse geocoding: $e');
+      return null;
+    }
+  }
+
+  // Get cached address without API call
+  String? getCachedAddress(double latitude, double longitude) {
+    final cacheKey = '${latitude.toStringAsFixed(5)}_${longitude.toStringAsFixed(5)}';
+    return _addressCache[cacheKey];
   }
 }

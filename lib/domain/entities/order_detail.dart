@@ -91,7 +91,10 @@ class VehicleAssignment extends Equatable {
   final String status;
   final String trackingCode;
   final List<JourneyHistory> journeyHistories;
-  final List<OrderSeal> orderSeals;
+  final List<OrderSeal> orderSeals; // Deprecated, use seals instead
+  final List<VehicleIssue> issues; // New field for issues in this vehicle assignment
+  final List<PhotoCompletion> photoCompletions; // New field for photo completions
+  final List<VehicleSeal> seals; // New field for seals (replaces orderSeals)
 
   const VehicleAssignment({
     required this.id,
@@ -101,7 +104,10 @@ class VehicleAssignment extends Equatable {
     required this.status,
     required this.trackingCode,
     required this.journeyHistories,
-    this.orderSeals = const [],
+    this.orderSeals = const [], // Deprecated
+    this.issues = const [],
+    this.photoCompletions = const [],
+    this.seals = const [],
   });
 
   @override
@@ -114,6 +120,9 @@ class VehicleAssignment extends Equatable {
     trackingCode,
     journeyHistories,
     orderSeals,
+    issues,
+    photoCompletions,
+    seals,
   ];
 }
 
@@ -208,12 +217,12 @@ class JourneySegment extends Equatable {
   final int segmentOrder;
   final String startPointName;
   final String endPointName;
-  final double startLatitude;
-  final double startLongitude;
-  final double endLatitude;
-  final double endLongitude;
+  final double? startLatitude; // Nullable for return journey segments
+  final double? startLongitude; // Nullable for return journey segments
+  final double? endLatitude; // Nullable for return journey segments
+  final double? endLongitude; // Nullable for return journey segments
   final int distanceMeters;
-  final String pathCoordinatesJson;
+  final String? pathCoordinatesJson; // Nullable for return journey segments
   final String status;
   final DateTime createdAt;
   final DateTime modifiedAt;
@@ -223,12 +232,12 @@ class JourneySegment extends Equatable {
     required this.segmentOrder,
     required this.startPointName,
     required this.endPointName,
-    required this.startLatitude,
-    required this.startLongitude,
-    required this.endLatitude,
-    required this.endLongitude,
+    this.startLatitude,
+    this.startLongitude,
+    this.endLatitude,
+    this.endLongitude,
     required this.distanceMeters,
-    required this.pathCoordinatesJson,
+    this.pathCoordinatesJson,
     required this.status,
     required this.createdAt,
     required this.modifiedAt,
@@ -292,5 +301,153 @@ class OrderSeal extends Equatable {
     sealAttachedImage,
     sealRemovalTime,
     sealRemovalReason,
+  ];
+}
+
+/// VehicleIssue - Issue attached to a vehicle assignment
+class VehicleIssue extends Equatable {
+  final String id;
+  final String description;
+  final double? locationLatitude;
+  final double? locationLongitude;
+  final String status; // OPEN, IN_PROGRESS, RESOLVED
+  final String vehicleAssignmentId;
+  final dynamic staff; // Can be null or staff object
+  final String issueTypeName;
+  final String? issueTypeDescription; // Description from IssueType
+  final DateTime? reportedAt; // When the issue was reported
+  final String issueCategory; // ORDER_REJECTION, SEAL_REPLACEMENT, etc.
+  final List<String> issueImages;
+  
+  // Seal replacement fields
+  final dynamic oldSeal;
+  final dynamic newSeal;
+  final String? sealRemovalImage;
+  final String? newSealAttachedImage;
+  final DateTime? newSealConfirmedAt;
+  
+  // Order rejection fields
+  final DateTime? paymentDeadline;
+  final double? calculatedFee;
+  final double? adjustedFee;
+  final double? finalFee;
+  final dynamic affectedOrderDetails;
+  final dynamic refund;
+  final dynamic transaction;
+
+  const VehicleIssue({
+    required this.id,
+    required this.description,
+    this.locationLatitude,
+    this.locationLongitude,
+    required this.status,
+    required this.vehicleAssignmentId,
+    this.staff,
+    required this.issueTypeName,
+    this.issueTypeDescription,
+    this.reportedAt,
+    required this.issueCategory,
+    this.issueImages = const [],
+    this.oldSeal,
+    this.newSeal,
+    this.sealRemovalImage,
+    this.newSealAttachedImage,
+    this.newSealConfirmedAt,
+    this.paymentDeadline,
+    this.calculatedFee,
+    this.adjustedFee,
+    this.finalFee,
+    this.affectedOrderDetails,
+    this.refund,
+    this.transaction,
+  });
+
+  @override
+  List<Object?> get props => [
+    id,
+    description,
+    locationLatitude,
+    locationLongitude,
+    status,
+    vehicleAssignmentId,
+    staff,
+    issueTypeName,
+    issueTypeDescription,
+    reportedAt,
+    issueCategory,
+    issueImages,
+    oldSeal,
+    newSeal,
+    sealRemovalImage,
+    newSealAttachedImage,
+    newSealConfirmedAt,
+    paymentDeadline,
+    calculatedFee,
+    adjustedFee,
+    finalFee,
+    affectedOrderDetails,
+    refund,
+    transaction,
+  ];
+}
+
+/// PhotoCompletion - Completion photo for delivery
+class PhotoCompletion extends Equatable {
+  final String id;
+  final String imageUrl;
+  final String? description;
+  final DateTime? createdAt;
+  final String vehicleAssignmentId;
+
+  const PhotoCompletion({
+    required this.id,
+    required this.imageUrl,
+    this.description,
+    this.createdAt,
+    required this.vehicleAssignmentId,
+  });
+
+  @override
+  List<Object?> get props => [
+    id,
+    imageUrl,
+    description,
+    createdAt,
+    vehicleAssignmentId,
+  ];
+}
+
+/// VehicleSeal - Seal attached to a vehicle (replaces OrderSeal)
+class VehicleSeal extends Equatable {
+  final String id;
+  final String description;
+  final DateTime sealDate;
+  final String status; // ACTIVE, IN_USE, REMOVED, etc.
+  final String sealCode;
+  final String? sealAttachedImage;
+
+  const VehicleSeal({
+    required this.id,
+    required this.description,
+    required this.sealDate,
+    required this.status,
+    required this.sealCode,
+    this.sealAttachedImage,
+  });
+
+  bool get isActive => status == 'ACTIVE';
+  bool get isInUse => status == 'IN_USE';
+  bool get isInUsed => status == 'IN_USE'; // Alias for backward compatibility
+  bool get isRemoved => status == 'REMOVED';
+  bool get canBeSelected => status == 'ACTIVE';
+
+  @override
+  List<Object?> get props => [
+    id,
+    description,
+    sealDate,
+    status,
+    sealCode,
+    sealAttachedImage,
   ];
 }

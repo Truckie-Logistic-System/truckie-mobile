@@ -7,8 +7,8 @@ import '../../../../../presentation/theme/app_text_styles.dart';
 
 /// Widget hiển thị thông tin seal của chuyến xe
 class SealInfoSection extends StatelessWidget {
-  /// Danh sách seal của chuyến xe
-  final List<OrderSeal> seals;
+  /// Danh sách seal của chuyến xe (VehicleSeal - new format from API)
+  final List<VehicleSeal> seals;
 
   const SealInfoSection({super.key, required this.seals});
 
@@ -53,7 +53,7 @@ class SealInfoSection extends StatelessWidget {
     );
   }
 
-  Widget _buildSealItem(OrderSeal seal) {
+  Widget _buildSealItem(VehicleSeal seal) {
     final statusColor = _getStatusColor(seal.status);
     final statusLabel = _getStatusLabel(seal.status);
 
@@ -104,35 +104,26 @@ class SealInfoSection extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-
-          // Removal info if seal was removed
-          if (seal.sealRemovalTime != null) ...[
+          
+          // Seal attached image (if available)
+          if (seal.sealAttachedImage != null) ...[
             SizedBox(height: 8.h),
-            Container(
-              padding: EdgeInsets.all(8.r),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6.r),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Thời gian gỡ: ${_formatDateTime(seal.sealRemovalTime!)}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.red[700],
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8.r),
+              child: Image.network(
+                seal.sealAttachedImage!,
+                height: 120.h,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 120.h,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
                     ),
-                  ),
-                  if (seal.sealRemovalReason != null && seal.sealRemovalReason!.isNotEmpty) ...[
-                    SizedBox(height: 4.h),
-                    Text(
-                      'Lý do: ${seal.sealRemovalReason}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.red[700],
-                      ),
-                    ),
-                  ],
-                ],
+                  );
+                },
               ),
             ),
           ],

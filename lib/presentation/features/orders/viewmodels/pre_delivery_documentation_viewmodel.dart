@@ -13,13 +13,13 @@ class PreDeliveryDocumentationViewModel extends ChangeNotifier {
   String _errorMessage = '';
   List<File> _packingProofImages = [];
   File? _sealImage;
-  OrderSeal? _selectedSeal;
+  VehicleSeal? _selectedSeal;
 
   PreDeliveryDocumentationState get state => _state;
   String get errorMessage => _errorMessage;
   List<File> get packingProofImages => _packingProofImages;
   File? get sealImage => _sealImage;
-  OrderSeal? get selectedSeal => _selectedSeal;
+  VehicleSeal? get selectedSeal => _selectedSeal;
 
   PreDeliveryDocumentationViewModel({
     required DocumentLoadingAndSealUseCase documentLoadingAndSealUseCase,
@@ -42,7 +42,7 @@ class PreDeliveryDocumentationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSelectedSeal(OrderSeal? seal) {
+  void setSelectedSeal(VehicleSeal? seal) {
     _selectedSeal = seal;
     notifyListeners();
   }

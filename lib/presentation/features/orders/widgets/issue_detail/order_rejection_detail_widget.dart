@@ -1,0 +1,395 @@
+import 'package:flutter/material.dart';
+import '../../../../../domain/entities/order_detail.dart';
+
+/// Widget hiển thị chi tiết người nhận từ chối cho driver
+/// Driver chỉ xem thông tin cơ bản, KHÔNG có thông tin về pricing/routing
+class OrderRejectionDetailWidget extends StatelessWidget {
+  final VehicleIssue issue;
+
+  const OrderRejectionDetailWidget({
+    Key? key,
+    required this.issue,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Status-based info banner
+        _buildStatusBanner(),
+        const SizedBox(height: 16),
+
+        // Affected packages
+        if (issue.affectedOrderDetails != null) ...[
+          _buildAffectedPackages(),
+          const SizedBox(height: 16),
+        ],
+
+        // Transaction status (if available)
+        if (issue.transaction != null) ...[
+          _buildTransactionStatus(),
+        ],
+      ],
+    );
+  }
+
+  /// Build status banner based on issue status
+  Widget _buildStatusBanner() {
+    IconData icon;
+    Color color;
+    String title;
+    String description;
+
+    switch (issue.status) {
+      case 'OPEN':
+        icon = Icons.hourglass_empty;
+        color = Colors.orange;
+        title = 'Chờ xử lý';
+        description =
+            'Người nhận đã từ chối nhận hàng. Nhân viên đang xử lý lộ trình trả hàng.';
+        break;
+      case 'IN_PROGRESS':
+        // Check if payment has been made
+        final hasTransaction = issue.transaction != null;
+        if (hasTransaction) {
+          final transactionStatus = issue.transaction?['status'] ?? '';
+          if (transactionStatus == 'COMPLETED') {
+            icon = Icons.local_shipping;
+            color = Colors.blue;
+            title = 'Sẵn sàng trả hàng';
+            description =
+                'Khách hàng đã thanh toán phí trả hàng. Vui lòng thực hiện trả hàng theo lộ trình.';
+          } else {
+            icon = Icons.payment;
+            color = Colors.amber;
+            title = 'Chờ thanh toán';
+            description =
+                'Đang chờ khách hàng thanh toán cước phí trả hàng.';
+          }
+        } else {
+          icon = Icons.payment;
+          color = Colors.amber;
+          title = 'Chờ thanh toán';
+          description =
+              'Đang chờ khách hàng thanh toán cước phí trả hàng.';
+        }
+        break;
+      case 'RESOLVED':
+        icon = Icons.check_circle;
+        color = Colors.green;
+        title = 'Đã hoàn thành';
+        description = 'Đã trả hàng về điểm lấy hàng thành công.';
+        break;
+      default:
+        icon = Icons.info;
+        color = Colors.blue;
+        title = 'Thông tin';
+        description = 'Vui lòng liên hệ điều phối viên để biết thêm chi tiết.';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build affected packages list
+  Widget _buildAffectedPackages() {
+    final packages = issue.affectedOrderDetails;
+    if (packages == null) return const SizedBox.shrink();
+
+    // Parse the packages - could be a list or a single item
+    List<dynamic> packageList = [];
+    if (packages is List) {
+      packageList = packages;
+    } else if (packages is Map) {
+      packageList = [packages];
+    }
+
+    if (packageList.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2,
+                    color: Colors.red,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Kiện hàng cần trả (${packageList.length} kiện)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Package list
+            ...packageList.asMap().entries.map((entry) {
+              final index = entry.key;
+              final pkg = entry.value;
+              final trackingCode = pkg['trackingCode'] ?? 'N/A';
+              final description = pkg['description'];
+              final weight = pkg['weightBaseUnit'];
+              final unit = pkg['unit'] ?? 'kg';
+
+              return Container(
+                margin: EdgeInsets.only(bottom: index < packageList.length - 1 ? 12 : 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tracking code
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            trackingCode,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (weight != null) ...[
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '$weight $unit',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (description != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build transaction status
+  Widget _buildTransactionStatus() {
+    final transaction = issue.transaction;
+    if (transaction == null) return const SizedBox.shrink();
+
+    final status = transaction['status'] ?? '';
+    final amount = transaction['amount'];
+
+    Color statusColor;
+    String statusLabel;
+    IconData statusIcon;
+
+    switch (status) {
+      case 'COMPLETED':
+        statusColor = Colors.green;
+        statusLabel = 'Đã thanh toán';
+        statusIcon = Icons.check_circle;
+        break;
+      case 'PENDING':
+        statusColor = Colors.orange;
+        statusLabel = 'Chờ thanh toán';
+        statusIcon = Icons.hourglass_empty;
+        break;
+      case 'FAILED':
+        statusColor = Colors.red;
+        statusLabel = 'Thanh toán thất bại';
+        statusIcon = Icons.error;
+        break;
+      default:
+        statusColor = Colors.grey;
+        statusLabel = status;
+        statusIcon = Icons.info;
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.payment,
+                    color: statusColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Trạng thái thanh toán',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: statusColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(statusIcon, color: statusColor, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (status == 'COMPLETED' && issue.paymentDeadline != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Khách hàng đã thanh toán. Bạn có thể bắt đầu trả hàng.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

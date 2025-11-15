@@ -164,9 +164,10 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
         ),
       );
 
-      // If issue was created successfully, refresh data
-      if (result != null && mounted) {
-        debugPrint('✅ Damage report created, refreshing data...');
+      // If damage report was created successfully, close report issue sheet and notify parent
+      if (result == true && mounted) {
+        debugPrint('✅ Damage report created, closing report issue sheet...');
+        Navigator.pop(context, true); // Close report issue bottom sheet and return success
       }
     } else if (selectedType.issueCategory == IssueCategory.penalty) {
       debugPrint('🚨 PENALTY category detected, showing penalty report form');

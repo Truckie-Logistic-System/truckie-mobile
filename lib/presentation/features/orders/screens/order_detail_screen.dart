@@ -16,6 +16,7 @@ import '../viewmodels/order_list_viewmodel.dart';
 import '../widgets/order_detail/index.dart';
 import '../widgets/order_detail/delivery_confirmation_section.dart';
 import '../widgets/order_detail/final_odometer_section.dart';
+import '../widgets/order_detail/issue_location_widget.dart';
 import '../../../widgets/driver/return_delivery_confirmation_button.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -250,9 +251,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final bool canConfirmReturnDelivery = viewModel.canConfirmReturnDelivery();
     final bool hasRouteData = viewModel.routeSegments.isNotEmpty;
     
-    // Check if navigation button should be shown (from PICKING_UP to final status)
+    // Count issues for tab badge
+    int totalIssues = 0;
+    for (var va in orderWithDetails.vehicleAssignments) {
+      totalIssues += va.issues.length;
+    }
+    
+    // Check if navigation button should be shown (from FULLY_PAID to final status)
     final orderStatus = OrderStatus.fromString(orderWithDetails.status);
-    final bool shouldShowNavigationButton = orderStatus == OrderStatus.pickingUp ||
+    final bool shouldShowNavigationButton = orderStatus == OrderStatus.fullyPaid ||
+        orderStatus == OrderStatus.pickingUp ||
         orderStatus == OrderStatus.onDelivered ||
         orderStatus == OrderStatus.ongoingDelivered ||
         orderStatus == OrderStatus.delivered ||
@@ -269,94 +277,65 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     return Stack(
       children: [
-        SingleChildScrollView(
-          padding: SystemUiService.getContentPadding(context).copyWith(
-            bottom: bottomPadding, // Unified padding for bottom section
-          ),
+        DefaultTabController(
+          length: 4,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thông tin cơ bản đơn hàng
-              OrderInfoSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Mã đơn hàng
-              TrackingCodeSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Địa chỉ lấy/giao hàng
-              AddressSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Thời gian dự kiến
-              JourneyTimeSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Thông tin người gửi
-              SenderSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Thông tin người nhận
-              ReceiverSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Thông tin hàng hóa
-              PackageSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Chi tiết đơn hàng + Vehicle Assignment + Tài xế
-              OrderDetailsSection(order: orderWithDetails),
-              SizedBox(height: 16),
-
-              // Journey info section (khoảng cách, phí cầu đường, v.v.)
-              // For multi-trip orders: show only current driver's trip info
-              if (orderWithDetails.vehicleAssignments.isNotEmpty) ...[
-                Builder(
-                  builder: (context) {
-                    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
-                    if (currentUserVehicleAssignment != null && 
-                        currentUserVehicleAssignment.journeyHistories.isNotEmpty) {
-                      return Column(
+              // Tab Bar
+              Container(
+                color: AppColors.primary,
+                child: TabBar(
+                  indicatorColor: Colors.white,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  tabs: [
+                    Tab(text: 'Thông tin'),
+                    Tab(text: 'Hàng hóa'),
+                    Tab(text: 'Chuyến xe'),
+                    Tab(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          JourneyInfoSection(
-                            journeyHistories: currentUserVehicleAssignment.journeyHistories,
-                          ),
-                          SizedBox(height: 16),
+                          Text('Sự cố'),
+                          if (totalIssues > 0) ...[
+                            SizedBox(width: 4),
+                            Container(
+                              padding: EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                totalIssues.toString(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      );
-                    }
-                    return SizedBox.shrink();
-                  },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-
-              // Seal info section
-              // For multi-trip orders: show only current driver's trip seals
-              if (orderWithDetails.vehicleAssignments.isNotEmpty) ...[
-                Builder(
-                  builder: (context) {
-                    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
-                    if (currentUserVehicleAssignment != null && 
-                        currentUserVehicleAssignment.orderSeals.isNotEmpty) {
-                      return Column(
-                        children: [
-                          SealInfoSection(
-                            seals: currentUserVehicleAssignment.orderSeals,
-                          ),
-                          SizedBox(height: 16),
-                        ],
-                      );
-                    }
-                    return SizedBox.shrink();
-                  },
+              ),
+              // Tab Views
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    // Tab 1: Thông tin đơn
+                    _buildInfoTab(orderWithDetails, viewModel),
+                    // Tab 2: Hàng hóa
+                    _buildPackageTab(orderWithDetails),
+                    // Tab 3: Chuyến xe & Lộ trình
+                    _buildVehicleTab(orderWithDetails, viewModel),
+                    // Tab 4: Sự cố
+                    _buildIssuesTab(orderWithDetails, viewModel),
+                  ],
                 ),
-              ],
-
-              // Final odometer upload section (when order is DELIVERED)
-              if (canUploadFinalOdometer)
-                FinalOdometerSection(order: orderWithDetails),
-              
-              SizedBox(height: 24),
+              ),
             ],
           ),
         ),
@@ -576,5 +555,282 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
       ],
     );
+  }
+
+  // Tab 1: Thông tin đơn hàng
+  Widget _buildInfoTab(dynamic orderWithDetails, OrderDetailViewModel viewModel) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OrderInfoSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          TrackingCodeSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          AddressSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          JourneyTimeSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          SenderSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          ReceiverSection(order: orderWithDetails),
+          SizedBox(height: 120), // Bottom padding for buttons
+        ],
+      ),
+    );
+  }
+
+  // Tab 2: Hàng hóa
+  Widget _buildPackageTab(dynamic orderWithDetails) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PackageSection(order: orderWithDetails),
+          SizedBox(height: 120), // Bottom padding for buttons
+        ],
+      ),
+    );
+  }
+
+  // Tab 3: Chuyến xe & Lộ trình
+  Widget _buildVehicleTab(dynamic orderWithDetails, OrderDetailViewModel viewModel) {
+    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Thông tin chuyến xe và tài xế
+          OrderDetailsSection(order: orderWithDetails),
+          SizedBox(height: 16),
+          
+          // Journey info (chỉ hiển thị journey mới nhất)
+          if (currentUserVehicleAssignment != null && 
+              currentUserVehicleAssignment.journeyHistories.isNotEmpty) ...[
+            JourneyInfoSection(
+              journeyHistories: [currentUserVehicleAssignment.journeyHistories.first],
+            ),
+            SizedBox(height: 16),
+          ],
+          
+          // Seal info
+          if (currentUserVehicleAssignment != null && 
+              currentUserVehicleAssignment.seals.isNotEmpty) ...[
+            SealInfoSection(
+              seals: currentUserVehicleAssignment.seals,
+            ),
+            SizedBox(height: 16),
+          ],
+          SizedBox(height: 120), // Bottom padding for buttons
+        ],
+      ),
+    );
+  }
+
+  // Tab 4: Sự cố
+  Widget _buildIssuesTab(dynamic orderWithDetails, OrderDetailViewModel viewModel) {
+    final currentUserVehicleAssignment = viewModel.getCurrentUserVehicleAssignment();
+    
+    if (currentUserVehicleAssignment == null || currentUserVehicleAssignment.issues.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              size: 64,
+              color: AppColors.success,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Không có sự cố nào',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 120, // Extra padding to avoid being covered by action button
+      ),
+      itemCount: currentUserVehicleAssignment.issues.length,
+      itemBuilder: (context, index) {
+        final issue = currentUserVehicleAssignment.issues[index];
+        return Card(
+          margin: EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: _getIssueColor(issue.issueCategory),
+              width: 2,
+            ),
+          ),
+          child: InkWell(
+            onTap: () {
+              // Navigate to issue detail screen
+              Navigator.pushNamed(
+                context,
+                AppRoutes.issueDetail,
+                arguments: issue,
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _getIssueColor(issue.issueCategory).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          color: _getIssueColor(issue.issueCategory),
+                          size: 24,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              issue.issueTypeName ?? 'Sự cố',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _getIssueStatusColor(issue.status),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _getIssueStatusLabel(issue.status),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.grey[400],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  // Description
+                  if (issue.description != null) ...[
+                    Text(
+                      'Mô tả:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      issue.description!,
+                      style: TextStyle(fontSize: 14),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 12),
+                  ],
+                  // Location with reverse geocoding
+                  if (issue.locationLatitude != null && issue.locationLongitude != null) ...[
+                    IssueLocationWidget(
+                      latitude: issue.locationLatitude!,
+                      longitude: issue.locationLongitude!,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Color _getIssueColor(String? category) {
+    switch (category) {
+      case 'ORDER_REJECTION':
+        return Colors.red;
+      case 'SEAL_REPLACEMENT':
+        return Colors.orange;
+      case 'DAMAGE':
+        return Colors.deepOrange;
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'IN_PROGRESS':
+        return Colors.orange;
+      case 'RESOLVED':
+        return Colors.green;
+      case 'CANCELLED':
+        return Colors.grey;
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  Color _getIssueStatusColor(String? status) {
+    switch (status) {
+      case 'OPEN':
+        return AppColors.primary; // Blue
+      case 'IN_PROGRESS':
+        return Colors.orange;
+      case 'RESOLVED':
+        return Colors.green;
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  String _getIssueStatusLabel(String? status) {
+    switch (status) {
+      case 'OPEN':
+        return 'Chờ xử lý';
+      case 'IN_PROGRESS':
+        return 'Đang xử lý';
+      case 'RESOLVED':
+        return 'Đã giải quyết';
+      default:
+        return status ?? 'Không rõ';
+    }
   }
 }

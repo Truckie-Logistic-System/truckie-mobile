@@ -37,13 +37,13 @@ class _PreDeliveryDocumentationSectionState
     _viewModel = getIt<PreDeliveryDocumentationViewModel>();
   }
 
-  List<OrderSeal> _getAvailableSeals() {
+  List<VehicleSeal> _getAvailableSeals() {
     if (widget.order.orderDetails.isEmpty || widget.order.vehicleAssignments.isEmpty) {
       return [];
     }
     
     final vehicleAssignment = _getCurrentUserVehicleAssignment();
-    return vehicleAssignment?.orderSeals ?? [];
+    return vehicleAssignment?.seals ?? [];
   }
 
   Future<void> _pickPackingProofImage(ImageSource source) async {

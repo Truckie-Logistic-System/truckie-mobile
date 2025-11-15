@@ -393,7 +393,9 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       return const SizedBox.shrink();
     }
     
-    final journeySegments = vehicleAssignment!.journeyHistories.first.journeySegments;
+    // Chỉ dùng journey history mới nhất (phần tử đầu tiên)
+    final latestJourney = vehicleAssignment!.journeyHistories.first;
+    final journeySegments = latestJourney.journeySegments;
 
     // Get current segment
     final currentSegment = journeySegments[_selectedSegmentIndex];
@@ -717,6 +719,93 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
             latLng: endPoint,
           ),
         );
+      }
+
+      // Thêm issue markers
+      final currentUserVehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
+      if (currentUserVehicleAssignment != null && currentUserVehicleAssignment.issues.isNotEmpty) {
+        for (var issue in currentUserVehicleAssignment.issues) {
+          if (issue.locationLatitude != null && issue.locationLongitude != null) {
+            final issueLatLng = LatLng(issue.locationLatitude!, issue.locationLongitude!);
+            
+            // Format reported time
+            String timeText = '';
+            if (issue.reportedAt != null) {
+              try {
+                timeText = '${issue.reportedAt!.day.toString().padLeft(2, '0')}/${issue.reportedAt!.month.toString().padLeft(2, '0')} ${issue.reportedAt!.hour.toString().padLeft(2, '0')}:${issue.reportedAt!.minute.toString().padLeft(2, '0')}';
+              } catch (e) {
+                timeText = '';
+              }
+            }
+            
+            _waypointMarkers.add(
+              Marker(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.5),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    Container(
+                      constraints: BoxConstraints(maxWidth: 140),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Issue type name
+                          Text(
+                            issue.issueTypeName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          // Reported time
+                          if (timeText.isNotEmpty) ...[
+                            SizedBox(height: 2),
+                            Text(
+                              timeText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                latLng: issueLatLng,
+              ),
+            );
+          }
+        }
       }
 
       // Rebuild UI to render markers

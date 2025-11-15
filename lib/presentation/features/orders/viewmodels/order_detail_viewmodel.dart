@@ -175,9 +175,15 @@ class OrderDetailViewModel extends BaseViewModel {
 
     for (var segment in journeyHistory.journeySegments) {
       try {
+        // Skip segments with null pathCoordinatesJson (e.g., return journey placeholder segments)
+        if (segment.pathCoordinatesJson == null || segment.pathCoordinatesJson!.isEmpty) {
+          debugPrint('Skipping segment ${segment.segmentOrder} with null/empty pathCoordinatesJson');
+          continue;
+        }
+
         final List<LatLng> points = [];
         final List<dynamic> coordinates = json.decode(
-          segment.pathCoordinatesJson,
+          segment.pathCoordinatesJson!,
         );
 
         for (var coordinate in coordinates) {

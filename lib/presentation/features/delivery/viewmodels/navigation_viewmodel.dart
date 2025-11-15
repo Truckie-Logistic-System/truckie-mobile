@@ -215,10 +215,10 @@ class NavigationViewModel extends ChangeNotifier {
 
         // Parse route points from JSON if available
         try {
-          if (segment.pathCoordinatesJson.isNotEmpty) {
+          if (segment.pathCoordinatesJson != null && segment.pathCoordinatesJson!.isNotEmpty) {
             // Parse JSON string to get coordinates
             final List<dynamic> coordinates = json.decode(
-              segment.pathCoordinatesJson,
+              segment.pathCoordinatesJson!,
             );
 
             // Add all points from the path
@@ -247,46 +247,57 @@ class NavigationViewModel extends ChangeNotifier {
 
               hasValidRoute = true;
             }
-          } else {
-            // If no path coordinates, just use start and end points
-            points.add(LatLng(segment.startLatitude, segment.startLongitude));
+          } else if (segment.startLatitude != null && 
+                     segment.startLongitude != null &&
+                     segment.endLatitude != null && 
+                     segment.endLongitude != null) {
+            // If no path coordinates, just use start and end points (if available)
+            points.add(LatLng(segment.startLatitude!, segment.startLongitude!));
             indices.add(0);
 
-            points.add(LatLng(segment.endLatitude, segment.endLongitude));
+            points.add(LatLng(segment.endLatitude!, segment.endLongitude!));
             indices.add(1);
 
             // Add waypoints
             if (waypoints.isEmpty) {
               waypoints.add(
-                LatLng(segment.startLatitude, segment.startLongitude),
+                LatLng(segment.startLatitude!, segment.startLongitude!),
               );
               waypointNames.add(segment.startPointName);
             }
-            waypoints.add(LatLng(segment.endLatitude, segment.endLongitude));
+            waypoints.add(LatLng(segment.endLatitude!, segment.endLongitude!));
+            waypointNames.add(segment.endPointName);
+
+            hasValidRoute = true;
+          } else {
+            // Skip segments with null coordinates (e.g., return journey placeholders)
+            debugPrint('⏭️ Skipping segment with null coordinates: ${segment.startPointName} → ${segment.endPointName}');
+          }
+        } catch (e) {
+          debugPrint('❌ Lỗi khi parse tọa độ segment: $e');
+          // Fallback to start and end points if available
+          if (segment.startLatitude != null && 
+              segment.startLongitude != null &&
+              segment.endLatitude != null && 
+              segment.endLongitude != null) {
+            points.add(LatLng(segment.startLatitude!, segment.startLongitude!));
+            indices.add(0);
+
+            points.add(LatLng(segment.endLatitude!, segment.endLongitude!));
+            indices.add(1);
+
+            // Add waypoints
+            if (waypoints.isEmpty) {
+              waypoints.add(
+                LatLng(segment.startLatitude!, segment.startLongitude!),
+              );
+              waypointNames.add(segment.startPointName);
+            }
+            waypoints.add(LatLng(segment.endLatitude!, segment.endLongitude!));
             waypointNames.add(segment.endPointName);
 
             hasValidRoute = true;
           }
-        } catch (e) {
-          debugPrint('❌ Lỗi khi parse tọa độ segment: $e');
-          // Fallback to start and end points
-          points.add(LatLng(segment.startLatitude, segment.startLongitude));
-          indices.add(0);
-
-          points.add(LatLng(segment.endLatitude, segment.endLongitude));
-          indices.add(1);
-
-          // Add waypoints
-          if (waypoints.isEmpty) {
-            waypoints.add(
-              LatLng(segment.startLatitude, segment.startLongitude),
-            );
-            waypointNames.add(segment.startPointName);
-          }
-          waypoints.add(LatLng(segment.endLatitude, segment.endLongitude));
-          waypointNames.add(segment.endPointName);
-
-          hasValidRoute = true;
         }
 
         if (points.isNotEmpty) {

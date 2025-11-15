@@ -204,9 +204,9 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã báo cáo ${_selectedOrderDetailIds.length} kiện hàng hư hại thành công! Staff sẽ xử lý yêu cầu hoàn tiền.'),
+            content: Text('Đã báo cáo ${_selectedOrderDetailIds.length} kiện hàng hư hại thành công! Bạn có thể tiếp tục chuyến đi. Staff sẽ xử lý hoàn tiền sau.'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

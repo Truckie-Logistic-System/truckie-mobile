@@ -203,8 +203,10 @@ class _DamageReportSectionState extends State<DamageReportSection> {
         ),
       ).then((result) {
         if (result == true && mounted) {
-          // Refresh order details after damage report
-          widget.onReported();
+          debugPrint('✅ Damage reported successfully from order detail screen');
+          // Pop back to navigation screen so driver can continue trip and resume simulator
+          // Pass true to indicate issue was reported successfully
+          Navigator.of(context).pop(true);
         }
       });
     }).catchError((e) {
@@ -288,9 +290,9 @@ class _DamageReportSectionState extends State<DamageReportSection> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Đã báo cáo hàng hư hại thành công! Staff sẽ xử lý yêu cầu hoàn tiền.'),
+            content: Text('Đã báo cáo hàng hư hại thành công! Bạn có thể tiếp tục chuyến đi. Staff sẽ xử lý hoàn tiền sau.'),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
           ),
         );
 

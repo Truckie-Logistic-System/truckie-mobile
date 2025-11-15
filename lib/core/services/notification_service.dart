@@ -591,14 +591,86 @@ class NotificationService {
     final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
     final returnJourneyId = notification['returnJourneyId'] as String?;
     
+    // Play success sound
+    SoundUtils.playPaymentSuccessSound();
+    
+    // Show success dialog to driver
+    if (_navigatorKey?.currentContext != null) {
+      showDialog(
+        context: _navigatorKey!.currentContext!,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 32),
+              SizedBox(width: 12),
+              Text('Khách hàng đã thanh toán'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                notification['message'] ?? 'Khách hàng đã thanh toán cước trả hàng thành công.',
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Hành động tiếp theo:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '• Lộ trình trả hàng đã được kích hoạt\n'
+                      '• Vui lòng trả hàng về điểm pickup\n'
+                      '• Bản đồ sẽ tự động cập nhật lộ trình mới',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Đã hiểu', style: TextStyle(fontSize: 16)),
+            ),
+          ],
+        ),
+      );
+    }
+    
     // Refresh order list to show updated journey
     _refreshOrderList();
     
-    // Navigate to map if return journey is active
-    if (returnJourneyId != null) {
-      // TODO: Navigate to map view with return journey
-      debugPrint('🗺️ [NotificationService] Should navigate to map with return journey: $returnJourneyId');
-    }
+    // Trigger navigation screen refresh to reload order with return journey
+    // This will update the route to include return journey
+    triggerNavigationScreenRefresh();
+    
+    debugPrint('🗺️ [NotificationService] Triggered navigation refresh for return journey: $returnJourneyId');
   }
   
   /// Handle return payment timeout notification

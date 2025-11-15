@@ -2266,7 +2266,15 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         currentLocation: _viewModel.currentLocation,
         orderWithDetails: _viewModel.orderWithDetails,
       ),
-    );
+    ).then((result) {
+      if (result == true && mounted) {
+        debugPrint('✅ Issue reported successfully, resuming simulation if needed');
+        // Resume simulation if it was paused
+        if (_isPaused && _isSimulating) {
+          _resumeSimulation();
+        }
+      }
+    });
   }
 
   void _showPickupMessage() {
