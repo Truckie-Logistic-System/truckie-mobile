@@ -485,24 +485,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     : canConfirmReturnDelivery
                                         ? Column(
                                             mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
                                             children: [
-                                              // Return delivery confirmation section
-                                              Text(
-                                                'Xác nhận trả hàng về pickup',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.primary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Chụp ảnh xác nhận trả hàng về điểm lấy hàng',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                ),
-                                              ),
-                                              const SizedBox(height: 16),
+                                              // Return delivery confirmation button
+                                              // Text(
+                                              //   'Xác nhận trả hàng về pickup',
+                                              //   style: TextStyle(
+                                              //     fontSize: 16,
+                                              //     fontWeight: FontWeight.bold,
+                                              //     color: AppColors.primary,
+                                              //   ),
+                                              // ),
+                                              // const SizedBox(height: 8),
+                                              // Text(
+                                              //   'Chụp ảnh xác nhận trả hàng về điểm lấy hàng',
+                                              //   style: TextStyle(
+                                              //     color: Colors.grey[600],
+                                              //     fontSize: 14,
+                                              //   ),
+                                              // ),
+                                              const SizedBox(height: 12),
                                               ReturnDeliveryConfirmationButton(
                                                 issue: orderWithDetails.orderRejectionIssue!,
                                                 onConfirmed: _loadOrderDetails,
@@ -859,6 +861,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return Colors.orange;
       case 'RESOLVED':
         return Colors.green;
+      case 'PAYMENT_OVERDUE':
+        return Colors.red;
       default:
         return AppColors.primary;
     }
@@ -872,6 +876,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return 'Đang xử lý';
       case 'RESOLVED':
         return 'Đã giải quyết';
+      case 'PAYMENT_OVERDUE':
+        return 'Quá hạn thanh toán';
       default:
         return status ?? 'Không rõ';
     }

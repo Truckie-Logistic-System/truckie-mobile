@@ -102,6 +102,8 @@ class OrderItem extends StatelessWidget {
       case OrderStatus.pending:
       case OrderStatus.processing:
         return Colors.grey;
+      case OrderStatus.cancelled:
+        return Colors.red;
       case OrderStatus.contractDraft:
       case OrderStatus.contractSigned:
       case OrderStatus.onPlanning:

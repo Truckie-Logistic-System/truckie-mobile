@@ -99,7 +99,8 @@ class Issue {
 enum IssueStatus {
   open('OPEN', 'Chờ xử lý'),
   inProgress('IN_PROGRESS', 'Đang xử lý'),
-  resolved('RESOLVED', 'Đã giải quyết');
+  resolved('RESOLVED', 'Đã giải quyết'),
+  paymentOverdue('PAYMENT_OVERDUE', 'Quá hạn thanh toán');
 
   final String value;
   final String label;

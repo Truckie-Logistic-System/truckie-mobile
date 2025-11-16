@@ -267,6 +267,8 @@ class IssueDetailScreen extends StatelessWidget {
         return Colors.orange;
       case 'RESOLVED':
         return Colors.green;
+      case 'PAYMENT_OVERDUE':
+        return Colors.red;
       default:
         return AppColors.primary;
     }
@@ -281,6 +283,8 @@ class IssueDetailScreen extends StatelessWidget {
         return 'Đang xử lý';
       case 'RESOLVED':
         return 'Đã giải quyết';
+      case 'PAYMENT_OVERDUE':
+        return 'Quá hạn thanh toán';
       default:
         return status;
     }

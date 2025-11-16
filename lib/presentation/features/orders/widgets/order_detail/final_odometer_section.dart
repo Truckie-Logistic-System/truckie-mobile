@@ -156,6 +156,92 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
     });
   }
 
+  void _showCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Success icon with animation
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_circle,
+                color: Colors.green.shade600,
+                size: 64,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Title
+            const Text(
+              'Hoàn thành chuyến xe!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Message
+            Text(
+              'Chuyến xe đã được hoàn thành thành công.\nCảm ơn bạn đã hoàn thành nhiệm vụ!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade700,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                // Close form
+                setState(() {
+                  _showForm = false;
+                  _odometerImage = null;
+                  _odometerController.clear();
+                });
+                
+                // Close dialog
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Đóng',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      ),
+    );
+  }
+
   Future<void> _confirmOdometerReading(BuildContext context) async {
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
     
@@ -213,17 +299,16 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
       );
 
       if (success && mounted) {
+        // Stop WebSocket tracking as trip is completed
         _globalLocationManager.stopGlobalTracking(reason: 'Trip completed - odometer uploaded');
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Đã hoàn thành chuyến xe thành công!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-
-        Navigator.of(context).pushReplacementNamed(AppRoutes.orders);
+        // Reload order to get updated status
+        await viewModel.getOrderDetails(widget.order.id);
+        
+        // Show completion dialog
+        if (mounted) {
+          _showCompletionDialog();
+        }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

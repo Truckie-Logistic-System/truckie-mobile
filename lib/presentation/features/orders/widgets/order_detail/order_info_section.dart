@@ -100,6 +100,8 @@ class OrderInfoSection extends StatelessWidget {
       case OrderStatus.pending:
       case OrderStatus.processing:
         return Colors.grey;
+      case OrderStatus.cancelled:
+        return AppColors.error;
       case OrderStatus.contractDraft:
       case OrderStatus.contractSigned:
       case OrderStatus.onPlanning:

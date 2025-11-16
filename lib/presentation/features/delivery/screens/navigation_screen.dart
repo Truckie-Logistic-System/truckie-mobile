@@ -30,12 +30,12 @@ import '../../../../data/datasources/vehicle_fuel_consumption_data_source.dart';
 import 'dart:io';
 
 class NavigationScreen extends StatefulWidget {
-  final String orderId;
+  final String? orderId;
   final bool isSimulationMode;
 
   const NavigationScreen({
     super.key,
-    required this.orderId,
+    this.orderId,
     this.isSimulationMode = false,
   });
 
@@ -115,7 +115,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       '   - Global tracking active: ${_globalLocationManager.isGlobalTrackingActive}',
     );
     debugPrint(
-      '   - Global tracking active for order ${widget.orderId}: ${_globalLocationManager.isTrackingOrder(widget.orderId)}',
+      '   - Global tracking active for order ${widget.orderId}: ${widget.orderId != null ? _globalLocationManager.isTrackingOrder(widget.orderId!) : false}',
     );
     debugPrint('   - Route segments: ${_viewModel.routeSegments.length}');
 
@@ -167,10 +167,13 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       await _fetchPendingSealReplacements();
       
       // Find the issue in pending list
-      final issue = _pendingSealReplacements.firstWhere(
-        (i) => i.id == issueId,
-        orElse: () => _pendingSealReplacements.isNotEmpty ? _pendingSealReplacements.first : null as Issue,
-      );
+      Issue? issue;
+      try {
+        issue = _pendingSealReplacements.firstWhere((i) => i.id == issueId);
+      } catch (e) {
+        // Issue not found in list
+        issue = null;
+      }
       
       if (issue != null) {
         debugPrint('✅ [NavigationScreen] Found issue, showing bottom sheet...');
@@ -962,8 +965,24 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
 
   Future<void> _loadOrderDetails() async {
     try {
+      // Get orderId - if null, use existing order from viewModel
+      String? targetOrderId = widget.orderId;
+      
+      if (targetOrderId == null) {
+        debugPrint('⚠️ orderId is null, checking existing order in viewModel...');
+        
+        // If viewModel already has order, reload it
+        if (_viewModel.orderWithDetails != null) {
+          targetOrderId = _viewModel.orderWithDetails!.id;
+          debugPrint('✅ Using existing order from viewModel: $targetOrderId');
+        } else {
+          debugPrint('❌ Cannot load order details: no orderId and no existing order');
+          return;
+        }
+      }
+      
       // Tải dữ liệu order từ API
-      await _viewModel.getOrderDetails(widget.orderId);
+      await _viewModel.getOrderDetails(targetOrderId);
 
       if (_viewModel.orderWithDetails != null) {
         debugPrint('✅ Tải thông tin order thành công: ${widget.orderId}');
@@ -974,7 +993,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
           debugPrint('⚠️ Không thể parse được route từ order, thử tải lại');
           // Thử tải lại dữ liệu
           await Future.delayed(const Duration(seconds: 1));
-          await _viewModel.getOrderDetails(widget.orderId);
+          await _viewModel.getOrderDetails(targetOrderId);
           if (_viewModel.orderWithDetails != null) {
             _viewModel.parseRouteFromOrder(_viewModel.orderWithDetails!);
           }
@@ -1334,11 +1353,25 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       final tokenStorage = getIt<TokenStorageService>();
       final jwtToken = tokenStorage.getAccessToken();
       
+      // Get orderId - use widget.orderId or fallback to orderWithDetails
+      final String? targetOrderId = widget.orderId ?? _viewModel.orderWithDetails?.id;
+      
+      if (targetOrderId == null) {
+        debugPrint('❌ Cannot start global tracking: no orderId available');
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          setState(() {
+            _isConnectingWebSocket = false;
+          });
+        }
+        return false;
+      }
+      
       // Small delay to allow UI to update
       await Future.delayed(const Duration(milliseconds: 100));
       
       final success = await _globalLocationManager.startGlobalTracking(
-        orderId: widget.orderId,
+        orderId: targetOrderId,
         vehicleId: _viewModel.currentVehicleId,
         licensePlateNumber: _viewModel.currentLicensePlateNumber,
         jwtToken: jwtToken,
@@ -2037,6 +2070,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       },
       onSegmentComplete: (segmentIndex, isLastSegment) {
         debugPrint('✅ Segment $segmentIndex complete, isLast: $isLastSegment');
+        debugPrint('   - Journey type: ${_viewModel.currentJourneyType}');
 
         // Pause simulation when reaching any waypoint
         _pauseSimulation();
@@ -2045,12 +2079,51 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         if (isLastSegment) {
           // Reached final destination (Carrier)
           _showCompletionMessage();
-        } else if (segmentIndex == 0) {
-          // Completed segment 0: Reached Pickup location
-          _showPickupMessage();
-        } else if (segmentIndex == 1) {
-          // Completed segment 1: Reached Delivery location
-          _showDeliveryMessage();
+        } else {
+          // Determine action based on segment index and journey type
+          final isReturnJourney = _viewModel.currentJourneyType == 'RETURN';
+          final segment = _viewModel.routeSegments[segmentIndex];
+          final segmentName = segment.name.toUpperCase();
+          
+          debugPrint('   - Segment index: $segmentIndex');
+          debugPrint('   - Segment name: $segmentName');
+          debugPrint('   - Is return journey: $isReturnJourney');
+          debugPrint('   - Total segments: ${_viewModel.routeSegments.length}');
+
+          // Standard journey: Carrier -> Pickup -> Delivery -> Carrier (3 segments)
+          // Return journey: Carrier -> Pickup -> Delivery -> Pickup -> Carrier (4 segments)
+          
+          if (isReturnJourney) {
+            // Return journey segments:
+            // Index 0: Carrier -> Pickup (initial pickup - already done)
+            // Index 1: Pickup -> Delivery (delivery - already done)
+            // Index 2: Delivery -> Pickup (return to pickup for return delivery)
+            // Index 3: Pickup -> Carrier (final return to carrier)
+            if (segmentIndex == 2) {
+              // Reached pickup point to return packages
+              _showReturnDeliveryMessage();
+            } else {
+              // Other segments in return journey - shouldn't happen but show pickup message as fallback
+              debugPrint('⚠️ Unexpected segment index in return journey: $segmentIndex');
+              _showPickupMessage();
+            }
+          } else {
+            // Standard journey segments:
+            // Index 0: Carrier -> Pickup (pickup goods)
+            // Index 1: Pickup -> Delivery (deliver goods)
+            // Index 2: Delivery -> Carrier (return to carrier)
+            if (segmentIndex == 0) {
+              // Reached pickup point to get packages
+              _showPickupMessage();
+            } else if (segmentIndex == 1) {
+              // Reached delivery point
+              _showDeliveryMessage();
+            } else {
+              // Other segments - shouldn't happen but show pickup message as fallback
+              debugPrint('⚠️ Unexpected segment index in standard journey: $segmentIndex');
+              _showPickupMessage();
+            }
+          }
         }
       },
       simulationSpeed:
@@ -2416,32 +2489,271 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Đã đến điểm lấy hàng'),
-        content: const Text(
-          'Bạn đã đến điểm lấy hàng. Vui lòng xác nhận hàng hóa và seal.',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.local_shipping,
+                color: Colors.blue.shade600,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            const Text(
+              'Đã đến điểm lấy hàng',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Message
+            const Text(
+              'Vui lòng chụp ảnh xác nhận hàng hóa và seal.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop(); // Close dialog
-              
-              // Navigate to order detail and wait for result
-              final result = await Navigator.of(context).pushNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
-              
-              // If result is true, seal was confirmed - resume simulation
-              if (result == true && mounted) {
-                debugPrint('✅ Seal confirmed, resuming simulation');
-                if (_isPaused && _isSimulating) {
-                  _resumeSimulation();
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                
+                // Navigate to order detail and wait for result
+                final result = await Navigator.of(context).pushNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+                
+                // If result is true, seal was confirmed - resume simulation
+                if (result == true && mounted) {
+                  debugPrint('✅ Seal confirmed, resuming simulation');
+                  if (_isPaused && _isSimulating) {
+                    _resumeSimulation();
+                  }
                 }
-              }
-            },
-            child: const Text('Xác nhận'),
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Xác nhận',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      ),
+    );
+  }
+
+  void _showReturnDeliveryMessage() {
+    debugPrint('📍 _showReturnDeliveryMessage() called - Return goods to pickup');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.assignment_return,
+                color: Colors.orange.shade600,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            const Text(
+              'Đã đến điểm trả hàng',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Message
+            const Text(
+              'Vui lòng chụp ảnh xác nhận trả hàng.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                
+                // Navigate to order detail and wait for result
+                final result = await Navigator.of(context).pushNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+                
+                // If result is true, return delivery was confirmed - resume simulation
+                if (result == true && mounted) {
+                  debugPrint('✅ Return delivery confirmed, resuming simulation to carrier');
+                  if (_isPaused && _isSimulating) {
+                    _resumeSimulation();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Chụp ảnh xác nhận',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      ),
+    );
+  }
+
+  void _showGenericWaypointMessage(String endPointName) {
+    debugPrint('📍 _showGenericWaypointMessage() called for: $endPointName');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.teal.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.location_on,
+                color: Colors.teal.shade600,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            Text(
+              'Đã đến $endPointName',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Message
+            Text(
+              'Bạn đã đến $endPointName. Vui lòng xác nhận để tiếp tục.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                
+                // Navigate to order detail and wait for result
+                final result = await Navigator.of(context).pushNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+                
+                // If result is true, resume simulation
+                if (result == true && mounted) {
+                  debugPrint('✅ Waypoint confirmed, resuming simulation');
+                  if (_isPaused && _isSimulating) {
+                    _resumeSimulation();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Xác nhận',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       ),
     );
   }
@@ -2463,32 +2775,87 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Đã đến điểm giao hàng'),
-        content: const Text(
-          'Bạn đã đến điểm giao hàng. Vui lòng chụp ảnh xác nhận giao hàng.',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.inventory_2,
+                color: Colors.green.shade600,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            const Text(
+              'Đã đến điểm giao hàng',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Message
+            const Text(
+              'Vui lòng chụp ảnh xác nhận giao hàng.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop(); // Close dialog
-              
-              // Navigate to order detail and wait for result
-              final result = await Navigator.of(context).pushNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
-              
-              // If result is true, delivery was confirmed - resume simulation
-              if (result == true && mounted) {
-                debugPrint('✅ Delivery confirmed, resuming simulation');
-                if (_isPaused && _isSimulating) {
-                  _resumeSimulation();
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                
+                // Navigate to order detail and wait for result
+                final result = await Navigator.of(context).pushNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+                
+                // If result is true, delivery was confirmed - resume simulation
+                if (result == true && mounted) {
+                  debugPrint('✅ Delivery confirmed, resuming simulation');
+                  if (_isPaused && _isSimulating) {
+                    _resumeSimulation();
+                  }
                 }
-              }
-            },
-            child: const Text('Chụp ảnh xác nhận'),
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Chụp ảnh xác nhận',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       ),
     );
   }
@@ -2541,25 +2908,80 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Đã về đến kho'),
-        content: const Text(
-          'Bạn đã về đến kho. Vui lòng chụp ảnh đồng hồ công tơ mét cuối để hoàn thành chuyến xe.',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.warehouse,
+                color: Colors.purple.shade600,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            const Text(
+              'Đã về đến đơn vị vận chuyển',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Message
+            const Text(
+              'Vui lòng chụp ảnh đồng hồ công tơ mét cuối để hoàn thành chuyến xe.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              // Navigate to order detail to upload odometer
-              // Backend will update order status to SUCCESSFUL after upload
-              Navigator.of(context).pushNamed(
-                AppRoutes.orderDetail,
-                arguments: widget.orderId,
-              );
-            },
-            child: const Text('Chụp ảnh đồng hồ'),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                
+                // Navigate to order detail to upload odometer
+                // OrderDetailScreen will handle stopping tracking after upload
+                Navigator.of(context).pushNamed(
+                  AppRoutes.orderDetail,
+                  arguments: widget.orderId,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Chụp ảnh đồng hồ',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       ),
     );
   }

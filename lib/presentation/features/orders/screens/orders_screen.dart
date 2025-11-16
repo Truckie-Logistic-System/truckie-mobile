@@ -497,6 +497,8 @@ class _OrdersScreenState extends State<OrdersScreen>
       case OrderStatus.pending:
       case OrderStatus.processing:
         return Colors.grey;
+      case OrderStatus.cancelled:
+        return AppColors.error;
       case OrderStatus.contractDraft:
       case OrderStatus.contractSigned:
       case OrderStatus.onPlanning:

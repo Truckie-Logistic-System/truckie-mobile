@@ -54,12 +54,13 @@ class OrderRejectionDetailWidget extends StatelessWidget {
         final hasTransaction = issue.transaction != null;
         if (hasTransaction) {
           final transactionStatus = issue.transaction?['status'] ?? '';
-          if (transactionStatus == 'COMPLETED') {
+          // Check for both PAID and COMPLETED status (backend uses PAID)
+          if (transactionStatus == 'PAID' || transactionStatus == 'COMPLETED') {
             icon = Icons.local_shipping;
             color = Colors.blue;
-            title = 'Sẵn sàng trả hàng';
+            title = 'Đang trả hàng về';
             description =
-                'Khách hàng đã thanh toán phí trả hàng. Vui lòng thực hiện trả hàng theo lộ trình.';
+                'Khách hàng đã thanh toán phí trả hàng. Vui lòng xác nhận khi đã trả hàng xong.';
           } else {
             icon = Icons.payment;
             color = Colors.amber;
@@ -79,7 +80,14 @@ class OrderRejectionDetailWidget extends StatelessWidget {
         icon = Icons.check_circle;
         color = Colors.green;
         title = 'Đã hoàn thành';
-        description = 'Đã trả hàng về điểm lấy hàng thành công.';
+        description = 'Đã xác nhận trả hàng về điểm lấy hàng thành công.';
+        break;
+      case 'PAYMENT_OVERDUE':
+        icon = Icons.warning_amber_rounded;
+        color = Colors.red;
+        title = 'Quá hạn thanh toán';
+        description =
+            'Khách hàng đã quá thời gian thanh toán phí trả hàng. Vui lòng liên hệ điều phối viên.';
         break;
       default:
         icon = Icons.info;

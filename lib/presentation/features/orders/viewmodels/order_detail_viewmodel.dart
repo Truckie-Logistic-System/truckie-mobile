@@ -386,14 +386,20 @@ class OrderDetailViewModel extends BaseViewModel {
   bool canConfirmReturnDelivery() {
     if (_orderWithDetails == null) return false;
     
+    // Kiểm tra orderRejectionIssue phải tồn tại
+    if (_orderWithDetails!.orderRejectionIssue == null) {
+      return false;
+    }
+    
     final detailStatus = getCurrentTripOrderDetailStatus();
     if (detailStatus == null) {
       return false;
     }
     
     // Có thể xác nhận trả hàng khi:
-    // - RETURN_IN_TRANSIT: đang trên đường trả hàng về pickup
-    return detailStatus == 'RETURN_IN_TRANSIT';
+    // - RETURNING: customer đã thanh toán, đang trên đường trả hàng về pickup
+    // - RETURN_IN_TRANSIT: đang trên đường trả hàng về pickup (alternative status)
+    return detailStatus == 'RETURNING';
   }
 
   /// Lấy vehicle assignment của driver hiện tại (primary driver)

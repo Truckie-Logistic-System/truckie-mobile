@@ -393,8 +393,19 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       return const SizedBox.shrink();
     }
     
-    // Chỉ dùng journey history mới nhất (phần tử đầu tiên)
-    final latestJourney = vehicleAssignment!.journeyHistories.first;
+    // Chỉ dùng ACTIVE journey history mới nhất
+    final activeJourney = vehicleAssignment!.journeyHistories
+        .where((j) => j.status == 'ACTIVE')
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    if (activeJourney.isEmpty) {
+      return const Center(
+        child: Text('Không có lộ trình đang hoạt động'),
+      );
+    }
+    
+    final latestJourney = activeJourney.first;
     final journeySegments = latestJourney.journeySegments;
 
     // Get current segment
@@ -513,7 +524,16 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       return false;
     }
     
-    return vehicleAssignment.journeyHistories.first.journeySegments.isNotEmpty;
+    // Chỉ kiểm tra ACTIVE journey history
+    final activeJourney = vehicleAssignment.journeyHistories
+        .where((j) => j.status == 'ACTIVE')
+        .toList();
+    
+    if (activeJourney.isEmpty) {
+      return false;
+    }
+    
+    return activeJourney.first.journeySegments.isNotEmpty;
   }
 
   VehicleAssignment? _getVehicleAssignmentForFirstOrderDetail() {

@@ -641,6 +641,13 @@ class NotificationService {
     final issueId = notification['issueId'] as String?;
     final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
     final returnJourneyId = notification['returnJourneyId'] as String?;
+    final orderId = notification['orderId'] as String?;
+    
+    debugPrint('📦 [NotificationService] Payment notification data:');
+    debugPrint('   - issueId: $issueId');
+    debugPrint('   - vehicleAssignmentId: $vehicleAssignmentId');
+    debugPrint('   - returnJourneyId: $returnJourneyId');
+    debugPrint('   - orderId: $orderId');
     
     // Play success sound
     SoundUtils.playPaymentSuccessSound();
@@ -652,87 +659,87 @@ class NotificationService {
     debugPrint('🔍 [NotificationService] Current route: $currentRoute');
     debugPrint('🔍 [NotificationService] Is on navigation screen: $isOnNavigationScreen');
     
-    // Show success dialog to driver
+    // Show simple success dialog to driver
     if (_navigatorKey?.currentContext != null) {
       showDialog(
         context: _navigatorKey!.currentContext!,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 32),
-              SizedBox(width: 12),
-              Text('Khách hàng đã thanh toán'),
-            ],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          contentPadding: const EdgeInsets.all(24),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                notification['message'] ?? 'Khách hàng đã thanh toán cước trả hàng thành công.',
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
+              // Success icon
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
                 ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Hành động tiếp theo:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '• Lộ trình trả hàng đã được kích hoạt\n'
-                      '• Vui lòng trả hàng về điểm pickup\n'
-                      '• Bản đồ sẽ tự động cập nhật lộ trình mới',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ],
+                child: Icon(
+                  Icons.check_circle_outline,
+                  color: Colors.green.shade600,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Message
+              const Text(
+                'Khách hàng đã thanh toán\nVui lòng trả hàng về điểm lấy hàng',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
                 ),
               ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                
-                // Refresh order list to show updated journey
-                _refreshOrderList();
-                
-                // Handle navigation based on current screen
-                if (isOnNavigationScreen) {
-                  // Already on navigation screen - just trigger refresh to resume simulation
-                  debugPrint('✅ [NotificationService] On navigation screen, triggering refresh to resume');
-                  triggerNavigationScreenRefresh();
-                } else {
-                  // Not on navigation screen - navigate there with simulation mode
-                  debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there');
-                  _navigateToNavigationScreen();
-                }
-                
-                debugPrint('🗺️ [NotificationService] Handled payment success for return journey: $returnJourneyId');
-              },
-              child: const Text('Đã hiểu', style: TextStyle(fontSize: 16)),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  
+                  // Refresh order list to show updated journey
+                  _refreshOrderList();
+                  
+                  // Handle navigation based on current screen
+                  if (isOnNavigationScreen) {
+                    // Already on navigation screen - just trigger refresh to resume simulation
+                    debugPrint('✅ [NotificationService] On navigation screen, triggering refresh to resume');
+                    triggerNavigationScreenRefresh();
+                  } else {
+                    // Not on navigation screen - navigate there with simulation mode
+                    debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there');
+                    _navigateToNavigationScreen(orderId: orderId);
+                  }
+                  
+                  debugPrint('🗺️ [NotificationService] Handled payment success for return journey: $returnJourneyId');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Đã hiểu',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         ),
       );
     }
@@ -740,15 +747,16 @@ class NotificationService {
   
   /// Navigate to navigation screen with simulation mode
   /// Pattern 1: Info-only notification - auto resume after fetch
-  void _navigateToNavigationScreen() {
+  void _navigateToNavigationScreen({String? orderId}) {
     if (_navigatorKey?.currentContext != null) {
       debugPrint('🗺️ [NotificationService] Navigating to navigation screen (Pattern 1: auto-resume)...');
+      debugPrint('   - orderId: $orderId');
       
       Navigator.of(_navigatorKey!.currentContext!).pushNamedAndRemoveUntil(
         '/navigation',
         (route) => false,
         arguments: {
-          'orderId': null, // Navigation screen will find current active order
+          'orderId': orderId, // Pass orderId from notification
           'isSimulationMode': true, // Enable simulation mode
         },
       );

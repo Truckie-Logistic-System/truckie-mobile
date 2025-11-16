@@ -1,6 +1,7 @@
 enum OrderStatus {
   pending('PENDING'),
   processing('PROCESSING'),
+  cancelled('CANCELLED'),
   contractDraft('CONTRACT_DRAFT'),
   contractSigned('CONTRACT_SIGNED'),
   onPlanning('ON_PLANNING'),
@@ -36,6 +37,8 @@ enum OrderStatus {
         return 'Chờ xử lý';
       case OrderStatus.processing:
         return 'Đang xử lý';
+      case OrderStatus.cancelled:
+        return 'Đã hủy';
       case OrderStatus.contractDraft:
         return 'Nháp hợp đồng';
       case OrderStatus.contractSigned:

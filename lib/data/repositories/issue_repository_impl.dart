@@ -424,32 +424,33 @@ class IssueRepositoryImpl implements IssueRepository {
       debugPrint('   - Issue ID: $issueId');
       debugPrint('   - Return delivery images: ${returnDeliveryImages.length} photo(s)');
 
-      // Upload photos first
-      List<String> imageUrls = [];
+      // Prepare FormData to send files directly (like PhotoCompletion)
+      final formData = FormData();
+      
+      // Add issueId as a part
+      formData.fields.add(MapEntry('issueId', issueId));
+      
+      // Add files
       for (var image in returnDeliveryImages) {
         if (image is File) {
-          // Upload each image and get URL
-          final uploadResponse = await _apiClient.uploadFile(
-            '/files/upload',
-            image,
-            fieldName: 'file',
+          formData.files.add(
+            MapEntry(
+              'files',
+              await MultipartFile.fromFile(
+                image.path,
+                filename: image.path.split('/').last,
+              ),
+            ),
           );
-          if (uploadResponse.statusCode == 200 && uploadResponse.data['data'] != null) {
-            imageUrls.add(uploadResponse.data['data']['url']);
-          }
-        } else if (image is String) {
-          // Already a URL
-          imageUrls.add(image);
         }
       }
 
-      // Confirm return delivery with image URLs
-      final response = await _apiClient.put(
+      debugPrint('📤 Sending ${formData.files.length} files to backend...');
+
+      // Send directly to backend, backend will upload to Cloudinary
+      final response = await _apiClient.post(
         '/issues/order-rejection/confirm-return',
-        data: {
-          'issueId': issueId,
-          'returnDeliveryImages': imageUrls,
-        },
+        data: formData,
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {

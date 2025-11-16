@@ -36,6 +36,7 @@ class NavigationViewModel extends ChangeNotifier {
   OrderWithDetails? orderWithDetails;
   List<RouteSegment> routeSegments = [];
   int currentSegmentIndex = 0;
+  String? currentJourneyType; // STANDARD, REROUTE, RETURN
 
   LatLng? currentLocation;
   double? currentBearing;
@@ -214,6 +215,10 @@ class NavigationViewModel extends ChangeNotifier {
       debugPrint('📍 Selected journey history: ${journeyHistory.journeyName} (${journeyHistory.journeyType})');
       debugPrint('   - Created at: ${journeyHistory.createdAt}');
       debugPrint('   - Status: ${journeyHistory.status}');
+      
+      // Store journey type for later use
+      currentJourneyType = journeyHistory.journeyType;
+      debugPrint('📌 Stored journey type: $currentJourneyType');
       
       final segments = journeyHistory.journeySegments;
 

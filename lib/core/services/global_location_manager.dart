@@ -776,7 +776,7 @@ class GlobalLocationManager {
     debugPrint('⏱️ Starting periodic state saving (every ${_stateSaveInterval.inSeconds}s)');
     _stateSaveTimer = Timer.periodic(_stateSaveInterval, (timer) {
       if (_isGlobalTrackingActive && _isSimulationMode) {
-        debugPrint('💾 Auto-saving simulation state...');
+        // debugPrint('💾 Auto-saving simulation state...');
         // State will be saved via sendLocationUpdate calls
         // This timer is a backup to ensure state is always current
       }

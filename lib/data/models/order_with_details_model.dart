@@ -1,5 +1,6 @@
 import '../../domain/entities/order_with_details.dart';
 import '../../domain/entities/order_detail.dart';
+import '../../domain/entities/order_rejection_issue.dart';
 import 'order_detail_model.dart';
 
 class OrderWithDetailsModel extends OrderWithDetails {
@@ -22,9 +23,31 @@ class OrderWithDetailsModel extends OrderWithDetails {
     required super.categoryName,
     required List<OrderDetailModel> super.orderDetails,
     super.vehicleAssignments = const [],
+    super.orderRejectionIssue,
   });
 
   factory OrderWithDetailsModel.fromJson(Map<String, dynamic> json) {
+    // Parse vehicle assignments first
+    final vehicleAssignments = (json['vehicleAssignments'] as List<dynamic>?)
+            ?.map((e) => VehicleAssignmentModel.fromJson(e))
+            .toList() ??
+        [];
+    
+    // Extract ORDER_REJECTION issue from vehicle assignments issues
+    OrderRejectionIssue? orderRejectionIssue;
+    for (var va in vehicleAssignments) {
+      try {
+        final rejectionIssue = va.issues.firstWhere(
+          (issue) => issue.issueCategory == 'ORDER_REJECTION',
+        );
+        orderRejectionIssue = _convertVehicleIssueToOrderRejectionIssue(rejectionIssue);
+        break; // Only one ORDER_REJECTION issue per order
+      } catch (e) {
+        // No ORDER_REJECTION issue found in this vehicle assignment, continue
+        continue;
+      }
+    }
+    
     return OrderWithDetailsModel(
       id: json['id'] ?? '',
       notes: json['notes'] ?? 'Không có ghi chú',
@@ -49,11 +72,39 @@ class OrderWithDetailsModel extends OrderWithDetails {
               ?.map((e) => OrderDetailModel.fromJson(e))
               .toList() ??
           [],
-      vehicleAssignments:
-          (json['vehicleAssignments'] as List<dynamic>?)
-              ?.map((e) => VehicleAssignmentModel.fromJson(e))
-              .toList() ??
-          [],
+      vehicleAssignments: vehicleAssignments,
+      orderRejectionIssue: orderRejectionIssue,
+    );
+  }
+  
+  /// Convert VehicleIssue with ORDER_REJECTION category to OrderRejectionIssue
+  static OrderRejectionIssue _convertVehicleIssueToOrderRejectionIssue(VehicleIssue issue) {
+    // Parse affected order details
+    List<AffectedOrderDetail> affectedOrderDetails = [];
+    if (issue.affectedOrderDetails != null) {
+      if (issue.affectedOrderDetails is List) {
+        affectedOrderDetails = (issue.affectedOrderDetails as List)
+            .map((e) => AffectedOrderDetail.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    }
+    
+    return OrderRejectionIssue(
+      issueId: issue.id,
+      issueCode: issue.id, // Use ID as code since backend doesn't provide separate code
+      description: issue.description,
+      status: issue.status,
+      reportedAt: issue.reportedAt ?? DateTime.now(),
+      resolvedAt: null, // Not provided in VehicleIssue
+      customerInfo: null, // Not provided in VehicleIssue
+      calculatedFee: issue.calculatedFee,
+      adjustedFee: issue.adjustedFee,
+      finalFee: issue.finalFee,
+      returnTransaction: null, // Transaction is separate, not included in simple issue response
+      paymentDeadline: issue.paymentDeadline,
+      returnJourney: null, // Journey info is separate
+      affectedOrderDetails: affectedOrderDetails,
+      returnDeliveryImages: [], // Not available in VehicleIssue
     );
   }
 
