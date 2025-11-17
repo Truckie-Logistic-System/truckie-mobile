@@ -892,6 +892,8 @@ class NavigationViewModel extends ChangeNotifier {
   }
 
   // Jump to end of current segment (skip to destination of current route)
+  // IMPROVED: Skip to a point ~150-200m before destination to allow simulation 
+  // to update location and send updates to FE before reaching waypoint
   Future<void> jumpToNextSegment() async {
     if (routeSegments.isEmpty) {
       debugPrint('⚠️ Cannot jump: no segments');
@@ -903,63 +905,102 @@ class NavigationViewModel extends ChangeNotifier {
       return;
     }
 
-    debugPrint('⏩ Skipping to end of current segment...');
+    debugPrint('⏩ Skipping near end of current segment...');
     debugPrint('   - Current segment: $currentSegmentIndex');
     
     final currentSegment = routeSegments[currentSegmentIndex];
     
-    // Jump to END of current segment only
+    // Skip to a point NEAR the end (not exactly at the end)
+    // This gives simulation time to update location and send to FE
     if (currentSegment.points.isNotEmpty) {
-      currentLocation = currentSegment.points.last;
-      currentSpeed = 0.0; // Stop at waypoint
+      final targetDistanceBeforeEnd = 180.0; // meters - distance before destination
+      final lastPoint = currentSegment.points.last;
+      
+      // Find the point that is approximately targetDistanceBeforeEnd meters before the end
+      int targetPointIndex = currentSegment.points.length - 1;
+      double accumulatedDistance = 0.0;
+      
+      // Walk backwards from the end to find the point ~180m before
+      for (int i = currentSegment.points.length - 1; i > 0; i--) {
+        final point = currentSegment.points[i];
+        final previousPoint = currentSegment.points[i - 1];
+        final segmentDistance = _calculateDistance(previousPoint, point);
+        
+        accumulatedDistance += segmentDistance;
+        
+        if (accumulatedDistance >= targetDistanceBeforeEnd) {
+          targetPointIndex = i;
+          break;
+        }
+      }
+      
+      // Ensure we're not at the very first point (need some progress)
+      if (targetPointIndex <= 0) {
+        targetPointIndex = (currentSegment.points.length * 0.7).floor();
+        debugPrint('   ⚠️ Route too short for 180m offset, using 70% of route length');
+      }
+      
+      currentLocation = currentSegment.points[targetPointIndex];
+      
+      // Calculate speed for smooth continuation to destination
+      final remainingDistance = _calculateDistance(currentLocation!, lastPoint);
+      final estimatedTimeToDestination = 10.0; // seconds - allow ~10 seconds of simulation
+      currentSpeed = (remainingDistance / estimatedTimeToDestination) * 3.6; // km/h
+      
+      debugPrint('✅ Skipped to point ~${remainingDistance.toStringAsFixed(0)}m before destination');
+      debugPrint('   - Target point index: $targetPointIndex / ${currentSegment.points.length - 1}');
+      debugPrint('   - Location: ${currentLocation!.latitude}, ${currentLocation!.longitude}');
+      debugPrint('   - Remaining distance: ${remainingDistance.toStringAsFixed(0)}m');
+      debugPrint('   - Simulation speed: ${currentSpeed.toStringAsFixed(1)} km/h');
       
       // CRITICAL: Update order status when jumping to delivery point (segment 1)
       // This ensures user can see the delivery confirmation button in OrderDetailScreen
       if (currentSegmentIndex == 1 && orderWithDetails != null) {
-        debugPrint('🎯 Jumped to delivery point! Auto-updating order status to ONGOING_DELIVERED...');
+        debugPrint('🎯 Jumped near delivery point! Auto-updating order status to ONGOING_DELIVERED...');
         // Note: This will be called from NavigationScreen context to trigger OrderDetailViewModel
         // For now, just log - the actual update happens in NavigationScreen._jumpToNextSegment()
       }
       
-      // Calculate bearing to next segment if available
-      if (currentSegmentIndex + 1 < routeSegments.length) {
-        final nextSegment = routeSegments[currentSegmentIndex + 1];
-        if (nextSegment.points.isNotEmpty) {
-          currentBearing = _calculateBearing(currentLocation!, nextSegment.points.first);
-        }
+      // Calculate bearing to next point
+      if (targetPointIndex < currentSegment.points.length - 1) {
+        final nextPoint = currentSegment.points[targetPointIndex + 1];
+        currentBearing = _calculateBearing(currentLocation!, nextPoint);
       } else {
-        currentBearing = 0.0;
+        // At last point, calculate bearing to next segment if available
+        if (currentSegmentIndex + 1 < routeSegments.length) {
+          final nextSegment = routeSegments[currentSegmentIndex + 1];
+          if (nextSegment.points.isNotEmpty) {
+            currentBearing = _calculateBearing(currentLocation!, nextSegment.points.first);
+          }
+        } else {
+          currentBearing = 0.0;
+        }
       }
       
-      // Update point index to last point
-      // The next simulation tick will detect this and trigger completion
-      final lastPointIndex = currentSegment.points.length - 1;
-      
-      // Ensure array has enough elements
+      // Update point index to target point
+      // The simulation will continue from here to the end naturally
       while (_currentPointIndices.length <= currentSegmentIndex) {
         _currentPointIndices.add(0);
       }
-      _currentPointIndices[currentSegmentIndex] = lastPointIndex;
+      _currentPointIndices[currentSegmentIndex] = targetPointIndex;
       
-      debugPrint('✅ Skipped to END of segment $currentSegmentIndex');
-      debugPrint('   - Location: ${currentLocation!.latitude}, ${currentLocation!.longitude}');
-      debugPrint('   - Set currentPointIndex to: $lastPointIndex');
-      debugPrint('   - Next tick will detect end and trigger completion');
+      debugPrint('   - Set currentPointIndex to: $targetPointIndex');
+      debugPrint('   - Simulation will continue to end point naturally');
     }
     
-    // Reset interpolation to force re-check on next tick
+    // Reset interpolation to start fresh from new position
     _startPoint = null;
     _endPoint = null;
     _interpolationProgress = 0.0;
     
-    // CRITICAL: Ensure simulation is running to detect completion
+    // CRITICAL: Ensure simulation is running to continue to destination
     debugPrint('🔍 Checking simulation state after jump:');
     debugPrint('   - _isSimulating: $_isSimulating');
     debugPrint('   - _simulationTimer?.isActive: ${_simulationTimer?.isActive}');
     
     if (!_isSimulating || _simulationTimer?.isActive != true) {
       debugPrint('⚠️ WARNING: Simulation not running after jump!');
-      debugPrint('   - This will prevent automatic detection of segment completion');
+      debugPrint('   - This will prevent automatic continuation to destination');
       debugPrint('   - Make sure simulation is started before jumping');
     }
     
@@ -970,7 +1011,7 @@ class NavigationViewModel extends ChangeNotifier {
   String _translatePointName(String name) {
     // Common translations
     final translations = {
-      'Carrier': 'Kho vận chuyển',
+      'Carrier': 'Đơn vị vận chuyển',
       'Pickup': 'Điểm lấy hàng',
       'Delivery': 'Điểm giao hàng',
       'Warehouse': 'Kho',

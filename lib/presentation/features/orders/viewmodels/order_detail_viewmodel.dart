@@ -48,6 +48,7 @@ class OrderDetailViewModel extends BaseViewModel {
   bool _isUploadingOdometer = false;
   String _odometerUploadError = '';
   String? _fuelConsumptionId;
+  double? _odometerReadingAtEnd; // Track if final odometer has been uploaded
 
   OrderDetailState get state => _state;
   StartDeliveryState get startDeliveryState => _startDeliveryState;
@@ -65,6 +66,7 @@ class OrderDetailViewModel extends BaseViewModel {
   String get photoUploadError => _photoUploadError;
   bool get isUploadingOdometer => _isUploadingOdometer;
   String get odometerUploadError => _odometerUploadError;
+  double? get odometerReadingAtEnd => _odometerReadingAtEnd;
 
   OrderDetailViewModel({
     required GetOrderDetailsUseCase getOrderDetailsUseCase,
@@ -124,10 +126,15 @@ class OrderDetailViewModel extends BaseViewModel {
 
         notifyListeners();
       },
-      (orderWithDetails) {
+      (orderWithDetails) async {
         _state = OrderDetailState.loaded;
         _orderWithDetails = orderWithDetails;
         _parseRouteSegments();
+        
+        // Load fuel consumption data to check if final odometer has been uploaded
+        // This is important to hide "Hoàn thành chuyến xe" button if already completed
+        await loadFuelConsumptionData();
+        
         notifyListeners();
       },
     );
@@ -249,20 +256,16 @@ class OrderDetailViewModel extends BaseViewModel {
       return false;
     }
     
-    final vehicleAssignmentId = _orderWithDetails!.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
+    // CRITICAL FIX: Use getCurrentUserVehicleAssignment() instead of orderDetails.first
+    // Bug: orderDetails.first might belong to another driver's trip in multi-trip orders
+    final vehicleAssignment = getCurrentUserVehicleAssignment();
+    if (vehicleAssignment == null) {
+      // debugPrint('❌ canStartDelivery: cannot get current user vehicle assignment');
       return false;
     }
     
-    // Vehicle assignment must exist
-    try {
-      _orderWithDetails!.vehicleAssignments.firstWhere(
-        (va) => va.id == vehicleAssignmentId,
-      );
-      return true;
-    } catch (e) {
-      return false;
-    }
+    // Vehicle assignment must exist and belong to current driver
+    return true;
   }
 
   /// Lấy OrderDetail Status của trip hiện tại (trip của driver hiện tại)
@@ -352,17 +355,50 @@ class OrderDetailViewModel extends BaseViewModel {
 
   /// Kiểm tra xem có thể upload odometer cuối không (khi đã về carrier)
   /// Dựa trên OrderDetail Status của trip hiện tại
+  /// 
+  /// CRITICAL: Driver PHẢI upload odometer cuối với TẤT CẢ các trường hợp END-OF-TRIP:
+  /// - DELIVERED: Giao hàng thành công → SUCCESSFUL
+  /// - IN_TROUBLES: Có sự cố (tai nạn, xe hỏng), staff chưa xử lý → GIỮ NGUYÊN
+  /// - COMPENSATION: Hàng hư hại đã bồi thường → GIỮ NGUYÊN
+  /// - RETURNED: Đã trả hàng về pickup (customer reject) → GIỮ NGUYÊN
+  /// - CANCELLED: Khách không trả tiền return → GIỮ NGUYÊN
+  /// - SUCCESSFUL: Đã upload rồi (allow re-upload)
+  /// 
+  /// ⚠️ KHÔNG bao gồm RETURNING: Driver PHẢI đến pickup trước, không có exception!
+  /// RETURNING → confirmReturnDelivery → RETURNED → upload odo cuối
+  /// 
+  /// Backend logic: Chỉ DELIVERED → SUCCESSFUL, các status khác giữ nguyên
+  /// 
+  /// FIX: Không hiển thị nút nếu đã upload final odometer rồi (check qua _odometerReadingAtEnd)
   bool canUploadFinalOdometer() {
     if (_orderWithDetails == null) return false;
+    
+    // CRITICAL FIX: If final odometer already uploaded, don't show button
+    // This prevents showing button after RETURNED status completed with odometer
+    if (_odometerReadingAtEnd != null && _odometerReadingAtEnd! > 0) {
+      debugPrint('⚠️ Final odometer already uploaded: $_odometerReadingAtEnd km');
+      return false;
+    }
     
     final detailStatus = getCurrentTripOrderDetailStatus();
     if (detailStatus == null) {
       // Fallback to Order Status if detail status not found
-      return _orderWithDetails!.status == 'DELIVERED';
+      return _orderWithDetails!.status == 'DELIVERED' || 
+             _orderWithDetails!.status == 'IN_TROUBLES' ||
+             _orderWithDetails!.status == 'COMPENSATION' ||
+             _orderWithDetails!.status == 'RETURNED' ||
+             _orderWithDetails!.status == 'CANCELLED';
     }
     
-    // Can upload final odometer if detail status is DELIVERED or SUCCESSFUL
-    return detailStatus == 'DELIVERED' || detailStatus == 'SUCCESSFUL';
+    // Can upload final odometer for ALL end-of-trip states
+    // Driver MUST return to carrier regardless of delivery outcome
+    // NOTE: RETURNING excluded - driver must reach pickup first!
+    return detailStatus == 'DELIVERED' || 
+           detailStatus == 'IN_TROUBLES' ||
+           detailStatus == 'COMPENSATION' ||
+           detailStatus == 'RETURNED' ||
+           detailStatus == 'CANCELLED' ||
+           detailStatus == 'SUCCESSFUL';
   }
 
   /// Kiểm tra xem có thể báo cáo người nhận từ chối nhận hàng không
@@ -376,9 +412,9 @@ class OrderDetailViewModel extends BaseViewModel {
     }
     
     // Có thể báo cáo từ chối khi:
-    // - IN_TRANSIT: đang trên đường giao hàng
+    // - ON_DELIVERED: đang trên đường giao hàng (đã xác nhận seal + đóng gói)
     // - ONGOING_DELIVERED: đã tới điểm giao, đang giao hàng
-    return detailStatus == 'IN_TRANSIT' || detailStatus == 'ONGOING_DELIVERED';
+    return detailStatus == 'ON_DELIVERED' || detailStatus == 'ONGOING_DELIVERED';
   }
 
   /// Kiểm tra xem có thể xác nhận trả hàng về pickup không
@@ -439,7 +475,6 @@ class OrderDetailViewModel extends BaseViewModel {
     return vehicleAssignment?.id;
   }
 
-  /// Bắt đầu giao hàng
   Future<bool> startDelivery({
     required Decimal odometerReading,
     required File odometerImage,
@@ -669,6 +704,15 @@ class OrderDetailViewModel extends BaseViewModel {
         debugPrint('   - Type: ${response.runtimeType}');
         if (response['success'] == true && response['data'] != null) {
           _fuelConsumptionId = response['data']['id'];
+          // Check if final odometer reading has been uploaded
+          final odometerEnd = response['data']['odometerReadingAtEnd'];
+          if (odometerEnd != null) {
+            _odometerReadingAtEnd = (odometerEnd is num) ? odometerEnd.toDouble() : null;
+            debugPrint('✅ Final odometer already uploaded: $_odometerReadingAtEnd km');
+          } else {
+            _odometerReadingAtEnd = null;
+            debugPrint('ℹ️ Final odometer not uploaded yet');
+          }
           debugPrint('✅ Fuel consumption ID loaded: $_fuelConsumptionId');
         } else {
           debugPrint('⚠️ Response success=false or data is null');
@@ -717,7 +761,9 @@ class OrderDetailViewModel extends BaseViewModel {
       },
       (success) {
         _isUploadingOdometer = false;
-        debugPrint('✅ Odometer end reading uploaded successfully');
+        // Mark as uploaded to prevent showing button again
+        _odometerReadingAtEnd = odometerReading;
+        debugPrint('✅ Odometer end reading uploaded successfully: $odometerReading km');
         notifyListeners();
         return true;
       },

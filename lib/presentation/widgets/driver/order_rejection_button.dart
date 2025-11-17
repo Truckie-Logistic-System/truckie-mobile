@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/utils/sound_utils.dart';
 import '../../../domain/entities/order_with_details.dart';
+import '../../../domain/entities/order_detail.dart';
 import '../../../domain/repositories/issue_repository.dart';
+import '../../features/auth/viewmodels/auth_viewmodel.dart';
 import '../../features/orders/viewmodels/order_list_viewmodel.dart';
 import 'order_rejection_package_selector.dart';
 
@@ -51,6 +55,9 @@ class OrderRejectionButton extends StatelessWidget {
   }
 
   Future<void> _showOrderRejectionDialog(BuildContext context) async {
+    // Play warning sound when showing rejection dialog
+    SoundUtils.playWarningSound();
+    
     // Convert OrderDetails to PackageItems
     final packages = order.orderDetails
         .map((detail) => PackageItem(
@@ -72,20 +79,41 @@ class OrderRejectionButton extends StatelessWidget {
       return;
     }
 
-    // Get vehicleAssignmentId before opening modal
-    final vehicleAssignmentId = order.orderDetails.isNotEmpty
-        ? order.orderDetails.first.vehicleAssignmentId
-        : null;
-
-    if (vehicleAssignmentId == null) {
+    // CRITICAL FIX: Get vehicleAssignmentId of CURRENT DRIVER's trip
+    // Bug: orderDetails.first might belong to another driver in multi-trip orders
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUserPhone = authViewModel.driver?.userResponse.phoneNumber;
+    
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('❌ Không tìm thấy thông tin phân công xe'),
+          content: Text('❌ Không thể xác định tài xế hiện tại'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
+    
+    // Find vehicle assignment where current user is primary driver
+    VehicleAssignment? currentVehicleAssignment;
+    try {
+      currentVehicleAssignment = order.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) return false;
+          return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+        },
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Không tìm thấy chuyến xe của bạn'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    final vehicleAssignmentId = currentVehicleAssignment.id;
 
     // Show package selector modal
     await showModalBottomSheet(
@@ -152,6 +180,9 @@ class OrderRejectionButton extends StatelessWidget {
       if (context.mounted) {
         Navigator.pop(context); // Close loading
 
+        // Play warning sound for order rejection (customer refused)
+        SoundUtils.playWarningSound();
+        
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -176,6 +207,9 @@ class OrderRejectionButton extends StatelessWidget {
       if (context.mounted) {
         Navigator.pop(context); // Close loading
 
+        // Play error sound for failed report
+        SoundUtils.playErrorSound();
+        
         // Show error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

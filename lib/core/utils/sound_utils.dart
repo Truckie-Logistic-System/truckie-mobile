@@ -1,76 +1,161 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 /// Sound types for different notifications
+/// Each type has unique sound pattern and haptic feedback
 enum SoundType {
+  /// Ascending powerup sound - positive feedback
   success,
+  
+  /// Gentle blip - non-intrusive info
   info,
+  
+  /// Alert beep pattern - attention needed
   warning,
+  
+  /// Harsh descending pattern - critical error
   error,
+  
+  /// Notification bell - new issue alert
   newIssue,
+  
+  /// Important alert - seal assignment
   sealAssignment,
+  
+  /// Resolved confirmation - issue fixed
   damageResolved,
+  
+  /// Resolved confirmation - rejection handled
   orderRejectionResolved,
+  
+  /// Rewarding sound - payment received
   paymentSuccess,
 }
 
 /// Sound utility class for playing notification sounds
+/// 
+/// Design Principles:
+/// - Ascending patterns = Positive feedback (success, rewards)
+/// - Descending patterns = Negative feedback (errors, warnings)
+/// - Short duration = Low priority (info, confirm)
+/// - Long duration = High priority (errors, important alerts)
+/// - Rich patterns = Rewarding (payment, achievements)
+/// - Simple patterns = Subtle (info, minor updates)
 class SoundUtils {
-  static const MethodChannel _channel = MethodChannel('sound_utils');
+  
+  // Sound pattern configurations based on notification importance
+  static const Map<SoundType, _SoundConfig> _soundConfigs = {
+    SoundType.success: _SoundConfig(
+      pattern: [100, 80, 60], // Ascending rhythm (fast to slow)
+      hapticType: _HapticType.light,
+      description: 'Ascending powerup - positive feedback',
+    ),
+    SoundType.info: _SoundConfig(
+      pattern: [50], // Single short blip
+      hapticType: _HapticType.selection,
+      description: 'Gentle blip - non-intrusive',
+    ),
+    SoundType.warning: _SoundConfig(
+      pattern: [120, 120], // Double equal beeps
+      hapticType: _HapticType.medium,
+      description: 'Clear double-beep alert',
+    ),
+    SoundType.error: _SoundConfig(
+      pattern: [150, 100, 80], // Descending urgent pattern
+      hapticType: _HapticType.heavy,
+      description: 'Harsh descending buzz - critical',
+    ),
+    SoundType.paymentSuccess: _SoundConfig(
+      pattern: [80, 60, 50, 40], // Cascading reward pattern
+      hapticType: _HapticType.heavy,
+      description: 'Rich coin collect - rewarding',
+    ),
+    SoundType.newIssue: _SoundConfig(
+      pattern: [100, 200, 100], // Bell-like ring
+      hapticType: _HapticType.medium,
+      description: 'Crisp notification bell',
+    ),
+    SoundType.sealAssignment: _SoundConfig(
+      pattern: [120, 180, 120], // Important attention pattern
+      hapticType: _HapticType.medium,
+      description: 'Important seal assignment alert',
+    ),
+    SoundType.damageResolved: _SoundConfig(
+      pattern: [80, 100], // Confirmation pattern
+      hapticType: _HapticType.light,
+      description: 'Issue resolved confirmation',
+    ),
+    SoundType.orderRejectionResolved: _SoundConfig(
+      pattern: [80, 100], // Confirmation pattern
+      hapticType: _HapticType.light,
+      description: 'Rejection resolved confirmation',
+    ),
+  };
 
-  /// Play notification sound based on type
+  /// Play notification sound based on type with rich patterns
+  /// 
+  /// Each sound type has:
+  /// - Unique timing pattern (ascending/descending/stable)
+  /// - Specific haptic feedback intensity
+  /// - Duration optimized for priority level
   static Future<void> playNotificationSound(SoundType type, {double volume = 0.7}) async {
     try {
-      debugPrint('🔊 [SoundUtils] Playing notification sound: $type');
-      
-      // Use system sounds + haptic feedback for different notification types
-      switch (type) {
-        case SoundType.success:
-        case SoundType.damageResolved:
-        case SoundType.orderRejectionResolved:
-          debugPrint('🔊 [SoundUtils] Playing single system click + light haptic');
-          await SystemSound.play(SystemSoundType.click);
-          await HapticFeedback.lightImpact();
-          break;
-        case SoundType.paymentSuccess:
-          // Play multiple success beeps + heavy haptic for payment confirmation
-          debugPrint('🔊 [SoundUtils] Playing 2 beeps + heavy haptic for payment success');
-          await HapticFeedback.heavyImpact();
-          await _playMultipleBeeps(2, 300);
-          break;
-        case SoundType.info:
-          debugPrint('🔊 [SoundUtils] Playing info sound + selection haptic');
-          await SystemSound.play(SystemSoundType.click);
-          await HapticFeedback.selectionClick();
-          break;
-        case SoundType.warning:
-        case SoundType.newIssue:
-        case SoundType.sealAssignment:
-          // Play multiple beeps + medium haptic for important notifications
-          debugPrint('🔊 [SoundUtils] Playing 2 beeps + medium haptic for warning/issue');
-          await HapticFeedback.mediumImpact();
-          await _playMultipleBeeps(2, 200);
-          break;
-        case SoundType.error:
-          debugPrint('🔊 [SoundUtils] Playing 3 beeps + vibrate for error');
-          await HapticFeedback.vibrate();
-          await _playMultipleBeeps(3, 150);
-          break;
+      final config = _soundConfigs[type];
+      if (config == null) {
+        debugPrint('⚠️ [SoundUtils] Unknown sound type: $type');
+        return;
       }
       
-      debugPrint('✅ [SoundUtils] Sound played successfully');
+      debugPrint('🔊 [SoundUtils] Playing: ${config.description}');
+      debugPrint('   Pattern: ${config.pattern} | Haptic: ${config.hapticType}');
+      
+      // Play haptic feedback first for immediate tactile response
+      await _playHaptic(config.hapticType);
+      
+      // Play sound pattern
+      await _playPattern(config.pattern);
+      
+      debugPrint('✅ [SoundUtils] Sound completed successfully');
     } catch (e) {
       debugPrint('❌ [SoundUtils] Error playing notification sound: $e');
     }
   }
 
-  /// Play multiple system beeps with interval
-  static Future<void> _playMultipleBeeps(int count, int intervalMs) async {
-    for (int i = 0; i < count; i++) {
+  /// Play sound pattern with dynamic timing
+  /// Pattern array defines intervals between beeps in milliseconds
+  /// Shorter intervals = faster rhythm = more urgent
+  /// Longer intervals = slower rhythm = calmer
+  static Future<void> _playPattern(List<int> pattern) async {
+    for (int i = 0; i < pattern.length; i++) {
+      // Play system click sound
       await SystemSound.play(SystemSoundType.click);
-      if (i < count - 1) {
-        await Future.delayed(Duration(milliseconds: intervalMs));
+      
+      // Wait for specified interval before next beep
+      if (i < pattern.length - 1) {
+        await Future.delayed(Duration(milliseconds: pattern[i]));
       }
+    }
+  }
+  
+  /// Play haptic feedback based on type
+  static Future<void> _playHaptic(_HapticType type) async {
+    switch (type) {
+      case _HapticType.light:
+        await HapticFeedback.lightImpact();
+        break;
+      case _HapticType.medium:
+        await HapticFeedback.mediumImpact();
+        break;
+      case _HapticType.heavy:
+        await HapticFeedback.heavyImpact();
+        break;
+      case _HapticType.selection:
+        await HapticFeedback.selectionClick();
+        break;
+      case _HapticType.vibrate:
+        await HapticFeedback.vibrate();
+        break;
     }
   }
 
@@ -113,4 +198,26 @@ class SoundUtils {
   static Future<void> playPaymentSuccessSound() async {
     await playNotificationSound(SoundType.paymentSuccess);
   }
+}
+
+/// Internal configuration for sound patterns
+class _SoundConfig {
+  final List<int> pattern;
+  final _HapticType hapticType;
+  final String description;
+  
+  const _SoundConfig({
+    required this.pattern,
+    required this.hapticType,
+    required this.description,
+  });
+}
+
+/// Internal haptic feedback types
+enum _HapticType {
+  light,
+  medium,
+  heavy,
+  selection,
+  vibrate,
 }

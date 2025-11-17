@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../core/utils/order_detail_status_helper.dart';
 import '../../../../../core/utils/responsive_extensions.dart';
 import '../../../../../domain/entities/order_detail.dart';
 import '../../../../../domain/entities/order_with_details.dart';
@@ -48,197 +49,249 @@ class PackageSection extends StatelessWidget {
           currentOrderDetails = order.orderDetails;
         }
 
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-          child: Padding(
-            padding: EdgeInsets.all(16.r),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Thông tin hàng hóa', style: AppTextStyles.titleMedium),
-                SizedBox(height: 12.h),
-                
-                // Hiển thị tất cả order details của chuyến xe hiện tại
-                if (currentOrderDetails.isNotEmpty) ...[
-                  ...currentOrderDetails.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final orderDetail = entry.value;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (index > 0) ...[
-                          SizedBox(height: 16.h),
-                          Divider(color: AppColors.border),
-                          SizedBox(height: 12.h),
-                        ],
-                        _buildTrackingCodeRow(
-                          context: context,
-                          code: orderDetail.trackingCode,
-                        ),
-                        SizedBox(height: 8.h),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.description,
-                              size: 16.r,
-                              color: AppColors.textSecondary,
-                            ),
-                            SizedBox(width: 8.w),
-                            Expanded(
-                              child: Text(
-                                'Mô tả: ${orderDetail.description}',
-                                style: AppTextStyles.bodyMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8.h),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.scale,
-                              size: 16.r,
-                              color: AppColors.textSecondary,
-                            ),
-                            SizedBox(width: 8.w),
-                            Text(
-                              'Trọng lượng: ${orderDetail.weightBaseUnit} ${orderDetail.unit}',
-                              style: AppTextStyles.bodyMedium,
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12.h),
-                      ],
-                    );
-                  }).toList(),
-                ],
-                
-                SizedBox(height: 8.h),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.format_list_numbered,
-                      size: 16.r,
-                      color: AppColors.textSecondary,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header section
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, color: Colors.white, size: 24.r),
+                  SizedBox(width: 12.w),
+                  Text(
+                    'Danh sách hàng hóa',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                    SizedBox(width: 8.w),
-                    Text(
-                      'Số lượng: ${currentOrderDetails.length}',
-                      style: AppTextStyles.bodyMedium,
+                  ),
+                  Spacer(),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20.r),
                     ),
-                  ],
-                ),
-                if (currentOrderDetails.isNotEmpty && currentOrderDetails.first.orderSize != null) ...[
-                  SizedBox(height: 16.h),
-                  _buildSizeInfo(currentOrderDetails.first.orderSize!),
+                    child: Text(
+                      '${currentOrderDetails.length} kiện',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ],
-              ],
+              ),
             ),
-          ),
+            SizedBox(height: 16.h),
+            
+            // Hiển thị tất cả order details của chuyến xe hiện tại
+            if (currentOrderDetails.isNotEmpty) ...[
+              ...currentOrderDetails.asMap().entries.map((entry) {
+                final index = entry.key;
+                final orderDetail = entry.value;
+                return Column(
+                  children: [
+                    if (index > 0) SizedBox(height: 12.h),
+                    _buildPackageCard(context, orderDetail, index + 1),
+                  ],
+                );
+              }).toList(),
+            ],
+          ],
         );
       },
     );
   }
 
-  /// Widget hiển thị mã theo dõi order detail
-  Widget _buildTrackingCodeRow({
-    required BuildContext context,
-    required String code,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.qr_code, size: 16.r, color: AppColors.textSecondary),
-        SizedBox(width: 8.w),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Mã theo dõi:',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 4.h),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12.w,
-                        vertical: 8.h,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8.r),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        code,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          fontFamily: 'Courier',
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  InkWell(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: code));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Đã sao chép: $code'),
-                          backgroundColor: AppColors.success,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(8.r),
-                    child: Container(
-                      padding: EdgeInsets.all(8.r),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(8.r),
-                      ),
-                      child: Icon(Icons.copy, color: Colors.white, size: 20.r),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+  /// Widget hiển thị card của từng package
+  Widget _buildPackageCard(
+    BuildContext context,
+    OrderDetail orderDetail,
+    int packageNumber,
+  ) {
+    final statusColor = OrderDetailStatusHelper.getStatusColor(orderDetail.status);
+    final statusText = OrderDetailStatusHelper.getStatusText(orderDetail.status);
+    final statusIcon = OrderDetailStatusHelper.getStatusIcon(orderDetail.status);
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.r),
+        side: BorderSide(
+          color: statusColor.withOpacity(0.3),
+          width: 2,
         ),
-      ],
-    );
-  }
-
-  /// Widget hiển thị thông tin kích thước hàng hóa
-  Widget _buildSizeInfo(OrderSize size) {
-    // Format kích thước theo yêu cầu: min d x min r x min c - max d x max r x max c
-    // d: chiều dài (length), r: chiều rộng (width), c: chiều cao (height)
-    final minDimensions =
-        '${size.minLength} x ${size.minWidth} x ${size.minHeight}';
-    final maxDimensions =
-        '${size.maxLength} x ${size.maxWidth} x ${size.maxHeight}';
-    final dimensionsText = '$minDimensions - $maxDimensions cm';
-
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8.h),
-      child: Row(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.straighten, size: 16.r, color: AppColors.textSecondary),
-          SizedBox(width: 8.w),
-          Expanded(
-            child: Text(
-              'Kích thước: $dimensionsText',
-              style: AppTextStyles.bodyMedium,
+          // Status badge header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+            decoration: BoxDecoration(
+              color: statusColor,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10.r),
+                topRight: Radius.circular(10.r),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(statusIcon, color: Colors.white, size: 20.r),
+                SizedBox(width: 8.w),
+                Text(
+                  statusText,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Text(
+                    'Kiện #$packageNumber',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Package details
+          Padding(
+            padding: EdgeInsets.all(16.r),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tracking code
+                _buildInfoRow(
+                  context: context,
+                  icon: Icons.qr_code_2,
+                  label: 'Mã theo dõi',
+                  value: orderDetail.trackingCode,
+                  isCopyable: true,
+                ),
+                SizedBox(height: 12.h),
+                
+                // Description
+                _buildInfoRow(
+                  context: context,
+                  icon: Icons.description,
+                  label: 'Mô tả',
+                  value: orderDetail.description,
+                ),
+                SizedBox(height: 12.h),
+                
+                // Weight
+                _buildInfoRow(
+                  context: context,
+                  icon: Icons.monitor_weight,
+                  label: 'Trọng lượng',
+                  value: '${orderDetail.weightBaseUnit} ${orderDetail.unit}',
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  /// Widget hiển thị thông tin dạng row
+  Widget _buildInfoRow({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isCopyable = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(12.r),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: AppColors.border.withOpacity(0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.all(8.r),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8.r),
+            ),
+            child: Icon(
+              icon,
+              size: 20.r,
+              color: AppColors.primary,
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 4.h),
+                Text(
+                  value,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isCopyable) ...[
+            SizedBox(width: 8.w),
+            InkWell(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Đã sao chép: $value'),
+                    backgroundColor: AppColors.success,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8.r),
+              child: Container(
+                padding: EdgeInsets.all(8.r),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Icon(Icons.copy, color: Colors.white, size: 18.r),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
 }

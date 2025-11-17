@@ -267,10 +267,10 @@ class JourneyInfoSection extends StatelessWidget {
   /// Dịch tên điểm từ tiếng Anh sang tiếng Việt
   String _translatePointName(String pointName) {
     final translations = {
-      'Carrier': 'Kho hàng',
+      'Carrier': 'Đơn vị vận chuyển',
       'Pickup': 'Lấy hàng',
       'Delivery': 'Giao hàng',
-      'carrier': 'Kho hàng',
+      'carrier': 'Đơn vị vận chuyển',
       'pickup': 'Lấy hàng',
       'delivery': 'Giao hàng',
     };

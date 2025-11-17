@@ -140,7 +140,7 @@ class _ReturnConfirmationDialogState extends State<ReturnConfirmationDialog> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Xác nhận trả hàng về kho',
+                      'Xác nhận trả hàng về đơn vị vận chuyển',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -163,7 +163,7 @@ class _ReturnConfirmationDialogState extends State<ReturnConfirmationDialog> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Chụp ảnh xác nhận đã trả hàng về kho tại điểm lấy hàng',
+                'Chụp ảnh xác nhận đã trả hàng về đơn vị vận chuyển tại điểm lấy hàng',
                 style: TextStyle(
                   color: Colors.grey[700],
                   fontSize: 14,

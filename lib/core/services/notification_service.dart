@@ -27,13 +27,15 @@ class NotificationService {
   GlobalKey<NavigatorState>? _navigatorKey;
   AuthViewModel? _authViewModel;
   int _retryCount = 0;
-  static const int _maxRetries = 3;
+  static const int _maxRetries = 10; // Increased from 3 to 10 for better reliability
   Completer<void>? _connectionCompleter;
+  Timer? _reconnectTimer; // Track reconnection timer
   
   // Track shown notifications to prevent duplicates
   final Set<String> _shownNotifications = {};
   String? _lastNotificationId;
   bool _isInitialized = false;
+  bool _isManualDisconnect = false; // Track if disconnect is intentional
 
   final StreamController<Map<String, dynamic>> _notificationController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -164,6 +166,8 @@ class NotificationService {
       await Future.delayed(const Duration(milliseconds: 500));
     }
 
+    // Reset manual disconnect flag when starting new connection
+    _isManualDisconnect = false;
     _currentDriverId = driverId;
     debugPrint('🔌 [NotificationService] ========================================');
     debugPrint('🔌 [NotificationService] Connecting for driver ID: $driverId');
@@ -227,7 +231,21 @@ class NotificationService {
           _handleStompError(frame);
         },
         onDisconnect: (StompFrame frame) {
-          // debugPrint('🔌 [NotificationService] WebSocket disconnected');
+          debugPrint('🔌 [NotificationService] ========================================');
+          debugPrint('🔌 [NotificationService] WebSocket disconnected');
+          debugPrint('🔌 [NotificationService] Frame: ${frame.body}');
+          debugPrint('🔌 [NotificationService] Current driver: $_currentDriverId');
+          debugPrint('🔌 [NotificationService] Retry count: $_retryCount');
+          debugPrint('🔌 [NotificationService] ========================================');
+          
+          // CRITICAL: Auto-reconnect when connection is lost
+          // This ensures driver always receives notifications even after network issues
+          if (_currentDriverId != null && !_isManualDisconnect) {
+            debugPrint('🔄 [NotificationService] Connection lost, scheduling auto-reconnect...');
+            _retryConnection();
+          } else {
+            debugPrint('⚠️ [NotificationService] Manual disconnect or no driver ID, skipping auto-reconnect');
+          }
         },
         // CRITICAL: Disable auto-reconnect to prevent reconnection with stale tokens
         // We handle reconnection manually via _retryConnection() with fresh tokens
@@ -361,9 +379,20 @@ class NotificationService {
   /// Pattern 2: Action-required notification
   /// Flow: Confirm modal → Navigate to navigation screen → Show bottom sheet (DON'T resume)
   /// After bottom sheet submit → Fetch order → Auto resume simulation
-  void _showSealAssignmentNotification(Map<String, dynamic> notification) {
+  void _showSealAssignmentNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
       debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
+      // CRITICAL: Retry after a delay to wait for MaterialApp to mount
+      // This fixes the issue where dialogs don't show on first app launch
+      if (retryCount < 5) {
+        debugPrint('⏳ [NotificationService] Retrying seal assignment dialog in 500ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _showSealAssignmentNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        debugPrint('❌ [NotificationService] Failed to show seal assignment dialog after 5 retries');
+      }
       return;
     }
 
@@ -554,6 +583,13 @@ class NotificationService {
 
   /// Disconnect from WebSocket
   void disconnect() {
+    // Set manual disconnect flag to prevent auto-reconnect
+    _isManualDisconnect = true;
+    
+    // Cancel any pending reconnect timer
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    
     // Unsubscribe first
     if (_currentSubscription != null) {
       // debugPrint('🔄 [NotificationService] Unsubscribing...');
@@ -635,7 +671,7 @@ class NotificationService {
 
   /// Handle return payment success notification
   /// Customer paid, journey is now ACTIVE, driver can proceed with return
-  void _handleReturnPaymentSuccess(Map<String, dynamic> notification) {
+  void _handleReturnPaymentSuccess(Map<String, dynamic> notification, {int retryCount = 0}) {
     debugPrint('✅ [NotificationService] Return payment SUCCESS - Customer paid');
     
     final issueId = notification['issueId'] as String?;
@@ -742,6 +778,17 @@ class NotificationService {
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         ),
       );
+    } else {
+      // CRITICAL: Retry after a delay to wait for MaterialApp to mount
+      // This fixes the issue where dialogs don't show on first app launch
+      if (retryCount < 5) {
+        debugPrint('⏳ [NotificationService] Retrying payment success dialog in 500ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _handleReturnPaymentSuccess(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        debugPrint('❌ [NotificationService] Failed to show payment success dialog after 5 retries');
+      }
     }
   }
   
@@ -827,7 +874,7 @@ class NotificationService {
   /// Staff resolved damage issue, driver can continue the trip
   /// Pattern 1: Info-only notification
   /// Flow: Confirm modal → Navigate to navigation screen (if needed) → Fetch order → Auto resume simulation
-  void _handleDamageResolved(Map<String, dynamic> notification) {
+  void _handleDamageResolved(Map<String, dynamic> notification, {int retryCount = 0}) {
     debugPrint('📦 [NotificationService] Damage issue RESOLVED - Driver can continue trip');
     
     final issue = notification['issue'] as Map<String, dynamic>?;
@@ -844,9 +891,19 @@ class NotificationService {
   
   /// Show damage resolved notification dialog
   /// Pattern 1: Info-only notification - navigate + fetch + auto-resume
-  void _showDamageResolvedNotification(Map<String, dynamic> notification) {
+  void _showDamageResolvedNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
       debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
+      // CRITICAL: Retry after a delay to wait for MaterialApp to mount
+      if (retryCount < 5) {
+        debugPrint('⏳ [NotificationService] Retrying damage resolved dialog in 500ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _showDamageResolvedNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        debugPrint('❌ [NotificationService] Failed to show damage resolved dialog after 5 retries');
+      }
       return;
     }
 
@@ -986,9 +1043,19 @@ class NotificationService {
   
   /// Show order rejection resolved notification dialog
   /// Pattern 1: Info-only notification - navigate + fetch + auto-resume
-  void _showOrderRejectionResolvedNotification(Map<String, dynamic> notification) {
+  void _showOrderRejectionResolvedNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
       debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
+      // CRITICAL: Retry after a delay to wait for MaterialApp to mount
+      if (retryCount < 5) {
+        debugPrint('⏳ [NotificationService] Retrying order rejection resolved dialog in 500ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _showOrderRejectionResolvedNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        debugPrint('❌ [NotificationService] Failed to show order rejection resolved dialog after 5 retries');
+      }
       return;
     }
 
@@ -1163,18 +1230,36 @@ class NotificationService {
 
   /// Retry connection with exponential backoff
   void _retryConnection() {
+    // Cancel any existing reconnect timer
+    _reconnectTimer?.cancel();
+    
     if (_retryCount >= _maxRetries) {
-      // debugPrint('❌ [NotificationService] Max retries reached, giving up');
+      debugPrint('❌ [NotificationService] Max retries ($_maxRetries) reached');
+      debugPrint('⚠️ [NotificationService] Will retry again in 60 seconds...');
+      
+      // Even after max retries, schedule one more attempt after longer delay
+      // This ensures we keep trying indefinitely with longer intervals
+      _reconnectTimer = Timer(const Duration(seconds: 60), () {
+        _retryCount = 0; // Reset counter for next round of attempts
+        _retryConnection();
+      });
       return;
     }
 
     _retryCount++;
-    // debugPrint('🔄 [NotificationService] Retrying connection (attempt $_retryCount/$_maxRetries)...');
+    debugPrint('🔄 [NotificationService] Retrying connection (attempt $_retryCount/$_maxRetries)...');
+    
+    // Exponential backoff: min(5 * attempt, 30) seconds
+    final delaySeconds = (_retryCount * 5).clamp(5, 30);
+    debugPrint('⏳ [NotificationService] Next retry in $delaySeconds seconds...');
     
     // Schedule retry with exponential backoff
-    Future.delayed(Duration(seconds: 5 * _retryCount), () async {
-      if (_currentDriverId != null && _retryCount <= _maxRetries) {
+    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () async {
+      if (_currentDriverId != null && !_isManualDisconnect) {
+        debugPrint('🔌 [NotificationService] Attempting reconnect for driver: $_currentDriverId');
         await connect(_currentDriverId!);
+      } else {
+        debugPrint('⚠️ [NotificationService] Cannot retry: driver=$_currentDriverId, manualDisconnect=$_isManualDisconnect');
       }
     });
   }

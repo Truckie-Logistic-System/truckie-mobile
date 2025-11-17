@@ -159,16 +159,15 @@ class AuthViewModel extends BaseViewModel {
         // and the new token gets revoked by the backend's token rotation.
         // Driver info will be fetched on-demand when needed.
 
-        // Connect to notification WebSocket BEFORE navigating
-        // This ensures NotificationService is ready before showing home screen
-        await _connectNotificationService();
-        
-        // Force status to loading to ensure setStatusWithNavigation will trigger navigation
-        // This handles the case where status might already be authenticated from checkAuthStatus
+        // CRITICAL FIX: Set authenticated status FIRST to trigger navigation
+        // Then connect to WebSocket AFTER MaterialApp has mounted
+        // This ensures navigatorKey.currentContext is ready when notifications arrive
         _status = AuthStatus.loading;
-        
-        // Now set authenticated status with navigation
         setStatusWithNavigation(AuthStatus.authenticated);
+        
+        // Wait for navigation to complete, then connect WebSocket
+        // This prevents dialog timing issues on first app launch
+        _connectNotificationService();
         
         return true;
       },
@@ -662,6 +661,12 @@ class AuthViewModel extends BaseViewModel {
     debugPrint('🔌 [AuthViewModel] Driver Name: ${_driver!.userResponse.fullName}');
 
     try {
+      // CRITICAL: Wait for MaterialApp navigation to complete
+      // This ensures navigatorKey.currentContext is ready before WebSocket connects
+      // Reduces the number of retry attempts needed for showing notification dialogs
+      debugPrint('⏳ [AuthViewModel] Waiting for MaterialApp navigation to complete...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
       debugPrint('🔌 [AuthViewModel] Getting NotificationService from GetIt...');
       final notificationService = getIt<NotificationService>();
       debugPrint('🔌 [AuthViewModel] Got NotificationService, calling connect()...');

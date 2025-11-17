@@ -380,21 +380,17 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       return const SizedBox.shrink();
     }
 
-    final orderDetail = widget.viewModel.orderWithDetails!.orderDetails.first;
-    final vehicleAssignmentId = orderDetail.vehicleAssignmentId;
-    final vehicleAssignment = widget.viewModel.orderWithDetails!.vehicleAssignments
-        .cast<VehicleAssignment?>()
-        .firstWhere(
-          (va) => va?.id == vehicleAssignmentId,
-          orElse: () => null,
-        );
+    final vehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
+    if (vehicleAssignment == null) {
+      return const SizedBox.shrink();
+    }
     
-    if (vehicleAssignment?.journeyHistories.isEmpty ?? true) {
+    if (vehicleAssignment.journeyHistories.isEmpty) {
       return const SizedBox.shrink();
     }
     
     // Chỉ dùng ACTIVE journey history mới nhất
-    final activeJourney = vehicleAssignment!.journeyHistories
+    final activeJourney = vehicleAssignment.journeyHistories
         .where((j) => j.status == 'ACTIVE')
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -418,11 +414,11 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
     String startPointName = currentSegment.startPointName;
     String endPointName = currentSegment.endPointName;
 
-    if (startPointName == "Carrier") startPointName = "Kho";
+    if (startPointName == "Carrier") startPointName = "Đơn vị vận chuyển";
     if (startPointName == "Pickup") startPointName = "Lấy hàng";
     if (startPointName == "Delivery") startPointName = "Giao hàng";
 
-    if (endPointName == "Carrier") endPointName = "Kho";
+    if (endPointName == "Carrier") endPointName = "Đơn vị vận chuyển";
     if (endPointName == "Pickup") endPointName = "Lấy hàng";
     if (endPointName == "Delivery") endPointName = "Giao hàng";
 
@@ -519,7 +515,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
       return false;
     }
     
-    final vehicleAssignment = _getVehicleAssignmentForFirstOrderDetail();
+    final vehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
     if (vehicleAssignment == null || vehicleAssignment.journeyHistories.isEmpty) {
       return false;
     }
@@ -536,20 +532,9 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
     return activeJourney.first.journeySegments.isNotEmpty;
   }
 
-  VehicleAssignment? _getVehicleAssignmentForFirstOrderDetail() {
-    if (widget.viewModel.orderWithDetails?.orderDetails.isEmpty ?? true) {
-      return null;
-    }
-    final vehicleAssignmentId = widget.viewModel.orderWithDetails!.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
-      return null;
-    }
-    return widget.viewModel.orderWithDetails!.vehicleAssignments
-        .cast<VehicleAssignment?>()
-        .firstWhere(
-          (va) => va?.id == vehicleAssignmentId,
-          orElse: () => null,
-        );
+  String? _getVehicleAssignmentId() {
+    final vehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
+    return vehicleAssignment?.id;
   }
 
   String _getMapStyleString() {
@@ -694,7 +679,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
         } else if (i == widget.viewModel.routeSegments.length - 1) {
           endMarkerColor = Colors.orange; // Back to Carrier
           endMarkerIcon = Icons.warehouse;
-          endMarkerLabel = 'Kho';
+          endMarkerLabel = 'Đơn vị vận chuyển';
         } else {
           endMarkerColor = Colors.red; // Delivery
           endMarkerIcon = Icons.local_shipping;

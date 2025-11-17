@@ -10,10 +10,23 @@ abstract class BaseViewModel extends ChangeNotifier {
   bool _isRetrying = false;
 
   /// Ghi đè phương thức notifyListeners để tránh lỗi khi ViewModel đã bị dispose
+  /// CRITICAL: Wrap in try-catch to handle rare race condition where dispose() 
+  /// is called between the check and super.notifyListeners()
   @override
   void notifyListeners() {
-    if (!_isDisposed) {
+    if (_isDisposed) return;
+    
+    try {
       super.notifyListeners();
+    } catch (e) {
+      // Handle case where disposal happened during notifyListeners()
+      // This is a rare race condition but can occur under heavy load
+      if (!e.toString().contains('disposed')) {
+        // Re-throw if it's not a disposal error
+        debugPrint('⚠️ Unexpected error in notifyListeners (${runtimeType}): $e');
+        rethrow;
+      }
+      // Silently ignore disposal errors as they're expected
     }
   }
 

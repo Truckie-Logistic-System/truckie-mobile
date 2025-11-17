@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/utils/sound_utils.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 
 class CompleteDeliveryDialog extends StatelessWidget {
@@ -29,10 +30,15 @@ class CompleteDeliveryDialog extends StatelessWidget {
   }
 
   static Future<bool?> show(BuildContext context) {
+    // Play warning sound when showing confirmation dialog
+    SoundUtils.playWarningSound();
+    
     return showDialog<bool>(
       context: context,
       builder: (context) => CompleteDeliveryDialog(
         onConfirm: () {
+          // Play success sound when confirming delivery completion
+          SoundUtils.playSuccessSound();
           Navigator.pop(context, true);
         },
         onCancel: () {

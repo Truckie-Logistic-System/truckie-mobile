@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../domain/entities/issue.dart';
 import '../../domain/repositories/issue_repository.dart';
 import '../datasources/api_client.dart';
+import '../../core/errors/error_mapper.dart';
 
 /// Concrete implementation of IssueRepository
 class IssueRepositoryImpl implements IssueRepository {
@@ -42,7 +43,9 @@ class IssueRepositoryImpl implements IssueRepository {
     } catch (e, stackTrace) {
       debugPrint('❌ Error creating issue: $e');
       debugPrint('Stack trace: $stackTrace');
-      throw Exception('Không thể tạo sự cố: $e');
+      // Use ErrorMapper for user-friendly message
+      final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
+      throw Exception('Không thể tạo sự cố: $friendlyMessage');
     }
   }
 
@@ -69,7 +72,9 @@ class IssueRepositoryImpl implements IssueRepository {
     } catch (e, stackTrace) {
       debugPrint('❌ Error fetching issue: $e');
       debugPrint('Stack trace: $stackTrace');
-      throw Exception('Không thể tải thông tin sự cố: $e');
+      // Use ErrorMapper for user-friendly message
+      final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
+      throw Exception('Không thể tải thông tin sự cố: $friendlyMessage');
     }
   }
 
@@ -93,7 +98,9 @@ class IssueRepositoryImpl implements IssueRepository {
     } catch (e, stackTrace) {
       debugPrint('❌ Error fetching issue types: $e');
       debugPrint('Stack trace: $stackTrace');
-      throw Exception('Không thể tải danh sách loại sự cố: $e');
+      // Use ErrorMapper for user-friendly message
+      final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
+      throw Exception('Không thể tải danh sách loại sự cố: $friendlyMessage');
     }
   }
 

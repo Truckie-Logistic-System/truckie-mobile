@@ -1572,160 +1572,238 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     }
   }
 
-  void _drawRoutesInternal() {
+  void _drawRoutesInternal() async {
     if (_mapController == null || _viewModel.routeSegments.isEmpty) return;
 
     // Clear previous waypoint markers
     _waypointMarkers.clear();
+    
+    // 🔥 XÓA TẤT CẢ POLYLINES CŨ trước khi vẽ line mới
+    // Điều này đảm bảo chỉ line của segment hiện tại được hiển thị
+    try {
+      await _mapController!.clearPolylines();
+      debugPrint('✅ Cleared all polylines before drawing current segment');
+    } catch (e) {
+      debugPrint('⚠️ Error clearing polylines: $e');
+    }
 
-    // Danh sách tất cả các điểm để tính toán bounds
-    List<LatLng> allPoints = [];
+    // 🎯 CHỈ VẼ SEGMENT HIỆN TẠI - để driver tập trung vào đoạn đường đang đi
+    final currentIndex = _viewModel.currentSegmentIndex;
+    
+    // Validate segment index
+    if (currentIndex < 0 || currentIndex >= _viewModel.routeSegments.length) {
+      debugPrint('⚠️ Invalid segment index: $currentIndex');
+      return;
+    }
+    
+    final currentSegment = _viewModel.routeSegments[currentIndex];
+    
+    // Tối ưu hóa: giảm số điểm cần vẽ nếu quá nhiều
+    List<LatLng> optimizedPoints = currentSegment.points;
+    if (currentSegment.points.length > 100) {
+      optimizedPoints = _simplifyRoute(currentSegment.points);
+    }
 
-    // Draw all segments with different colors
-    for (int i = 0; i < _viewModel.routeSegments.length; i++) {
-      final segment = _viewModel.routeSegments[i];
-      final isCurrentSegment = i == _viewModel.currentSegmentIndex;
+    // Draw line ONLY for current segment
+    _mapController!.addPolyline(
+      PolylineOptions(
+        geometry: optimizedPoints,
+        polylineColor: AppColors.primary, // Màu xanh dương cho route hiện tại
+        polylineWidth: 8.0, // Độ dày dễ nhìn
+        polylineOpacity: 1.0, // Đầy đủ opacity
+      ),
+    );
 
-      // Lấy màu cho đoạn đường này
-      final Color color;
-      switch (i) {
-        case 0:
-          color = AppColors.primary; // Màu xanh dương cho đoạn 1
-          break;
-        case 1:
-          color = Colors.green; // Màu xanh lá cho đoạn 2
-          break;
-        case 2:
-          color = Colors.orange; // Màu cam cho đoạn 3
-          break;
-        default:
-          color = isCurrentSegment ? AppColors.primary : Colors.grey;
+    // Draw waypoint markers ONLY for current segment
+    if (optimizedPoints.isNotEmpty) {
+      // Get journey type to determine correct labels
+      final journeyType = _viewModel.currentJourneyType;
+      
+      // Start point marker
+      Color startPointColor;
+      IconData startPointIcon;
+      String startLabel;
+      
+      if (journeyType == 'RETURN') {
+        // RETURN journey structure: Delivery → Return Pickup → Carrier
+        if (currentIndex == 0) {
+          // From delivery point
+          startPointColor = Colors.red;
+          startPointIcon = Icons.local_shipping;
+          startLabel = 'Giao hàng';
+        } else if (currentIndex == 1) {
+          // From return pickup point
+          startPointColor = Colors.green;
+          startPointIcon = Icons.inventory_2;
+          startLabel = 'Trả hàng';
+        } else {
+          // Fallback
+          startPointColor = Colors.blue;
+          startPointIcon = Icons.location_on;
+          startLabel = 'Điểm trước';
+        }
+      } else {
+        // STANDARD or REROUTE journey: Carrier → Pickup → Delivery → Carrier
+        if (currentIndex == 0) {
+          // First segment: from Carrier
+          startPointColor = Colors.orange;
+          startPointIcon = Icons.warehouse;
+          startLabel = 'Đơn vị vận chuyển';
+        } else {
+          // Subsequent segments: from previous delivery/pickup
+          startPointColor = Colors.blue;
+          startPointIcon = Icons.location_on;
+          startLabel = 'Điểm trước';
+        }
       }
-
-      // Tối ưu hóa: giảm số điểm cần vẽ nếu quá nhiều
-      List<LatLng> optimizedPoints = segment.points;
-      if (segment.points.length > 100) {
-        optimizedPoints = _simplifyRoute(segment.points);
-      }
-
-      // Thêm điểm vào danh sách tất cả các điểm
-      allPoints.addAll(optimizedPoints);
-
-      // Draw line for this segment
-      _mapController!.addPolyline(
-        PolylineOptions(
-          geometry: optimizedPoints,
-          polylineColor: AppColors.primary, // Luôn dùng màu xanh dương
-          polylineWidth: 8.0, // Tăng độ dày để dễ nhìn
-          polylineOpacity: 1.0, // Đầy đủ opacity
-        ),
-      );
-
-      // Draw waypoint markers with icons
-      if (optimizedPoints.isNotEmpty) {
-        // Start point - only for first segment (Carrier)
-        if (i == 0) {
-          _waypointMarkers.add(
-            Marker(
-              child: Container(
+      
+      _waypointMarkers.add(
+        Marker(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
                 decoration: BoxDecoration(
-                  color: Colors.orange,
+                  color: startPointColor,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
                 ),
-                child: const Icon(
-                  Icons.warehouse,
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  startPointIcon,
                   color: Colors.white,
                   size: 20,
                 ),
               ),
-              latLng: optimizedPoints.first,
-            ),
-          );
-        }
-
-        // End point markers with different colors and icons based on segment
-        Color endPointColor;
-        IconData endPointIcon;
-        String label;
-        
-        if (i == 0) {
-          endPointColor = Colors.green; // Pickup point
-          endPointIcon = Icons.inventory_2; // Goods box icon
-          label = 'Lấy hàng';
-        } else if (i == _viewModel.routeSegments.length - 1) {
-          endPointColor = Colors.orange; // Back to Carrier
-          endPointIcon = Icons.warehouse; // Warehouse icon
-          label = 'Kho';
-        } else {
-          endPointColor = Colors.red; // Delivery point
-          endPointIcon = Icons.local_shipping; // Delivery icon
-          label = 'Giao hàng';
-        }
-
-        _waypointMarkers.add(
-          Marker(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: endPointColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(
-                    endPointIcon,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: startPointColor,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  startLabel,
+                  style: const TextStyle(
                     color: Colors.white,
-                    size: 20,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: endPointColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            latLng: optimizedPoints.last,
+              ),
+            ],
           ),
-        );
+          latLng: optimizedPoints.first,
+        ),
+      );
+
+      // End point marker
+      Color endPointColor;
+      IconData endPointIcon;
+      String endLabel;
+      
+      if (journeyType == 'RETURN') {
+        // RETURN journey structure: Delivery → Return Pickup → Carrier
+        if (currentIndex == 0) {
+          // To return pickup point (where goods were picked up originally)
+          endPointColor = Colors.green;
+          endPointIcon = Icons.inventory_2;
+          endLabel = 'Trả hàng';
+        } else if (currentIndex == _viewModel.routeSegments.length - 1) {
+          // Back to carrier
+          endPointColor = Colors.orange;
+          endPointIcon = Icons.warehouse;
+          endLabel = 'Đơn vị vận chuyển';
+        } else {
+          // Fallback
+          endPointColor = Colors.blue;
+          endPointIcon = Icons.location_on;
+          endLabel = 'Điểm đến';
+        }
+      } else {
+        // STANDARD or REROUTE journey: Carrier → Pickup → Delivery → Carrier
+        if (currentIndex == 0) {
+          // Segment 0: Pickup point
+          endPointColor = Colors.green;
+          endPointIcon = Icons.inventory_2;
+          endLabel = 'Lấy hàng';
+        } else if (currentIndex == _viewModel.routeSegments.length - 1) {
+          // Last segment: Back to Carrier
+          endPointColor = Colors.orange;
+          endPointIcon = Icons.warehouse;
+          endLabel = 'Đơn vị vận chuyển';
+        } else {
+          // Middle segments: Delivery point
+          endPointColor = Colors.red;
+          endPointIcon = Icons.local_shipping;
+          endLabel = 'Giao hàng';
+        }
       }
+
+      _waypointMarkers.add(
+        Marker(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: endPointColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  endPointIcon,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: endPointColor,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  endLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          latLng: optimizedPoints.last,
+        ),
+      );
     }
 
-    // If not following user, fit map to show all route points
-    if (!_isFollowingUser && allPoints.length > 1) {
+    // If not following user, fit map to show CURRENT segment points
+    if (!_isFollowingUser && optimizedPoints.length > 1) {
       double minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
 
-      for (final point in allPoints) {
+      for (final point in optimizedPoints) {
         minLat = min(minLat, point.latitude);
         maxLat = max(maxLat, point.latitude);
         minLng = min(minLng, point.longitude);
         maxLng = max(maxLng, point.longitude);
       }
 
-      // No padding to avoid green area
+      // Add padding for better visibility
+      final latPadding = (maxLat - minLat) * 0.1; // 10% padding
+      final lngPadding = (maxLng - minLng) * 0.1;
+
       _mapController!.animateCamera(
         CameraUpdate.newLatLngBounds(
           LatLngBounds(
-            southwest: LatLng(minLat, minLng),
-            northeast: LatLng(maxLat, maxLng),
+            southwest: LatLng(minLat - latPadding, minLng - lngPadding),
+            northeast: LatLng(maxLat + latPadding, maxLng + lngPadding),
           ),
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: 0,
+          left: 50,
+          top: 50,
+          right: 50,
+          bottom: 50,
         ),
       );
     }

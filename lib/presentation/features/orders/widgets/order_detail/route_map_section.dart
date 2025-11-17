@@ -163,21 +163,15 @@ class _RouteMapSectionState extends State<RouteMapSection>
       return false;
     }
     
-    final vehicleAssignmentId = widget.viewModel.orderWithDetails!.orderDetails.first.vehicleAssignmentId;
-    if (vehicleAssignmentId == null) {
+    // CRITICAL FIX: Use getCurrentUserVehicleAssignment() instead of orderDetails.first
+    // Bug: orderDetails.first might belong to another driver's trip in multi-trip orders
+    final vehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
+    if (vehicleAssignment == null) {
       return false;
     }
     
-    try {
-      final vehicleAssignment = widget.viewModel.orderWithDetails!.vehicleAssignments.firstWhere(
-        (va) => va.id == vehicleAssignmentId,
-      );
-      
-      return vehicleAssignment.journeyHistories.isNotEmpty &&
-          vehicleAssignment.journeyHistories.first.journeySegments.isNotEmpty;
-    } catch (e) {
-      return false;
-    }
+    return vehicleAssignment.journeyHistories.isNotEmpty &&
+        vehicleAssignment.journeyHistories.first.journeySegments.isNotEmpty;
   }
 
   Widget _buildRouteInfo() {
@@ -185,14 +179,10 @@ class _RouteMapSectionState extends State<RouteMapSection>
       return const SizedBox.shrink();
     }
 
-    final vehicleAssignmentId = widget.viewModel.orderWithDetails!.orderDetails.first.vehicleAssignmentId;
-    
-    VehicleAssignment? vehicleAssignment;
-    try {
-      vehicleAssignment = widget.viewModel.orderWithDetails!.vehicleAssignments.firstWhere(
-        (va) => va.id == vehicleAssignmentId,
-      );
-    } catch (e) {
+    // CRITICAL FIX: Use getCurrentUserVehicleAssignment() instead of orderDetails.first
+    // Bug: Would show route of another driver's trip in multi-trip orders
+    final vehicleAssignment = widget.viewModel.getCurrentUserVehicleAssignment();
+    if (vehicleAssignment == null) {
       return const SizedBox.shrink();
     }
 
@@ -243,11 +233,11 @@ class _RouteMapSectionState extends State<RouteMapSection>
     String startPointName = segment.startPointName;
     String endPointName = segment.endPointName;
 
-    if (startPointName == "Carrier") startPointName = "Kho";
+    if (startPointName == "Carrier") startPointName = "Đơn vị vận chuyển";
     if (startPointName == "Pickup") startPointName = "Lấy hàng";
     if (startPointName == "Delivery") startPointName = "Giao hàng";
 
-    if (endPointName == "Carrier") endPointName = "Kho";
+    if (endPointName == "Carrier") endPointName = "Đơn vị vận chuyển";
     if (endPointName == "Pickup") endPointName = "Lấy hàng";
     if (endPointName == "Delivery") endPointName = "Giao hàng";
 
@@ -443,7 +433,7 @@ class _RouteMapSectionState extends State<RouteMapSection>
         } else if (i == widget.viewModel.routeSegments.length - 1) {
           endMarkerColor = Colors.orange; // Back to Carrier
           endMarkerIcon = Icons.warehouse;
-          endMarkerLabel = 'Kho';
+          endMarkerLabel = 'Đơn vị vận chuyển';
         } else {
           endMarkerColor = Colors.red; // Delivery
           endMarkerIcon = Icons.local_shipping;

@@ -218,6 +218,15 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
                 
                 // Close dialog
                 Navigator.of(context).pop();
+
+                // CRITICAL: Pop back to NavigationScreen (if came from there)
+                // Note: We don't pass result = true because trip is completed, no need to resume
+                // NavigationScreen will handle the completed state
+                if (_globalLocationManager.isGlobalTrackingActive &&
+                    _globalLocationManager.currentOrderId == widget.order.id) {
+                  debugPrint('✅ Trip completed with odometer, popping back to NavigationScreen');
+                  Navigator.of(context).pop(false); // false = don't resume (trip ended)
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade600,

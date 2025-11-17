@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../../app/di/service_locator.dart';
 import '../../../../../domain/entities/issue.dart';
+import '../../../../../domain/entities/order_detail.dart';
 import '../../../../../domain/entities/order_with_details.dart';
 import '../../../../../domain/repositories/issue_repository.dart';
 import '../../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
@@ -158,19 +159,42 @@ class _DamageReportSectionState extends State<DamageReportSection> {
     });
   }
 
+  /// Get vehicle assignment of current driver
+  VehicleAssignment? _getCurrentUserVehicleAssignment(BuildContext context) {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUserPhone = authViewModel.driver?.userResponse?.phoneNumber;
+    
+    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+      return null;
+    }
+    
+    try {
+      return widget.order.vehicleAssignments.firstWhere(
+        (va) {
+          if (va.primaryDriver == null) return false;
+          return currentUserPhone.trim() == va.primaryDriver!.phoneNumber.trim();
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Could not find vehicle assignment for current user: $e');
+      return null;
+    }
+  }
+
   void _showDamageReportBottomSheet() {
-    // Get vehicle assignment ID from order
-    if (widget.order.vehicleAssignments.isEmpty) {
+    // CRITICAL FIX: Get vehicle assignment of CURRENT DRIVER
+    // Bug: vehicleAssignments.first might belong to another driver in multi-trip orders
+    final vehicleAssignment = _getCurrentUserVehicleAssignment(context);
+    
+    if (vehicleAssignment == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Không tìm thấy thông tin phương tiện'),
+          content: Text('❌ Không tìm thấy chuyến xe của bạn'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
-
-    final vehicleAssignment = widget.order.vehicleAssignments.first;
 
     // Get damage issue type
     _issueRepository.getActiveIssueTypes().then((types) {
@@ -271,8 +295,21 @@ class _DamageReportSectionState extends State<DamageReportSection> {
       // Use location passed from parent widget (consistent with seal report approach)
       debugPrint('📍 Using location: ${widget.currentLatitude}, ${widget.currentLongitude}');
 
-      // Get vehicle assignment ID from order
-      final vehicleAssignment = widget.order.vehicleAssignments.first;
+      // CRITICAL FIX: Get vehicle assignment ID from CURRENT DRIVER
+      // Bug: vehicleAssignments.first might belong to another driver in multi-trip orders
+      final vehicleAssignment = _getCurrentUserVehicleAssignment(context);
+      if (vehicleAssignment == null) {
+        if (context.mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Không tìm thấy chuyến xe của bạn'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       // Report damage issue
       await _issueRepository.reportDamageIssue(

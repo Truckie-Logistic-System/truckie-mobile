@@ -18,7 +18,7 @@ class VehicleWebSocketService {
   Timer? _reconnectTimer;
   Timer? _connectionTimeoutTimer; // Timeout for connection attempts
   int _reconnectAttempts = 0;
-  final int _maxReconnectAttempts = 10;
+  final int _maxReconnectAttempts = 15; // Increased from 10 to 15
   final int _connectionTimeoutSeconds = 10; // Timeout after 10 seconds
 
   // Store callbacks for reconnection
@@ -414,53 +414,60 @@ class VehicleWebSocketService {
     // Cancel any existing reconnect timer
     _reconnectTimer?.cancel();
 
-    // Only attempt to reconnect if we haven't exceeded the maximum attempts
-    if (_reconnectAttempts < _maxReconnectAttempts) {
-      _reconnectAttempts++;
-
-      // Exponential backoff: 2^n * 1000 ms (1s, 2s, 4s, 8s, 16s)
-      final delay = Duration(
-        milliseconds: (1000 * _pow(2, _reconnectAttempts - 1)).toInt(),
-      );
-
-      debugPrint(
-        '📅 Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s',
-      );
-
-      _reconnectTimer = Timer(delay, () {
-        debugPrint(
-          '🔄 Attempting to reconnect (attempt $_reconnectAttempts/$_maxReconnectAttempts)...',
-        );
-        
-        // CRITICAL: Always get latest token from TokenStorageService before reconnecting
-        final latestToken = _getLatestToken();
-        
-        if (latestToken == null) {
-          debugPrint('❌ Cannot reconnect: No access token available');
-          final errorMsg = 'No access token for reconnection';
-          _storedOnError?.call(errorMsg);
-          return;
-        }
-        
-        debugPrint('✅ Using latest token for reconnection');
-        
-        // Use stored callbacks to ensure they persist across reconnects
-        connect(
-          jwtToken: latestToken,
-          vehicleId: vehicleId,
-          onConnected: _storedOnConnected ?? onConnected,
-          onError: _storedOnError ?? onError,
-          onLocationBroadcast: _storedOnLocationBroadcast ?? onLocationBroadcast,
-        );
-      });
-    } else {
-      debugPrint('❌ Maximum reconnect attempts ($_maxReconnectAttempts) reached');
-      debugPrint('   Please restart the app or manually reconnect');
+    // Check if max attempts reached
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint('❌ Max reconnect attempts ($_maxReconnectAttempts) reached');
+      debugPrint('⚠️ Will retry again in 60 seconds with reset counter...');
       
-      // Notify error callback
-      final errorMsg = 'Maximum reconnect attempts reached';
-      _storedOnError?.call(errorMsg);
+      // Even after max retries, schedule one more attempt after longer delay
+      // This ensures GPS tracking keeps trying indefinitely
+      _reconnectTimer = Timer(const Duration(seconds: 60), () {
+        debugPrint('🔄 Resetting reconnect counter and retrying...');
+        _reconnectAttempts = 0; // Reset counter for next round
+        _scheduleReconnect(jwtToken, vehicleId, onConnected, onError, onLocationBroadcast);
+      });
+      return;
     }
+
+    _reconnectAttempts++;
+
+    // Exponential backoff: 2^n * 1000 ms, capped at 32 seconds
+    final delayMs = (1000 * _pow(2, _reconnectAttempts - 1)).toInt().clamp(1000, 32000);
+    final delay = Duration(milliseconds: delayMs);
+
+    debugPrint(
+      '📅 Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s',
+    );
+
+    _reconnectTimer = Timer(delay, () {
+      debugPrint(
+        '🔄 Attempting to reconnect (attempt $_reconnectAttempts/$_maxReconnectAttempts)...',
+      );
+      
+      // CRITICAL: Always get latest token from TokenStorageService before reconnecting
+      final latestToken = _getLatestToken();
+      
+      if (latestToken == null) {
+        debugPrint('❌ Cannot reconnect: No access token available');
+        final errorMsg = 'No access token for reconnection';
+        _storedOnError?.call(errorMsg);
+        
+        // Schedule retry even without token (token might become available later)
+        _scheduleReconnect(jwtToken, vehicleId, onConnected, onError, onLocationBroadcast);
+        return;
+      }
+      
+      debugPrint('✅ Using latest token for reconnection');
+      
+      // Use stored callbacks to ensure they persist across reconnects
+      connect(
+        jwtToken: latestToken,
+        vehicleId: vehicleId,
+        onConnected: _storedOnConnected ?? onConnected,
+        onError: _storedOnError ?? onError,
+        onLocationBroadcast: _storedOnLocationBroadcast ?? onLocationBroadcast,
+      );
+    });
   }
 
   void _subscribeToVehicleUpdates(

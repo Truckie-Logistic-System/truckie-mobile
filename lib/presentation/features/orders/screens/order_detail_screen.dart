@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -34,6 +35,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final AuthViewModel _authViewModel;
   late final OrderListViewModel _orderListViewModel;
   late final GlobalLocationManager _globalLocationManager;
+  Timer? _refreshTimer; // Timer for periodic UI refresh
 
   @override
   void initState() {
@@ -120,17 +122,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _startPeriodicRefresh() {
-    // Refresh UI every 2 seconds to update button state
-    Future.delayed(const Duration(seconds: 2), () {
+    // CRITICAL: Use Timer.periodic instead of recursive Future.delayed
+    // to prevent memory leaks and ensure proper cleanup
+    _refreshTimer?.cancel(); // Cancel existing timer if any
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (mounted) {
-        setState(() {});
-        _startPeriodicRefresh();
+        setState(() {}); // Refresh UI to update button state
+      } else {
+        timer.cancel(); // Auto-cleanup if widget disposed
       }
     });
   }
 
   @override
   void dispose() {
+    // CRITICAL: Cancel periodic refresh timer to prevent memory leak
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    
     // Unregister this screen from GlobalLocationManager
     _globalLocationManager.unregisterScreen('OrderDetailScreen');
     super.dispose();
@@ -138,6 +147,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _loadOrderDetails() async {
     await _viewModel.getOrderDetails(widget.orderId);
+  }
+
+  /// Handle return delivery confirmation and navigate back to NavigationScreen
+  Future<void> _handleReturnDeliveryConfirmed() async {
+    debugPrint('✅ OrderDetailScreen: Return delivery confirmed, handling navigation');
+    
+    // Reload order details to reflect status change
+    await _loadOrderDetails();
+
+    // Wait a bit for data to load
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // If tracking is active, pop back to NavigationScreen with result = true
+    if (_globalLocationManager.isGlobalTrackingActive &&
+        _globalLocationManager.currentOrderId == widget.orderId) {
+      debugPrint('✅ Return delivery confirmed, popping back to NavigationScreen with result = true');
+      if (mounted) {
+        Navigator.of(context).pop(true); // Pop with result to signal resume
+      }
+    }
   }
 
   @override
@@ -507,7 +536,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                               const SizedBox(height: 12),
                                               ReturnDeliveryConfirmationButton(
                                                 issue: orderWithDetails.orderRejectionIssue!,
-                                                onConfirmed: _loadOrderDetails,
+                                                onConfirmed: _handleReturnDeliveryConfirmed,
                                                 issueRepository: getIt(),
                                               ),
                                             ],

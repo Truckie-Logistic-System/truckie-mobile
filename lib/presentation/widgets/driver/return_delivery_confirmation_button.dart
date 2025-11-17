@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
+import '../../../core/utils/sound_utils.dart';
 import '../../../domain/entities/order_rejection_issue.dart';
 import '../../../domain/repositories/issue_repository.dart';
 
@@ -9,7 +10,7 @@ import '../../../domain/repositories/issue_repository.dart';
 /// Driver chụp ảnh xác nhận và gửi lên server
 class ReturnDeliveryConfirmationButton extends StatefulWidget {
   final OrderRejectionIssue issue;
-  final VoidCallback onConfirmed;
+  final Function() onConfirmed;
   final IssueRepository issueRepository;
 
   const ReturnDeliveryConfirmationButton({
@@ -414,6 +415,9 @@ class _ReturnDeliveryConfirmationButtonState
       );
 
       if (mounted) {
+        // Play success sound for return delivery confirmation
+        SoundUtils.playSuccessSound();
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Đã xác nhận trả hàng thành công!'),
@@ -426,10 +430,13 @@ class _ReturnDeliveryConfirmationButtonState
         await Future.delayed(const Duration(milliseconds: 500));
 
         // Trigger callback - OrderDetailScreen will handle navigation back to NavigationScreen
-        widget.onConfirmed();
+        await widget.onConfirmed();
       }
     } catch (e) {
       if (mounted) {
+        // Play error sound for failed return delivery
+        SoundUtils.playErrorSound();
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('❌ Lỗi: ${e.toString()}'),

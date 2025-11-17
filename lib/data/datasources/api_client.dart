@@ -7,13 +7,25 @@ import '../../app/di/service_locator.dart';
 
 typedef OnUnauthorizedCallback = Future<void> Function();
 
+/// Wrapper class to track queued requests with timestamp
+class _QueuedRequest {
+  final DioException error;
+  final DateTime timestamp;
+  
+  _QueuedRequest({required this.error, required this.timestamp});
+}
+
 class ApiClient implements IHttpClient {
   final String baseUrl;
   late final Dio dio;
   late final TokenStorageService _tokenStorageService;
   OnUnauthorizedCallback? _onUnauthorizedCallback;
   bool _isRefreshing = false; // Lock to prevent concurrent refresh calls
-  List<DioException> _requestQueue = []; // Queue to hold 401 errors while refreshing
+  
+  // CRITICAL: Add max queue size and timeout to prevent memory leak
+  final List<_QueuedRequest> _requestQueue = [];
+  static const int _maxQueueSize = 10; // Max 10 queued requests
+  static const Duration _queueTimeout = Duration(seconds: 30); // 30 second timeout
 
   ApiClient({required this.baseUrl}) {
     _tokenStorageService = getIt<TokenStorageService>();
@@ -95,7 +107,20 @@ class ApiClient implements IHttpClient {
             // Check BEFORE any async operation
             if (_isRefreshing) {
               debugPrint('🔓 401 Unauthorized - Already refreshing, queuing this request');
-              _requestQueue.add(e);
+              
+              // Clean up old requests before adding new one
+              _cleanupOldQueuedRequests();
+              
+              // Check queue size limit
+              if (_requestQueue.length >= _maxQueueSize) {
+                debugPrint('⚠️ Request queue full (${_requestQueue.length}/$_maxQueueSize), dropping oldest request');
+                _requestQueue.removeAt(0);
+              }
+              
+              _requestQueue.add(_QueuedRequest(
+                error: e,
+                timestamp: DateTime.now(),
+              ));
               debugPrint('🔓 Queue size: ${_requestQueue.length}');
               return handler.next(e);
             }
@@ -125,12 +150,23 @@ class ApiClient implements IHttpClient {
                     debugPrint('✅ [401 Retry] Request succeeded with new token');
                     _isRefreshing = false;
                     
+                    // Clean up old queued requests before processing
+                    _cleanupOldQueuedRequests();
+                    
                     // Process queued requests
                     debugPrint('🔓 Processing ${_requestQueue.length} queued requests');
                     final queue = _requestQueue.toList();
                     _requestQueue.clear();
                     
-                    for (final queuedError in queue) {
+                    for (final queuedRequest in queue) {
+                      final queuedError = queuedRequest.error;
+                      final age = DateTime.now().difference(queuedRequest.timestamp);
+                      
+                      if (age > _queueTimeout) {
+                        debugPrint('⏰ Skipping queued request (timeout ${age.inSeconds}s): ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
+                        continue;
+                      }
+                      
                       debugPrint('🔓 Retrying queued request: ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
                       queuedError.requestOptions.headers['Authorization'] = 'Bearer $newToken';
                       try {
@@ -181,6 +217,19 @@ class ApiClient implements IHttpClient {
     _onUnauthorizedCallback = callback;
   }
 
+  /// Clean up old queued requests that have exceeded timeout
+  void _cleanupOldQueuedRequests() {
+    final now = DateTime.now();
+    _requestQueue.removeWhere((queuedRequest) {
+      final age = now.difference(queuedRequest.timestamp);
+      final isOld = age > _queueTimeout;
+      if (isOld) {
+        debugPrint('🧹 Removing old queued request (age: ${age.inSeconds}s): ${queuedRequest.error.requestOptions.method} ${queuedRequest.error.requestOptions.path}');
+      }
+      return isOld;
+    });
+  }
+  
   /// Check if token is expiring soon (< 5 minutes)
   bool _isTokenExpiringSoon(String token) {
     try {

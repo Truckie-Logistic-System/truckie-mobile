@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../../app/app_routes.dart';
 import '../../../../../core/services/global_location_manager.dart';
+import '../../../../../core/utils/sound_utils.dart';
 import '../../../../../app/di/service_locator.dart';
 import '../../../../utils/driver_role_checker.dart';
 import '../../../../../domain/entities/order_with_details.dart';
@@ -146,6 +147,9 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
       debugPrint('📸 Kết quả gửi ảnh: $success');
 
       if (success) {
+        // Play success sound for delivery confirmation
+        SoundUtils.playSuccessSound();
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -154,12 +158,21 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
             ),
           );
 
-          // CRITICAL: Pop with result = true to signal NavigationScreen to resume
+          // Wait a bit for snackbar to show
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // CRITICAL: Only pop if tracking is active (came from NavigationScreen)
           // NavigationScreen is waiting for this result via await pushNamed()
-          debugPrint('✅ Seal confirmed, popping with result = true');
-          Navigator.of(context).pop(true);
+          if (_globalLocationManager.isGlobalTrackingActive &&
+              _globalLocationManager.currentOrderId == widget.order.id) {
+            debugPrint('✅ Delivery confirmed, popping back to NavigationScreen with result = true');
+            Navigator.of(context).pop(true);
+          }
         }
       } else {
+        // Play error sound for failed delivery confirmation
+        SoundUtils.playErrorSound();
+        
         debugPrint('❌ Lỗi: ${viewModel.photoUploadError}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -173,6 +186,9 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
         }
       }
     } catch (e) {
+      // Play error sound for exception
+      SoundUtils.playErrorSound();
+      
       debugPrint('❌ Exception khi xác nhận giao hàng: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
