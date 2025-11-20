@@ -34,11 +34,9 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
     String? description,
   }) async {
     try {
-      debugPrint('========== PHOTO COMPLETION UPLOAD DEBUG INFO ==========');
-      debugPrint('vehicleAssignmentId: $vehicleAssignmentId');
-      debugPrint('imageFile path: ${imageFile.path}');
-      debugPrint('imageFile exists: ${imageFile.existsSync()}');
-      debugPrint('imageFile size: ${imageFile.lengthSync()} bytes');
+
+      
+      
 
       // Create multipart form data
       final formData = FormData.fromMap({
@@ -56,11 +54,6 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
         '/photo-completions/upload',
         data: formData,
       );
-
-      debugPrint('========== RESPONSE DEBUG INFO ==========');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('Response Data: ${response.data}');
-      debugPrint('========== END RESPONSE DEBUG INFO ==========');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = response.data;
@@ -81,20 +74,15 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('========== ERROR DEBUG INFO ==========');
-      debugPrint('DioException: ${e.message}');
-      debugPrint('DioException type: ${e.type}');
-      debugPrint('DioException response status: ${e.response?.statusCode}');
-      debugPrint('DioException response data: ${e.response?.data}');
-      debugPrint('========== END ERROR DEBUG INFO ==========');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('Exception: ${e.toString()}');
+      
       return Left(ServerFailure(message: e.toString()));
     }
   }
@@ -106,15 +94,12 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
     String? description,
   }) async {
     try {
-      debugPrint('========== MULTIPLE PHOTO COMPLETION UPLOAD DEBUG INFO ==========');
-      debugPrint('vehicleAssignmentId: $vehicleAssignmentId');
-      debugPrint('Number of images: ${imageFiles.length}');
-      
+
       // Validate all files exist
       for (var i = 0; i < imageFiles.length; i++) {
-        debugPrint('Image $i path: ${imageFiles[i].path}');
-        debugPrint('Image $i exists: ${imageFiles[i].existsSync()}');
-        debugPrint('Image $i size: ${imageFiles[i].lengthSync()} bytes');
+
+        
+        
       }
 
       // Create multipart form data with multiple files
@@ -141,11 +126,6 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
         data: formData,
       );
 
-      debugPrint('========== RESPONSE DEBUG INFO ==========');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('Response Data: ${response.data}');
-      debugPrint('========== END RESPONSE DEBUG INFO ==========');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = response.data;
         if (responseData['success'] == true) {
@@ -165,20 +145,15 @@ class PhotoCompletionDataSourceImpl implements PhotoCompletionDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('========== ERROR DEBUG INFO ==========');
-      debugPrint('DioException: ${e.message}');
-      debugPrint('DioException type: ${e.type}');
-      debugPrint('DioException response status: ${e.response?.statusCode}');
-      debugPrint('DioException response data: ${e.response?.data}');
-      debugPrint('========== END ERROR DEBUG INFO ==========');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('Exception: ${e.toString()}');
+      
       return Left(ServerFailure(message: e.toString()));
     }
   }

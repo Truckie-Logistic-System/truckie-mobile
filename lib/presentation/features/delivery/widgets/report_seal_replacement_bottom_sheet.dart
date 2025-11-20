@@ -58,14 +58,14 @@ class _ReportSealReplacementBottomSheetState
     });
 
     try {
-      debugPrint('📤 Loading IN_USE seal for vehicle assignment: ${widget.vehicleAssignmentId}');
+
       final seal =
           await _issueRepository.getInUseSeal(widget.vehicleAssignmentId);
       
       if (seal != null) {
-        debugPrint('✅ Found IN_USE seal: ${seal['sealCode']}');
+
       } else {
-        debugPrint('⚠️ No IN_USE seal found');
+
       }
       
       setState(() {
@@ -73,7 +73,7 @@ class _ReportSealReplacementBottomSheetState
         _isLoadingSeals = false;
       });
     } catch (e) {
-      debugPrint('❌ Error loading IN_USE seal: $e');
+
       setState(() {
         _isLoadingSeals = false;
       });
@@ -145,7 +145,7 @@ class _ReportSealReplacementBottomSheetState
         });
       }
     } catch (e) {
-      debugPrint('❌ Error picking image: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -188,11 +188,6 @@ class _ReportSealReplacementBottomSheetState
 
     try {
       final sealId = _inUseSeal['id'] as String;
-      debugPrint('📤 Submitting seal removal issue...');
-      debugPrint('   - Seal ID: $sealId');
-      debugPrint('   - Seal Code: ${_inUseSeal['sealCode']}');
-      debugPrint('   - Description: ${_descriptionController.text}');
-      debugPrint('   - Vehicle Assignment ID: ${widget.vehicleAssignmentId}');
 
       // Image will be uploaded to Cloudinary by backend
       final imagePath = _sealRemovalImage!.path;
@@ -207,8 +202,6 @@ class _ReportSealReplacementBottomSheetState
         locationLongitude: widget.currentLocation?.longitude,
       );
 
-      debugPrint('✅ Seal removal issue created successfully: ${issue.id}');
-
       if (mounted) {
         Navigator.pop(context, issue);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -222,7 +215,7 @@ class _ReportSealReplacementBottomSheetState
         );
       }
     } catch (e) {
-      debugPrint('❌ Error submitting seal removal: $e');
+
       setState(() {
         _isSubmitting = false;
       });

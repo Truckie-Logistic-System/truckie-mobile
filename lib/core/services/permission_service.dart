@@ -11,17 +11,11 @@ class PermissionService {
     bool showRationale = true,
   }) async {
     var status = await Permission.location.status;
-    
-    debugPrint('📍 [PermissionService] Current location permission: $status');
-    
     if (status.isGranted) {
-      debugPrint('✅ [PermissionService] Location permission already granted');
       return true;
     }
     
     if (status.isDenied) {
-      debugPrint('⚠️ [PermissionService] Location permission denied, requesting...');
-      
       // Show rationale if context provided
       if (showRationale && context != null) {
         final shouldRequest = await _showPermissionRationale(
@@ -31,19 +25,15 @@ class PermissionService {
         );
         
         if (!shouldRequest) {
-          debugPrint('❌ [PermissionService] User declined permission request');
           return false;
         }
       }
       
       // Request permission
       status = await Permission.location.request();
-      debugPrint('📍 [PermissionService] Permission request result: $status');
     }
     
     if (status.isPermanentlyDenied) {
-      debugPrint('🚫 [PermissionService] Location permission permanently denied');
-      
       // Show dialog to open settings
       if (context != null) {
         await _showPermissionDeniedDialog(context);
@@ -206,11 +196,9 @@ class PermissionService {
   static Future<Map<Permission, PermissionStatus>> requestMultiplePermissions(
     List<Permission> permissions,
   ) async {
-    debugPrint('📋 [PermissionService] Requesting multiple permissions: $permissions');
     final statuses = await permissions.request();
     
     for (final entry in statuses.entries) {
-      debugPrint('   - ${entry.key}: ${entry.value}');
     }
     
     return statuses;
@@ -223,12 +211,9 @@ class PermissionService {
     for (final permission in permissions) {
       final status = await permission.status;
       if (!status.isGranted) {
-        debugPrint('❌ [PermissionService] Permission not granted: $permission');
         return false;
       }
     }
-    
-    debugPrint('✅ [PermissionService] All permissions granted');
     return true;
   }
   

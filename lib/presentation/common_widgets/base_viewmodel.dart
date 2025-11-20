@@ -23,7 +23,7 @@ abstract class BaseViewModel extends ChangeNotifier {
       // This is a rare race condition but can occur under heavy load
       if (!e.toString().contains('disposed')) {
         // Re-throw if it's not a disposal error
-        debugPrint('⚠️ Unexpected error in notifyListeners (${runtimeType}): $e');
+        
         rethrow;
       }
       // Silently ignore disposal errors as they're expected
@@ -43,9 +43,7 @@ abstract class BaseViewModel extends ChangeNotifier {
         errorMessage.contains('token')) {
       if (!_isRetrying) {
         _isRetrying = true;
-        debugPrint(
-          'Handling unauthorized error in ${runtimeType.toString()}: $errorMessage',
-        );
+        
 
         try {
           final authViewModel = getIt<AuthViewModel>();
@@ -53,21 +51,19 @@ abstract class BaseViewModel extends ChangeNotifier {
 
           _isRetrying = false;
           if (refreshed) {
-            debugPrint(
-              'Token refreshed successfully in ${runtimeType.toString()}',
-            );
+            
             return true; // Thành công, có thể thử lại request
           } else {
-            debugPrint('Token refresh failed in ${runtimeType.toString()}');
+            
             return false; // Thất bại, không thể thử lại
           }
         } catch (e) {
           _isRetrying = false;
-          debugPrint('Error refreshing token in ${runtimeType.toString()}: $e');
+          
           return false;
         }
       } else {
-        debugPrint('Already retrying in ${runtimeType.toString()}');
+        
         return false;
       }
     }

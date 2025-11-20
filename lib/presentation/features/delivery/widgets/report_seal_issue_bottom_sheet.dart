@@ -5,13 +5,14 @@ import '../../../../app/di/service_locator.dart';
 import '../../../theme/app_colors.dart';
 import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
+import '../../../../domain/entities/order_detail.dart';
 
 /// Bottom sheet for driver to report seal removal issue
 class ReportSealIssueBottomSheet extends StatefulWidget {
   final String vehicleAssignmentId;
   final double? currentLatitude;
   final double? currentLongitude;
-  final List<dynamic> availableSeals; // Seals with status IN_USE
+  final List<VehicleSeal> availableSeals; // Seals with status IN_USE
 
   const ReportSealIssueBottomSheet({
     super.key,
@@ -44,6 +45,11 @@ class _ReportSealIssueBottomSheetState
   void initState() {
     super.initState();
     _loadIssueTypes();
+    
+    // Auto-select seal if only one available
+    if (widget.availableSeals.length == 1) {
+      _selectedSealId = widget.availableSeals.first.id;
+    }
   }
 
   @override
@@ -58,6 +64,13 @@ class _ReportSealIssueBottomSheetState
       setState(() {
         _issueTypes = types;
         _loadingIssueTypes = false;
+        
+        // Auto-select SEAL_REPLACEMENT issue type if available
+        final sealIssueType = _issueTypes.firstWhere(
+          (type) => type.issueCategory == IssueCategory.sealReplacement,
+          orElse: () => _issueTypes.first,
+        );
+        _selectedIssueTypeId = sealIssueType.id;
       });
     } catch (e) {
       setState(() => _loadingIssueTypes = false);
@@ -74,8 +87,33 @@ class _ReportSealIssueBottomSheetState
 
   Future<void> _pickImage() async {
     try {
+      // Show dialog to choose camera or gallery
+      final ImageSource? source = await showDialog<ImageSource>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Chọn nguồn ảnh'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Chụp ảnh'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Chọn từ thư viện'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (source == null) return;
+
       final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
+        source: source,
         imageQuality: 80,
         maxWidth: 1920,
         maxHeight: 1080,
@@ -90,11 +128,26 @@ class _ReportSealIssueBottomSheetState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Không thể chụp ảnh: $e'),
+            content: Text('Không thể chọn ảnh: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
+    }
+  }
+
+  String _translateSealStatus(String status) {
+    switch (status.toUpperCase()) {
+      case 'IN_USE':
+        return 'Đang sử dụng';
+      case 'AVAILABLE':
+        return 'Có sẵn';
+      case 'REMOVED':
+        return 'Đã gỡ';
+      case 'DAMAGED':
+        return 'Hư hỏng';
+      default:
+        return status;
     }
   }
 
@@ -224,7 +277,7 @@ class _ReportSealIssueBottomSheetState
                             ),
                           ),
                           Text(
-                            'Cảnh sát giao thông yêu cầu gỡ seal',
+                            'Seal bị gỡ do cảnh sát giao thông yêu cầu hoặc đã đến điểm giao hàng',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey,
@@ -260,30 +313,86 @@ class _ReportSealIssueBottomSheetState
                         ),
                       ),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: _selectedSealId,
-                        decoration: InputDecoration(
-                          hintText: 'Chọn seal đang sử dụng',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                        ),
-                        items: widget.availableSeals.map((seal) {
-                          return DropdownMenuItem<String>(
-                            value: seal['id'].toString(),
-                            child: Text(
-                              '${seal['sealCode']} - ${seal['status']}',
-                              style: const TextStyle(fontSize: 14),
+                      // If only one seal, show it as read-only; otherwise show dropdown
+                      widget.availableSeals.length == 1
+                          ? Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.lock_outline, color: Colors.blue),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Seal đang sử dụng',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          widget.availableSeals.first.sealCode,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[100],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      _translateSealStatus(widget.availableSeals.first.status),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green[800],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              value: _selectedSealId,
+                              decoration: InputDecoration(
+                                hintText: 'Chọn seal đang sử dụng',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                              ),
+                              items: widget.availableSeals.map((seal) {
+                                return DropdownMenuItem<String>(
+                                  value: seal.id,
+                                  child: Text(
+                                    '${seal.sealCode} - ${_translateSealStatus(seal.status)}',
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() => _selectedSealId = value);
+                              },
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedSealId = value);
-                        },
-                      ),
 
                       const SizedBox(height: 20),
 
@@ -298,30 +407,71 @@ class _ReportSealIssueBottomSheetState
                       const SizedBox(height: 8),
                       _loadingIssueTypes
                           ? const Center(child: CircularProgressIndicator())
-                          : DropdownButtonFormField<String>(
-                              value: _selectedIssueTypeId,
-                              decoration: InputDecoration(
-                                hintText: 'Chọn loại sự cố',
-                                prefixIcon: const Icon(Icons.category_outlined),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[50],
-                              ),
-                              items: _issueTypes.map((type) {
-                                return DropdownMenuItem<String>(
-                                  value: type.id,
-                                  child: Text(
-                                    type.issueTypeName,
-                                    style: const TextStyle(fontSize: 14),
+                          : _selectedIssueTypeId != null &&
+                                  _issueTypes.any((type) =>
+                                      type.id == _selectedIssueTypeId &&
+                                      type.issueCategory == IssueCategory.sealReplacement)
+                              // Show as read-only if SEAL_REPLACEMENT is auto-selected
+                              ? Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey[300]!),
                                   ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() => _selectedIssueTypeId = value);
-                              },
-                            ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.category_outlined, color: Colors.blue),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Loại sự cố',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _issueTypes.firstWhere((t) => t.id == _selectedIssueTypeId).issueTypeName,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : DropdownButtonFormField<String>(
+                                  value: _selectedIssueTypeId,
+                                  decoration: InputDecoration(
+                                    hintText: 'Chọn loại sự cố',
+                                    prefixIcon: const Icon(Icons.category_outlined),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[50],
+                                  ),
+                                  items: _issueTypes.map((type) {
+                                    return DropdownMenuItem<String>(
+                                      value: type.id,
+                                      child: Text(
+                                        type.issueTypeName,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() => _selectedIssueTypeId = value);
+                                  },
+                                ),
 
                       const SizedBox(height: 20),
 
@@ -339,7 +489,6 @@ class _ReportSealIssueBottomSheetState
                         maxLines: 4,
                         maxLength: 200,
                         decoration: InputDecoration(
-                          hintText: 'VD: Cảnh sát giao thông yêu cầu gỡ seal để kiểm tra hàng hóa tại km 15 quốc lộ 1A',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -399,7 +548,7 @@ class _ReportSealIssueBottomSheetState
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Chụp ảnh seal đã gỡ',
+                                      'Chụp hoặc chọn ảnh seal đã gỡ',
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.grey[600],

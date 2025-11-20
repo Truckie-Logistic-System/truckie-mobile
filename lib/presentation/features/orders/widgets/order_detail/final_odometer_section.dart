@@ -129,7 +129,6 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
         }
       }
     } catch (e) {
-      debugPrint('Lỗi OCR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -224,7 +223,6 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
                 // NavigationScreen will handle the completed state
                 if (_globalLocationManager.isGlobalTrackingActive &&
                     _globalLocationManager.currentOrderId == widget.order.id) {
-                  debugPrint('✅ Trip completed with odometer, popping back to NavigationScreen');
                   Navigator.of(context).pop(false); // false = don't resume (trip ended)
                 }
               },
@@ -292,11 +290,6 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
     setState(() {
       _isLoading = true;
     });
-
-    debugPrint('📸 Uploading final odometer reading...');
-    debugPrint('   - Reading: $reading km');
-    debugPrint('   - Image: ${_odometerImage!.path}');
-
     try {
       final viewModel = Provider.of<OrderDetailViewModel>(
         context,
@@ -329,7 +322,6 @@ class _FinalOdometerSectionState extends State<FinalOdometerSection> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Exception: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

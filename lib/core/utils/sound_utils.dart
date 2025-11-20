@@ -36,58 +36,57 @@ enum SoundType {
 /// Sound utility class for playing notification sounds
 /// 
 /// Design Principles:
-/// - Ascending patterns = Positive feedback (success, rewards)
-/// - Descending patterns = Negative feedback (errors, warnings)
-/// - Short duration = Low priority (info, confirm)
-/// - Long duration = High priority (errors, important alerts)
-/// - Rich patterns = Rewarding (payment, achievements)
-/// - Simple patterns = Subtle (info, minor updates)
+/// - Single tone = Subtle confirmation (success, info)
+/// - Double tone = Important notification (warning, payment)
+/// - Very short intervals = Quick, crisp feedback
+/// - Light haptic = Professional, non-intrusive
+/// - Minimal patterns = Clean business app feel
 class SoundUtils {
   
-  // Sound pattern configurations based on notification importance
+  // Sound pattern configurations - Professional, subtle tones
   static const Map<SoundType, _SoundConfig> _soundConfigs = {
     SoundType.success: _SoundConfig(
-      pattern: [100, 80, 60], // Ascending rhythm (fast to slow)
+      pattern: [60], // Single crisp confirmation
       hapticType: _HapticType.light,
-      description: 'Ascending powerup - positive feedback',
+      description: 'Subtle positive confirmation',
     ),
     SoundType.info: _SoundConfig(
-      pattern: [50], // Single short blip
+      pattern: [40], // Very short blip
       hapticType: _HapticType.selection,
-      description: 'Gentle blip - non-intrusive',
+      description: 'Gentle notification blip',
     ),
     SoundType.warning: _SoundConfig(
-      pattern: [120, 120], // Double equal beeps
-      hapticType: _HapticType.medium,
-      description: 'Clear double-beep alert',
+      pattern: [80, 80], // Two clear tones
+      hapticType: _HapticType.light,
+      description: 'Gentle but clear alert',
     ),
     SoundType.error: _SoundConfig(
-      pattern: [150, 100, 80], // Descending urgent pattern
-      hapticType: _HapticType.heavy,
-      description: 'Harsh descending buzz - critical',
+      pattern: [100, 80], // Brief urgent pattern
+      hapticType: _HapticType.medium,
+      description: 'Clear attention tone',
     ),
     SoundType.paymentSuccess: _SoundConfig(
-      pattern: [80, 60, 50, 40], // Cascading reward pattern
-      hapticType: _HapticType.heavy,
-      description: 'Rich coin collect - rewarding',
+      pattern: [70, 50], // Pleasant double chime
+      hapticType: _HapticType.light,
+      description: 'Pleasant confirmation chime',
     ),
     SoundType.newIssue: _SoundConfig(
-      pattern: [100, 200, 100], // Bell-like ring
-      hapticType: _HapticType.medium,
-      description: 'Crisp notification bell',
+      pattern: [90, 120], // Soft notification
+      hapticType: _HapticType.light,
+      description: 'Soft notification ping',
     ),
     SoundType.sealAssignment: _SoundConfig(
-      pattern: [120, 180, 120], // Important attention pattern
-      hapticType: _HapticType.medium,
-      description: 'Important seal assignment alert',
+      pattern: [100, 100], // Clear double tone
+      hapticType: _HapticType.light,
+      description: 'Important notification tone',
     ),
     SoundType.damageResolved: _SoundConfig(
-      pattern: [80, 100], // Confirmation pattern
+      pattern: [60], // Single confirmation
       hapticType: _HapticType.light,
       description: 'Issue resolved confirmation',
     ),
     SoundType.orderRejectionResolved: _SoundConfig(
-      pattern: [80, 100], // Confirmation pattern
+      pattern: [60], // Single confirmation
       hapticType: _HapticType.light,
       description: 'Rejection resolved confirmation',
     ),
@@ -103,22 +102,14 @@ class SoundUtils {
     try {
       final config = _soundConfigs[type];
       if (config == null) {
-        debugPrint('⚠️ [SoundUtils] Unknown sound type: $type');
         return;
       }
-      
-      debugPrint('🔊 [SoundUtils] Playing: ${config.description}');
-      debugPrint('   Pattern: ${config.pattern} | Haptic: ${config.hapticType}');
-      
       // Play haptic feedback first for immediate tactile response
       await _playHaptic(config.hapticType);
       
       // Play sound pattern
       await _playPattern(config.pattern);
-      
-      debugPrint('✅ [SoundUtils] Sound completed successfully');
     } catch (e) {
-      debugPrint('❌ [SoundUtils] Error playing notification sound: $e');
     }
   }
 

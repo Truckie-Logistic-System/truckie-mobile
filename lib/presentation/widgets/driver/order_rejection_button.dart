@@ -144,10 +144,7 @@ class OrderRejectionButton extends StatelessWidget {
     IssueRepository issueRepository,
     OrderListViewModel orderListViewModel,
   ) async {
-    debugPrint('🔍 _reportOrderRejection called:');
-    debugPrint('   - vehicleAssignmentId: $vehicleAssignmentId');
-    debugPrint('   - orderDetailIds: $orderDetailIds');
-    
+
     // Show loading
     showDialog(
       context: context,
@@ -200,7 +197,7 @@ class OrderRejectionButton extends StatelessWidget {
         try {
           orderListViewModel.refreshOrders();
         } catch (e) {
-          debugPrint('⚠️ Could not refresh order list: $e');
+
         }
       }
     } catch (e) {

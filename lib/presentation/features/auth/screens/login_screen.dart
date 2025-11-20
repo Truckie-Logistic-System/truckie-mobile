@@ -264,7 +264,6 @@ class _LoginScreenState extends State<LoginScreen> {
             // CRITICAL: Don't navigate here - AuthViewModel handles navigation via setStatusWithNavigation()
             // Navigating here causes conflicts and pushes user back to login
             // Just let AuthViewModel handle the navigation automatically
-            debugPrint('Login successful - AuthViewModel will handle navigation');
           } else {
             // Show error message and reset loading state
             ScaffoldMessenger.of(context).showSnackBar(

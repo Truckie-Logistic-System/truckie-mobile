@@ -132,7 +132,7 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
         }
       }
     } catch (e) {
-      debugPrint('Lỗi OCR: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -220,8 +220,7 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
       } else {
         // Play error sound for failed delivery start
         SoundUtils.playErrorSound();
-        
-        debugPrint('❌ Lỗi: ${viewModel.startDeliveryErrorMessage}');
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -234,8 +233,7 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
     } catch (e) {
       // Play error sound for exception
       SoundUtils.playErrorSound();
-      
-      debugPrint('❌ Exception khi bắt đầu chuyến xe: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -276,7 +274,6 @@ class _StartDeliverySectionState extends State<StartDeliverySection> {
       return _buildButton();
     }
   }
-
 
   Widget _buildImagePreview() {
     if (_odometerImage == null) {

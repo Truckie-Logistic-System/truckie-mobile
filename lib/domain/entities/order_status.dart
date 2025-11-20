@@ -68,9 +68,9 @@ enum OrderStatus {
       case OrderStatus.rejectOrder:
         return 'Đã từ chối';
       case OrderStatus.returning:
-        return 'Đang hoàn trả';
+        return 'Đang trả hàng';
       case OrderStatus.returned:
-        return 'Đã hoàn trả';
+        return 'Đã trả hàng';
     }
   }
 

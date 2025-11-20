@@ -60,10 +60,14 @@ class Issue {
           ? DateTime.parse(json['resolvedAt'] as String)
           : null,
       oldSeal: json['oldSeal'] != null
-          ? Seal.fromJson(json['oldSeal'] as Map<String, dynamic>)
+          ? (json['oldSeal'] is Map<String, dynamic>
+              ? Seal.fromJson(json['oldSeal'] as Map<String, dynamic>)
+              : null) // If it's a String (ID), ignore it for now
           : null,
       newSeal: json['newSeal'] != null
-          ? Seal.fromJson(json['newSeal'] as Map<String, dynamic>)
+          ? (json['newSeal'] is Map<String, dynamic>
+              ? Seal.fromJson(json['newSeal'] as Map<String, dynamic>)
+              : null) // If it's a String (ID), ignore it for now
           : null,
       sealRemovalImage: json['sealRemovalImage'] as String?,
       newSealAttachedImage: json['newSealAttachedImage'] as String?,
@@ -124,7 +128,8 @@ enum IssueCategory {
   accident('ACCIDENT', 'Tai nạn'),
   sealReplacement('SEAL_REPLACEMENT', 'Thay thế seal'),
   orderRejection('ORDER_REJECTION', 'Từ chối đơn hàng'),
-  penalty('PENALTY', 'Vi phạm giao thông');
+  penalty('PENALTY', 'Vi phạm giao thông'),
+  reroute('REROUTE', 'Tái định tuyến');
 
   final String value;
   final String label;

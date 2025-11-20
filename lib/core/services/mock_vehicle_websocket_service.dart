@@ -51,7 +51,6 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
     // Simulate random connection failure (10% chance)
     if (_random.nextInt(10) == 0) {
       final errorMsg = 'Mock connection failure (simulated)';
-      debugPrint('❌ $errorMsg');
 
       _connectionStatus = WebSocketConnectionStatus.error;
       _connectionStatusController.add(_connectionStatus);
@@ -71,7 +70,6 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
     // Start generating mock location updates
     _startMockLocationUpdates(vehicleId, onLocationBroadcast);
 
-    debugPrint('✅ Mock WebSocket connected for vehicle: $vehicleId');
   }
 
   void _startMockLocationUpdates(
@@ -114,7 +112,6 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
       baseLat += latDelta;
       baseLng += lngDelta;
 
-      debugPrint('📍 Mock location update: $locationData');
     });
   }
 
@@ -126,11 +123,9 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
     required String licensePlateNumber,
   }) {
     if (!_isConnected) {
-      debugPrint('❌ Cannot send location: WebSocket not connected');
       return;
     }
 
-    debugPrint('📤 Mock sent location update: lat=$latitude, lng=$longitude');
 
     // Simulate echo back from server after a short delay
     Future.delayed(const Duration(milliseconds: 200), () {
@@ -175,7 +170,6 @@ class MockVehicleWebSocketService extends VehicleWebSocketService {
     _connectionStatus = WebSocketConnectionStatus.disconnected;
     _connectionStatusController.add(_connectionStatus);
 
-    debugPrint('🔌 Mock WebSocket disconnected');
   }
 
   @override

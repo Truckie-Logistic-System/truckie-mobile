@@ -34,19 +34,13 @@ class _SplashScreenState extends State<SplashScreen> {
       // Token was just obtained from login, and calling refresh immediately
       // will cause the backend to revoke the new token (token rotation)
       // Just navigate to main screen directly
-      debugPrint('✅ [SplashScreen] User is authenticated, navigating to main');
       _navigateToMain();
     } else if (_authViewModel.status == AuthStatus.unauthenticated) {
       // Nếu chưa đăng nhập, chuyển đến trang đăng nhập
-      debugPrint('🔓 [SplashScreen] Status is unauthenticated, navigating to login');
       _navigateToLogin();
     } else {
       // Nếu đang trong trạng thái loading, đợi cho đến khi hoàn tất
-      debugPrint('⏳ [SplashScreen] Status is loading, waiting for checkAuthStatus...');
       await _authViewModel.checkAuthStatus();
-      debugPrint('✅ [SplashScreen] checkAuthStatus completed');
-      debugPrint('👤 [SplashScreen] Driver info loaded: ${_authViewModel.driver != null}');
-      
       if (_authViewModel.status == AuthStatus.authenticated) {
         _navigateToMain();
       } else {

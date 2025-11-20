@@ -76,13 +76,9 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
     required File odometerImage,
   }) async {
     try {
-      debugPrint('========== ODOMETER END UPLOAD DEBUG INFO ==========');
-      debugPrint('fuelConsumptionId: $fuelConsumptionId');
-      debugPrint('odometerReadingAtEnd: $odometerReadingAtEnd');
-      debugPrint('odometerReadingAtEnd type: ${odometerReadingAtEnd.runtimeType}');
-      debugPrint('odometerImage path: ${odometerImage.path}');
-      debugPrint('odometerImage exists: ${odometerImage.existsSync()}');
-      debugPrint('odometerImage size: ${odometerImage.lengthSync()} bytes');
+
+      
+      
 
       // Create multipart form data
       final multipartFile = await MultipartFile.fromFile(
@@ -95,11 +91,8 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         'odometerReadingAtEnd': odometerReadingAtEnd.toStringAsFixed(2),
         'odometerAtEndImage': multipartFile,
       });
+
       
-      debugPrint('Form data to send:');
-      debugPrint('  - id: $fuelConsumptionId');
-      debugPrint('  - odometerReadingAtEnd: ${odometerReadingAtEnd.toStringAsFixed(2)}');
-      debugPrint('  - odometerAtEndImage: ${multipartFile.filename}');
 
       final response = await _apiClient.dio.put(
         '/vehicle-fuel-consumptions/final-reading',
@@ -109,11 +102,6 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
           headers: {'Accept': '*/*'},
         ),
       );
-
-      debugPrint('========== RESPONSE DEBUG INFO ==========');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('Response Data: ${response.data}');
-      debugPrint('========== END RESPONSE DEBUG INFO ==========');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = response.data;
@@ -134,20 +122,15 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         );
       }
     } on DioException catch (e) {
-      debugPrint('========== ERROR DEBUG INFO ==========');
-      debugPrint('DioException: ${e.message}');
-      debugPrint('DioException type: ${e.type}');
-      debugPrint('DioException response status: ${e.response?.statusCode}');
-      debugPrint('DioException response data: ${e.response?.data}');
-      debugPrint('========== END ERROR DEBUG INFO ==========');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('Exception: ${e.toString()}');
+      
       return Left(ServerFailure(message: e.toString()));
     }
   }
@@ -155,16 +138,10 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
   @override
   Future<Either<Failure, Map<String, dynamic>>> getByVehicleAssignmentId(String vehicleAssignmentId) async {
     try {
-      debugPrint('Getting fuel consumption for vehicle assignment: $vehicleAssignmentId');
-      
+
       final response = await _apiClient.dio.get(
         '/vehicle-fuel-consumptions/vehicle-assignment/$vehicleAssignmentId',
       );
-
-      debugPrint('========== FUEL CONSUMPTION RESPONSE DEBUG ==========');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('Response Data: ${response.data}');
-      debugPrint('========== END RESPONSE DEBUG ==========');
 
       if (response.statusCode == 200) {
         final responseData = response.data;
@@ -185,13 +162,7 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         );
       }
     } on DioException catch (e) {
-      debugPrint('========== DIO EXCEPTION DEBUG ==========');
-      debugPrint('DioException: ${e.message}');
-      debugPrint('DioException type: ${e.type}');
-      debugPrint('DioException response status: ${e.response?.statusCode}');
-      debugPrint('DioException response data: ${e.response?.data}');
-      debugPrint('========== END EXCEPTION DEBUG ==========');
-      
+
       // Handle 404 Not Found specifically
       if (e.response?.statusCode == 404) {
         return Left(
@@ -203,10 +174,10 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('Exception: ${e.toString()}');
+      
       return Left(ServerFailure(message: e.toString()));
     }
   }
@@ -217,11 +188,9 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
     required File invoiceImage,
   }) async {
     try {
-      debugPrint('========== FUEL INVOICE UPLOAD DEBUG INFO ==========');
-      debugPrint('fuelConsumptionId: $fuelConsumptionId');
-      debugPrint('invoiceImage path: ${invoiceImage.path}');
-      debugPrint('invoiceImage exists: ${invoiceImage.existsSync()}');
-      debugPrint('invoiceImage size: ${invoiceImage.lengthSync()} bytes');
+
+      
+      
 
       // Create multipart form data
       final multipartFile = await MultipartFile.fromFile(
@@ -233,10 +202,6 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         'id': fuelConsumptionId,
         'companyInvoiceImage': multipartFile,
       });
-      
-      debugPrint('Form data to send:');
-      debugPrint('  - id: $fuelConsumptionId');
-      debugPrint('  - companyInvoiceImage: ${multipartFile.filename}');
 
       final response = await _apiClient.dio.put(
         '/vehicle-fuel-consumptions/invoice',
@@ -246,11 +211,6 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
           headers: {'Accept': '*/*'},
         ),
       );
-
-      debugPrint('========== RESPONSE DEBUG INFO ==========');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('Response Data: ${response.data}');
-      debugPrint('========== END RESPONSE DEBUG INFO ==========');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = response.data;
@@ -271,20 +231,15 @@ class VehicleFuelConsumptionDataSourceImpl implements VehicleFuelConsumptionData
         );
       }
     } on DioException catch (e) {
-      debugPrint('========== ERROR DEBUG INFO ==========');
-      debugPrint('DioException: ${e.message}');
-      debugPrint('DioException type: ${e.type}');
-      debugPrint('DioException response status: ${e.response?.statusCode}');
-      debugPrint('DioException response data: ${e.response?.data}');
-      debugPrint('========== END ERROR DEBUG INFO ==========');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('Exception: ${e.toString()}');
+      
       return Left(ServerFailure(message: e.toString()));
     }
   }

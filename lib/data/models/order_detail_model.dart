@@ -157,12 +157,28 @@ class VehicleAssignmentModel extends VehicleAssignment {
           [],
       photoCompletions:
           (photoCompletionsJson as List<dynamic>?)
-              ?.map((e) => PhotoCompletionModel.fromJson(e))
+              ?.map((e) {
+                // Handle both String URLs and Map objects
+                if (e is String) {
+                  // If it's just a URL string, create a PhotoCompletion with minimal data
+                  return PhotoCompletionModel(
+                    id: '', // Empty ID since backend doesn't provide it
+                    imageUrl: e,
+                    vehicleAssignmentId: json['id'] ?? '',
+                  );
+                } else if (e is Map<String, dynamic>) {
+                  // If it's a full object, parse it normally
+                  return PhotoCompletionModel.fromJson(e);
+                }
+                return null;
+              })
+              .whereType<PhotoCompletionModel>() // Filter out nulls
               .toList() ??
           [],
       seals:
           (sealsJson as List<dynamic>?)
-              ?.map((e) => VehicleSealModel.fromJson(e))
+              ?.whereType<Map<String, dynamic>>() // Filter out non-Map items (like String IDs)
+              .map((e) => VehicleSealModel.fromJson(e))
               .toList() ??
           [],
     );

@@ -95,7 +95,7 @@ class GlobalLocationManager {
   
   // Setter for resume flag
   void setShouldResumeSimulation(bool value) {
-    debugPrint('🔄 GlobalLocationManager: setShouldResumeSimulation = $value');
+    
     _shouldResumeSimulation = value;
   }
   
@@ -117,7 +117,7 @@ class GlobalLocationManager {
     bool isSimulationMode = false, // Chế độ mô phỏng - không dùng GPS thật
   }) async {
     if (_isGlobalTrackingActive) {
-      debugPrint('⚠️ Global tracking already active for order: $_currentOrderId');
+      
       
       // If same order, just register the screen
       if (_currentOrderId == orderId) {
@@ -126,28 +126,28 @@ class GlobalLocationManager {
         }
         return true;
       } else {
-        debugPrint('❌ Different order detected. Current: $_currentOrderId, New: $orderId');
+        
         return false;
       }
     }
 
     try {
-      debugPrint('🚀 Starting global location tracking...');
-      debugPrint('   - Order ID: $orderId');
-      debugPrint('   - Vehicle ID: $vehicleId');
-      debugPrint('   - License Plate: $licensePlateNumber');
-      debugPrint('   - Initiating Screen: $initiatingScreen');
-      debugPrint('   - Is Primary Driver: $isPrimaryDriver');
-      debugPrint('   - Is Simulation Mode: $isSimulationMode');
+      
+      
+      
+      
+      
+      
+      
 
       // Store simulation mode for reconnection (before checking primary driver)
       _isSimulationMode = isSimulationMode;
       
       // Chỉ kết nối WebSocket nếu là tài xế chính
       if (!isPrimaryDriver) {
-        debugPrint('⚠️ Secondary driver detected - WebSocket connection will not be established');
-        debugPrint('   Secondary driver will use polling for location updates');
-        debugPrint('   - Simulation mode: $isSimulationMode');
+        
+        
+        
         
         // Vẫn set trạng thái tracking để UI có thể hoạt động
         _isGlobalTrackingActive = true;
@@ -165,7 +165,7 @@ class GlobalLocationManager {
         // Không cần WebSocket riêng, chỉ cần register để nhận updates từ primary driver
 
         _trackingStateController.add('TRACKING_STARTED_SECONDARY_DRIVER');
-        debugPrint('✅ Global location manager initialized for secondary driver (listening mode)');
+        
         return true;
       }
       
@@ -182,20 +182,20 @@ class GlobalLocationManager {
       
       // CRITICAL: Force stop any existing GPS stream before simulation
       if (isSimulationMode && _positionStream != null) {
-        debugPrint('🛑 FORCE STOPPING existing GPS stream for simulation mode...');
+        
         await _positionStream?.cancel();
         _positionStream = null;
         await Future.delayed(const Duration(milliseconds: 500)); // Longer delay
-        debugPrint('   ✅ GPS stream force stopped');
+        
       }
       
       // Start GPS position stream if NOT in simulation mode
       if (success && !isSimulationMode) {
         await _startPositionStream();
-        debugPrint('✅ GPS position stream started');
+        
       } else if (isSimulationMode) {
-        debugPrint('⚠️ GPS position stream SKIPPED (simulation mode)');
-        debugPrint('   - Simulation mode active: GPS will be blocked');
+        
+        
       }
 
       if (success) {
@@ -221,14 +221,14 @@ class GlobalLocationManager {
         // Start periodic state saving (especially for simulation mode)
         _startPeriodicStateSaving();
         
-        debugPrint('✅ Global location tracking started successfully');
+        
         return true;
       } else {
-        debugPrint('❌ Failed to start global location tracking');
+        
         return false;
       }
     } catch (e) {
-      debugPrint('❌ Exception starting global tracking: $e');
+      
       return false;
     }
   }
@@ -236,14 +236,14 @@ class GlobalLocationManager {
   /// Schedule auto-reconnect with exponential backoff
   void _scheduleAutoReconnect() {
     if (_isReconnecting) {
-      debugPrint('⚠️ Already reconnecting, skipping...');
-      debugPrint('   Reconnect attempts: $_reconnectAttempts/$_maxReconnectAttempts');
-      debugPrint('   Timer active: ${_reconnectTimer?.isActive ?? false}');
+      
+      
+      
       return;
     }
     
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      debugPrint('❌ Max reconnect attempts reached ($_maxReconnectAttempts)');
+      
       _trackingStateController.add('MAX_RECONNECT_ATTEMPTS_REACHED');
       _isReconnecting = false; // Reset flag
       return;
@@ -254,24 +254,24 @@ class GlobalLocationManager {
     // Exponential backoff: 2^n seconds (2s, 4s, 8s, 16s, 32s...)
     final delaySeconds = (2 << (_reconnectAttempts - 1)).clamp(2, 60);
     
-    debugPrint('📍 Scheduling auto-reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delaySeconds}s');
+    
     _trackingStateController.add('RECONNECTING_IN_${delaySeconds}S');
     
     _reconnectTimer?.cancel();
     _isReconnecting = true; // Set AFTER checks, BEFORE timer
     
     _reconnectTimer = Timer(Duration(seconds: delaySeconds), () async {
-      debugPrint('🔄 Auto-reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts...');
+      
       
       final success = await forceReconnect();
       
       if (success) {
-        debugPrint('✅ Auto-reconnect successful!');
+        
         _reconnectAttempts = 0; // Reset on success
         _isReconnecting = false;
         _trackingStateController.add('AUTO_RECONNECTED');
       } else {
-        debugPrint('❌ Auto-reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts failed');
+        
         _isReconnecting = false;
         // Will trigger another reconnect via error handler if needed
       }
@@ -291,23 +291,23 @@ class GlobalLocationManager {
     _stopPeriodicStateSaving();
     
     if (!_isGlobalTrackingActive) {
-      debugPrint('⚠️ Global tracking not active');
+      
       return;
     }
 
     try {
-      debugPrint('🛑 Stopping global location tracking...');
-      debugPrint('   - Reason: ${reason ?? "Not specified"}');
-      debugPrint('   - Order ID: $_currentOrderId');
-      debugPrint('   - Duration: ${_getTrackingDuration()}');
+      
+      
+      
+      
 
       // Stop GPS stream first
       if (_positionStream != null) {
-        debugPrint('   - Cancelling GPS position stream...');
+        
         await _positionStream?.cancel();
         _positionStream = null;
         await Future.delayed(const Duration(milliseconds: 100));
-        debugPrint('   ✅ GPS position stream cancelled');
+        
       }
       
       // Stop enhanced tracking service
@@ -331,9 +331,9 @@ class GlobalLocationManager {
 
       _trackingStateController.add('TRACKING_STOPPED');
       
-      debugPrint('✅ Global location tracking stopped');
+      
     } catch (e) {
-      debugPrint('❌ Error stopping global tracking: $e');
+      
     }
   }
 
@@ -342,7 +342,7 @@ class GlobalLocationManager {
     Function(Map<String, dynamic>)? onLocationUpdate,
     Function(String)? onError,
   }) {
-    debugPrint('📱 Registering screen: $screenName');
+    
     
     _registerScreen(screenName);
     
@@ -356,12 +356,12 @@ class GlobalLocationManager {
     
     _currentScreen = screenName;
     
-    debugPrint('   - Active screens: ${_activeScreens.join(", ")}');
+    
   }
 
   /// Unregister a screen (when screen is disposed or navigated away)
   void unregisterScreen(String screenName) {
-    debugPrint('📱 Unregistering screen: $screenName');
+    
     
     _activeScreens.remove(screenName);
     _locationCallbacks.remove(screenName);
@@ -374,8 +374,8 @@ class GlobalLocationManager {
       _currentScreen = null;
     }
     
-    debugPrint('   - Active screens: ${_activeScreens.join(", ")}');
-    debugPrint('   - Current screen: $_currentScreen');
+    
+    
   }
 
   /// Internal method to register screen
@@ -396,15 +396,15 @@ class GlobalLocationManager {
     final locationVehicleId = data['vehicleId']?.toString();
     
     if (locationVehicleId != null && _currentVehicleId != null && locationVehicleId != _currentVehicleId) {
-      debugPrint('🚫 CRITICAL: Location for WRONG vehicle received!');
-      debugPrint('   Expected vehicle: $_currentVehicleId');
-      debugPrint('   Received vehicle: $locationVehicleId');
-      debugPrint('   Location: ${data['latitude']}, ${data['longitude']}');
-      debugPrint('   ⚠️ This should NOT happen - check WebSocket subscriptions!');
+      
+      
+      
+      
+      
       return; // IGNORE locations from other vehicles
     }
     
-    debugPrint('📍 Global location update (vehicle: $_currentVehicleId): ${data['latitude']}, ${data['longitude']}');
+    // 
     
     // Store last known location
     _lastLatitude = data['latitude'] as double?;
@@ -419,21 +419,21 @@ class GlobalLocationManager {
       try {
         callback(data);
       } catch (e) {
-        debugPrint('❌ Error calling location callback: $e');
+        
       }
     }
   }
 
   /// Handle global errors and distribute to registered screens
   void _handleGlobalError(String error) {
-    debugPrint('❌ Global tracking error: $error');
+    
     
     // Send to all registered screen error callbacks
     for (final callback in _errorCallbacks.values) {
       try {
         callback(error);
       } catch (e) {
-        debugPrint('❌ Error calling error callback: $e');
+        
       }
     }
     
@@ -447,7 +447,7 @@ class GlobalLocationManager {
       if (error.toLowerCase().contains('websocket') || 
           error.toLowerCase().contains('connection') ||
           error.toLowerCase().contains('disconnect')) {
-        debugPrint('⚠️ WebSocket error detected - VehicleWebSocketService will handle reconnection');
+        
       }
     }
   }
@@ -467,12 +467,12 @@ class GlobalLocationManager {
     int? segmentIndex,
   }) async {
     if (!_isGlobalTrackingActive) {
-      debugPrint('⚠️ Cannot send location: global tracking not active');
+      
       return;
     }
 
     if (!_isPrimaryDriver) {
-      debugPrint('⚠️ Cannot send location: only primary drivers can send location updates');
+      
       return;
     }
 
@@ -536,16 +536,16 @@ class GlobalLocationManager {
   /// Only available for primary drivers
   Future<bool> forceReconnect() async {
     if (!_isGlobalTrackingActive || _currentVehicleId == null || _currentLicensePlate == null) {
-      debugPrint('⚠️ Cannot reconnect: tracking not active or missing data');
+      
       return false;
     }
 
     if (!_isPrimaryDriver) {
-      debugPrint('⚠️ Cannot reconnect: only primary drivers can reconnect WebSocket');
+      
       return false;
     }
 
-    debugPrint('🔄 Force reconnecting global tracking...');
+    
     
     try {
       // Stop GPS stream
@@ -563,7 +563,7 @@ class GlobalLocationManager {
       final jwtToken = tokenStorage.getAccessToken();
       
       if (jwtToken == null) {
-        debugPrint('❌ Cannot reconnect: No access token available');
+        
         _trackingStateController.add('RECONNECT_FAILED');
         return false;
       }
@@ -581,22 +581,22 @@ class GlobalLocationManager {
       // Restart GPS stream ONLY if NOT in simulation mode
       if (success && !_isSimulationMode) {
         await _startPositionStream();
-        debugPrint('✅ GPS stream restarted (normal mode)');
+        
       } else if (success && _isSimulationMode) {
-        debugPrint('✅ Reconnected in simulation mode (GPS stream not started)');
+        
       }
       
       if (success) {
-        debugPrint('✅ Global tracking reconnected successfully');
+        
         _trackingStateController.add('RECONNECTED');
       } else {
-        debugPrint('❌ Failed to reconnect global tracking');
+        
         _trackingStateController.add('RECONNECT_FAILED');
       }
       
       return success;
     } catch (e) {
-      debugPrint('❌ Exception during reconnect: $e');
+      
       _trackingStateController.add('RECONNECT_ERROR');
       return false;
     }
@@ -618,21 +618,21 @@ class GlobalLocationManager {
           _enhancedService.sendPosition(position); // isManualUpdate = false by default
         },
         onError: (error) {
-          debugPrint('❌ Position stream error: $error');
+          
         },
         cancelOnError: false,
       );
 
-      debugPrint('✅ GPS position stream started in GlobalLocationManager');
+      
       
     } catch (e) {
-      debugPrint('❌ Failed to start position stream: $e');
+      
     }
   }
 
   /// Update simulation mode (called when user starts simulation manually)
   void updateSimulationMode(bool isSimulationMode) {
-    debugPrint('🔄 Updating simulation mode: $_isSimulationMode → $isSimulationMode');
+    
     _isSimulationMode = isSimulationMode;
   }
 
@@ -668,7 +668,7 @@ class GlobalLocationManager {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error saving navigation state: $e');
+      
     }
   }
 
@@ -676,46 +676,46 @@ class GlobalLocationManager {
   /// Returns true if state was restored and tracking was resumed
   Future<bool> tryRestoreNavigationState() async {
     try {
-      debugPrint('🔍 tryRestoreNavigationState - Starting...');
+      
       
       final stateService = _navigationStateService;
-      debugPrint('   - NavigationStateService obtained');
+      
       
       final savedState = stateService.getSavedNavigationState();
-      debugPrint('   - Saved state: ${savedState?.toString() ?? "null"}');
+      
 
       if (savedState == null) {
-        debugPrint('ℹ️ No saved navigation state found in SharedPreferences');
+        
         return false;
       }
 
-      debugPrint('🔄 Found saved navigation state:');
-      debugPrint('   - Order ID: ${savedState.orderId}');
-      debugPrint('   - Vehicle ID: ${savedState.vehicleId}');
-      debugPrint('   - License Plate: ${savedState.licensePlate}');
-      debugPrint('   - Simulation Mode: ${savedState.isSimulationMode}');
-      debugPrint('   - Tracking Start Time: ${savedState.trackingStartTime}');
+      
+      
+      
+      
+      
+      
 
       // Check if state is still valid (not too old)
       if (savedState.trackingStartTime != null) {
         final age = DateTime.now().difference(savedState.trackingStartTime!);
-        debugPrint('   - State age: ${age.inHours} hours');
+        
         if (age.inHours > 24) {
-          debugPrint('⚠️ Saved state is too old (${age.inHours} hours), clearing...');
+          
           await stateService.clearNavigationState();
           return false;
         }
       }
 
       // Try to reconnect with saved state
-      debugPrint('🔄 Attempting to restore tracking for order: ${savedState.orderId}');
+      
       
       // Get latest token from TokenStorageService
       final tokenStorage = GetIt.instance<TokenStorageService>();
       final jwtToken = tokenStorage.getAccessToken();
       
       if (jwtToken == null) {
-        debugPrint('❌ Cannot restore navigation: No access token available');
+        
         return false;
       }
       
@@ -729,26 +729,26 @@ class GlobalLocationManager {
       );
 
       if (success) {
-        debugPrint('✅ Navigation state restored successfully');
-        debugPrint('   - Current order ID: $_currentOrderId');
-        debugPrint('   - Is tracking active: $_isGlobalTrackingActive');
-        debugPrint('   - Simulation mode in manager: $_isSimulationMode');
-        debugPrint('   - Simulation mode from saved state: ${savedState.isSimulationMode}');
+        
+        
+        
+        
+        
         
         // Double check that simulation mode was set correctly
         if (_isSimulationMode != savedState.isSimulationMode) {
-          debugPrint('⚠️ WARNING: Simulation mode mismatch!');
-          debugPrint('   Expected: ${savedState.isSimulationMode}, Got: $_isSimulationMode');
+          
+          
         }
         
         return true;
       } else {
-        debugPrint('❌ Failed to restore navigation state - startGlobalTracking returned false');
+        
         return false;
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ Error restoring navigation state: $e');
-      debugPrint('Stack trace: $stackTrace');
+      
+      
       return false;
     }
   }
@@ -758,25 +758,25 @@ class GlobalLocationManager {
     try {
       final stateService = _navigationStateService;
       await stateService.clearNavigationState();
-      debugPrint('✅ Saved navigation state cleared');
+      
     } catch (e) {
-      debugPrint('❌ Error clearing saved navigation state: $e');
+      
     }
   }
 
   /// Start periodic state saving for simulation mode
   void _startPeriodicStateSaving() {
     if (!_isSimulationMode) {
-      debugPrint('ℹ️ Not in simulation mode, skipping periodic state saving');
+      
       return;
     }
     
     _stopPeriodicStateSaving(); // Ensure no duplicate timers
     
-    debugPrint('⏱️ Starting periodic state saving (every ${_stateSaveInterval.inSeconds}s)');
+    
     _stateSaveTimer = Timer.periodic(_stateSaveInterval, (timer) {
       if (_isGlobalTrackingActive && _isSimulationMode) {
-        // debugPrint('💾 Auto-saving simulation state...');
+        // 
         // State will be saved via sendLocationUpdate calls
         // This timer is a backup to ensure state is always current
       }
@@ -787,7 +787,7 @@ class GlobalLocationManager {
   void _stopPeriodicStateSaving() {
     _stateSaveTimer?.cancel();
     _stateSaveTimer = null;
-    debugPrint('⏹️ Stopped periodic state saving');
+    
   }
 
   /// Dispose resources

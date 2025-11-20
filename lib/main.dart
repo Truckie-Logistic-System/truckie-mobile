@@ -17,35 +17,26 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Hive for offline storage
-  debugPrint('🔧 Initializing Hive...');
   await Hive.initFlutter();
-  debugPrint('✅ Hive initialized');
-
   // Reset problematic instances for hot reload
   HotReloadHelper.resetProblematicInstances();
 
   // Khởi tạo service locator (includes enhanced location services)
-  debugPrint('🔧 Setting up service locator...');
   try {
     await setupServiceLocator();
-    debugPrint('✅ Service locator setup complete');
-    
     // Verify AuthViewModel is registered
     try {
       final authVM = getIt<AuthViewModel>();
-      debugPrint('✅ AuthViewModel verified in GetIt');
     } catch (e) {
-      debugPrint('❌ AuthViewModel NOT found in GetIt: $e');
       rethrow;
     }
   } catch (e) {
-    debugPrint('❌ Error setting up service locator: $e');
     rethrow;
   }
 
   // NOTE: Recovery features removed as part of architecture simplification
   // GlobalLocationManager now handles all location tracking directly
-  // debugPrint('ℹ️ Location tracking will be managed by GlobalLocationManager');
+  // 
 
   // Token refresh callback is now handled in ApiClient via interceptor
 

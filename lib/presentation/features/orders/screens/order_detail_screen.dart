@@ -6,11 +6,16 @@ import 'package:vietmap_flutter_gl/vietmap_flutter_gl.dart';
 
 import '../../../../app/app_routes.dart';
 import '../../../../core/services/global_location_manager.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/navigation_state_service.dart';
 import '../../../../app/di/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
 import '../../../utils/driver_role_checker.dart';
 import '../../../../domain/entities/order_status.dart';
 import '../../../../domain/entities/order_with_details.dart';
+import '../../../../domain/entities/issue.dart';
+import '../../../../domain/repositories/issue_repository.dart';
+import '../../delivery/widgets/confirm_seal_replacement_sheet.dart';
 import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../viewmodels/order_detail_viewmodel.dart';
@@ -36,6 +41,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final OrderListViewModel _orderListViewModel;
   late final GlobalLocationManager _globalLocationManager;
   Timer? _refreshTimer; // Timer for periodic UI refresh
+  
+  // ✅ Notification stream subscriptions
+  // NOTE: Return payment success handled by NavigationScreen only (complex seal workflow)
+  StreamSubscription<Map<String, dynamic>>? _sealAssignmentSubscription;
+  StreamSubscription<Map<String, dynamic>>? _damageResolvedSubscription;
+  StreamSubscription<Map<String, dynamic>>? _orderRejectionResolvedSubscription;
+  StreamSubscription<Map<String, dynamic>>? _paymentTimeoutSubscription;
+  
+  // Duplicate dialog prevention flags
+  bool _isSealAssignmentDialogShowing = false;
+  bool _isDamageResolvedDialogShowing = false;
+  bool _isOrderRejectionResolvedDialogShowing = false;
+  bool _isPaymentTimeoutDialogShowing = false;
 
   @override
   void initState() {
@@ -48,17 +66,805 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     // Register this screen with GlobalLocationManager
     _globalLocationManager.registerScreen('OrderDetailScreen');
     
+    // ✅ Subscribe to notification streams (EXCEPT return payment - handled by NavigationScreen)
+    final notificationService = getIt<NotificationService>();
+    
+    // ✅ Subscribe to seal assignment stream
+    _sealAssignmentSubscription = notificationService.sealAssignmentStream.listen((data) async {
+      print('🔔 [OrderDetail] Seal assignment notification received');
+      
+      if (!mounted || _isSealAssignmentDialogShowing) {
+        print('⚠️ [OrderDetail] Skipping: mounted=$mounted, showing=$_isSealAssignmentDialogShowing');
+        return;
+      }
+      
+      // ✅ CRITICAL: Wait for any closing bottom sheets to complete
+      print('⏳ [OrderDetail] Waiting 500ms for bottom sheet to close...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Check mounted again after delay
+      if (!mounted) {
+        print('⚠️ [OrderDetail] Widget unmounted after delay');
+        return;
+      }
+      
+      _isSealAssignmentDialogShowing = true;
+      
+      print('✅ [OrderDetail] Showing seal assignment info dialog');
+      
+      // Extract issue data from notification
+      final issueId = data['issueId'] as String?;
+      final oldSeal = data['oldSeal'] as Map<String, dynamic>?;
+      final newSeal = data['newSeal'] as Map<String, dynamic>?;
+      final staff = data['staff'] as Map<String, dynamic>?;
+      
+      if (issueId == null) {
+        print('❌ [OrderDetail] No issue ID in notification');
+        _isSealAssignmentDialogShowing = false;
+        return;
+      }
+      
+      // Step 1: Show info dialog with beautiful UI (optimized for small screens)
+      final shouldConfirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          elevation: 16,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 360),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                // Header with gradient (compact, full width)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade700, Colors.blue.shade500],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Icon shield compact
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.blue.shade400, Colors.blue.shade600],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.security,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Title
+                      const Text(
+                        'Seal Mới Đã Được Gán',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Yêu cầu thay seal',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content (compact padding)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Staff info
+                      if (staff != null)
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.blue.shade100,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.person,
+                                  color: Colors.blue.shade700,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Nhân viên',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Staff ${staff['fullName']}',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+
+                      // Instruction text (compact)
+                      Center(
+                        child: Text(
+                          'Vui lòng xác nhận gắn seal mới lên kiện hàng',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Seal comparison với arrow (compact)
+                      if (oldSeal != null && newSeal != null)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.red.shade300,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.red.shade100,
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(Icons.lock_open_rounded, color: Colors.red.shade600, size: 24),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Seal cũ',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      oldSeal['sealCode'],
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    color: Colors.grey.shade400,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Thay',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.green.shade300,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.green.shade100,
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade50,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(Icons.lock_rounded, color: Colors.green.shade600, size: 24),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Seal mới',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      newSeal['sealCode'],
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Actions (compact)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Container(
+                    width: double.infinity,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blue.shade600, Colors.blue.shade700],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.shade300.withOpacity(0.5),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Xác Nhận Gán Seal',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ),
+        ),
+      );
+      
+      if (!mounted || shouldConfirm != true) {
+        _isSealAssignmentDialogShowing = false;
+        return;
+      }
+      
+      print('✅ [OrderDetail] User confirmed, fetching issue details...');
+      
+      // Step 2: Fetch full issue details and show upload form
+      try {
+        final issueRepository = getIt<IssueRepository>();
+        final issue = await issueRepository.getIssueById(issueId);
+        
+        if (!mounted) {
+          _isSealAssignmentDialogShowing = false;
+          return;
+        }
+        
+        // Show confirm seal replacement sheet directly
+        final result = await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          isDismissible: false,
+          enableDrag: false,
+          backgroundColor: Colors.transparent,
+          builder: (context) => ConfirmSealReplacementSheet(
+            issue: issue,
+            onConfirm: (imageBase64) async {
+              try {
+                await issueRepository.confirmSealReplacement(
+                  issueId: issue.id,
+                  newSealAttachedImage: imageBase64,
+                );
+                return;
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi: $e')),
+                  );
+                }
+                rethrow;
+              }
+            },
+          ),
+        );
+        
+        if (!mounted) {
+          _isSealAssignmentDialogShowing = false;
+          return;
+        }
+        
+        // After successful confirmation, navigate to NavigationScreen with auto-resume
+        if (result == true) {
+          print('✅ [OrderDetail] Seal confirmed, navigating to NavigationScreen...');
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Đã xác nhận gắn seal mới thành công'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          
+          // Navigate to NavigationScreen with auto-resume flag
+          final navigationStateService = getIt<NavigationStateService>();
+          final savedOrderId = navigationStateService.getActiveOrderId();
+          
+          if (savedOrderId != null) {
+            // Small delay to let snackbar show
+            await Future.delayed(const Duration(milliseconds: 500));
+            
+            if (mounted) {
+              Navigator.pushReplacementNamed(
+                context,
+                AppRoutes.navigation,
+                arguments: {
+                  'orderId': savedOrderId,
+                  'isSimulationMode': true, // Enable simulation mode
+                  'autoResume': true, // Flag to auto-resume after mount
+                },
+              );
+            }
+          }
+        }
+      } catch (e) {
+        print('❌ [OrderDetail] Failed to fetch issue or confirm seal: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi khi xác nhận seal: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        _isSealAssignmentDialogShowing = false;
+      }
+    });
+    
+    // ✅ Subscribe to damage resolved stream
+    _damageResolvedSubscription = notificationService.damageResolvedStream.listen((data) async {
+      print('🔔 [OrderDetail] Damage resolved notification received');
+      
+      if (!mounted || _isDamageResolvedDialogShowing) {
+        print('⚠️ [OrderDetail] Skipping: mounted=$mounted, showing=$_isDamageResolvedDialogShowing');
+        return;
+      }
+      
+      // ✅ CRITICAL: Wait for any closing bottom sheets to complete
+      print('⏳ [OrderDetail] Waiting 500ms for bottom sheet to close...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Check mounted again after delay
+      if (!mounted) {
+        print('⚠️ [OrderDetail] Widget unmounted after delay');
+        return;
+      }
+      
+      _isDamageResolvedDialogShowing = true;
+      
+      print('✅ [OrderDetail] Showing damage resolved dialog');
+      
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: const EdgeInsets.all(24),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle,
+                  color: Colors.green.shade600,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Sự cố đã được xử lý',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Nhân viên đã xác nhận xử lý xong sự cố hư hỏng. Bạn có thể tiếp tục giao hàng.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _loadOrderDetails();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Đã hiểu',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ).whenComplete(() {
+        _isDamageResolvedDialogShowing = false;
+        print('✅ [OrderDetail] Damage resolved dialog dismissed');
+      });
+    });
+    
+    // ✅ Subscribe to order rejection resolved stream
+    _orderRejectionResolvedSubscription = notificationService.orderRejectionResolvedStream.listen((data) async {
+      print('🔔 [OrderDetail] Order rejection resolved notification received');
+      
+      if (!mounted || _isOrderRejectionResolvedDialogShowing) {
+        print('⚠️ [OrderDetail] Skipping: mounted=$mounted, showing=$_isOrderRejectionResolvedDialogShowing');
+        return;
+      }
+      
+      // ✅ CRITICAL: Wait for any closing bottom sheets to complete
+      print('⏳ [OrderDetail] Waiting 500ms for bottom sheet to close...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Check mounted again after delay
+      if (!mounted) {
+        print('⚠️ [OrderDetail] Widget unmounted after delay');
+        return;
+      }
+      
+      _isOrderRejectionResolvedDialogShowing = true;
+      
+      print('✅ [OrderDetail] Showing order rejection resolved dialog');
+      
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: const EdgeInsets.all(24),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle,
+                  color: Colors.green.shade600,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Khách hàng đã thanh toán',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Khách hàng đã thanh toán phí trả hàng. Vui lòng vào màn hình điều hướng để bắt đầu trả hàng.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _loadOrderDetails();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Đã hiểu',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ).whenComplete(() {
+        _isOrderRejectionResolvedDialogShowing = false;
+        print('✅ [OrderDetail] Order rejection resolved dialog dismissed');
+      });
+    });
+    
+    // ✅ Subscribe to payment timeout stream
+    _paymentTimeoutSubscription = notificationService.paymentTimeoutStream.listen((data) async {
+      print('🔔 [OrderDetail] Payment timeout notification received');
+      
+      if (!mounted || _isPaymentTimeoutDialogShowing) {
+        print('⚠️ [OrderDetail] Skipping: mounted=$mounted, showing=$_isPaymentTimeoutDialogShowing');
+        return;
+      }
+      
+      // ✅ CRITICAL: Wait for any closing bottom sheets to complete
+      print('⏳ [OrderDetail] Waiting 500ms for bottom sheet to close...');
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Check mounted again after delay
+      if (!mounted) {
+        print('⚠️ [OrderDetail] Widget unmounted after delay');
+        return;
+      }
+      
+      _isPaymentTimeoutDialogShowing = true;
+      
+      print('✅ [OrderDetail] Showing payment timeout dialog');
+      
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: const EdgeInsets.all(24),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.schedule,
+                  color: Colors.orange.shade600,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Hết thời gian thanh toán',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Khách hàng đã hết thời gian thanh toán. Hàng sẽ được đưa về nhà kho.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _loadOrderDetails();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Đã hiểu',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ).whenComplete(() {
+        _isPaymentTimeoutDialogShowing = false;
+        print('✅ [OrderDetail] Payment timeout dialog dismissed');
+      });
+    });
+    
     // Load order details and try to restore navigation state
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Load order details first
       await _loadOrderDetails();
-      
-      debugPrint('🔍 OrderDetailScreen - Checking restore conditions:');
-      debugPrint('   - Current order ID: ${widget.orderId}');
-      debugPrint('   - Order status: ${_viewModel.orderWithDetails?.status}');
-      debugPrint('   - Active tracking order: ${_globalLocationManager.currentOrderId}');
-      debugPrint('   - Is tracking active: ${_globalLocationManager.isGlobalTrackingActive}');
-      
       // Try to restore navigation state if app was restarted during delivery
       // Check if there's a saved navigation state for this order
       final activeOrderId = _globalLocationManager.currentOrderId;
@@ -68,16 +874,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         final orderStatusString = _viewModel.orderWithDetails?.status;
         if (orderStatusString != null) {
           final orderStatus = OrderStatus.fromString(orderStatusString);
-          
-          debugPrint('   - Order status enum: ${orderStatus.name}');
-          debugPrint('   - Is active delivery: ${orderStatus.isActiveDelivery}');
-          
           if (orderStatus.isActiveDelivery) {
-            debugPrint('🔄 Attempting to restore navigation state...');
             // No active tracking or different order - try to restore
             final restored = await _globalLocationManager.tryRestoreNavigationState();
             if (restored) {
-              debugPrint('✅ Navigation state restored - WebSocket reconnected');
               // Check if restored order matches current order
               if (_globalLocationManager.currentOrderId == widget.orderId) {
                 if (mounted) {
@@ -85,16 +885,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 }
               }
             } else {
-              debugPrint('❌ Failed to restore navigation state');
             }
           } else {
-            debugPrint('ℹ️ Order not in active delivery state (${orderStatus.toVietnamese()}), skipping restore');
+            
           }
         } else {
-          debugPrint('⚠️ Order status is null, cannot check restore conditions');
         }
       } else {
-        debugPrint('ℹ️ Already tracking this order: $activeOrderId');
         // Already tracking this order, just update UI
         if (mounted) {
           setState(() {});
@@ -140,6 +937,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _refreshTimer?.cancel();
     _refreshTimer = null;
     
+    // Cancel all notification subscriptions
+    _sealAssignmentSubscription?.cancel();
+    _sealAssignmentSubscription = null;
+    _damageResolvedSubscription?.cancel();
+    _damageResolvedSubscription = null;
+    _orderRejectionResolvedSubscription?.cancel();
+    _orderRejectionResolvedSubscription = null;
+    _paymentTimeoutSubscription?.cancel();
+    _paymentTimeoutSubscription = null;
+    
     // Unregister this screen from GlobalLocationManager
     _globalLocationManager.unregisterScreen('OrderDetailScreen');
     super.dispose();
@@ -151,8 +958,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   /// Handle return delivery confirmation and navigate back to NavigationScreen
   Future<void> _handleReturnDeliveryConfirmed() async {
-    debugPrint('✅ OrderDetailScreen: Return delivery confirmed, handling navigation');
-    
     // Reload order details to reflect status change
     await _loadOrderDetails();
 
@@ -162,7 +967,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     // If tracking is active, pop back to NavigationScreen with result = true
     if (_globalLocationManager.isGlobalTrackingActive &&
         _globalLocationManager.currentOrderId == widget.orderId) {
-      debugPrint('✅ Return delivery confirmed, popping back to NavigationScreen with result = true');
       if (mounted) {
         Navigator.of(context).pop(true); // Pop with result to signal resume
       }
@@ -180,14 +984,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       child: WillPopScope(
         onWillPop: () async {
           // Check if navigation is active - if yes, we came from NavigationScreen
-          debugPrint('🔙 OrderDetail back pressed');
-          
           final isNavigationActive = _globalLocationManager.isGlobalTrackingActive &&
                                      _globalLocationManager.currentOrderId == widget.orderId;
           
           if (isNavigationActive) {
             // Came from NavigationScreen, go to main screen Orders tab
-            debugPrint('   - Navigation active, going to main screen Orders tab');
             // Pop all routes and push MainScreen with Orders tab (index 1)
             Navigator.of(context).pushNamedAndRemoveUntil(
               AppRoutes.main,
@@ -196,7 +997,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             );
           } else {
             // Normal case: just pop back
-            debugPrint('   - Normal pop back');
             Navigator.of(context).pop(true);
           }
           
@@ -211,14 +1011,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 // Check if navigation is active
-                debugPrint('🔙 OrderDetail back button pressed');
-                
                 final isNavigationActive = _globalLocationManager.isGlobalTrackingActive &&
                                            _globalLocationManager.currentOrderId == widget.orderId;
                 
                 if (isNavigationActive) {
                   // Came from NavigationScreen, go to main screen Orders tab
-                  debugPrint('   - Navigation active, going to main screen Orders tab');
                   Navigator.of(context).pushNamedAndRemoveUntil(
                     AppRoutes.main,
                     (route) => false, // Remove all routes
@@ -226,7 +1023,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   );
                 } else {
                   // Normal case: just pop back
-                  debugPrint('   - Normal pop back');
                   Navigator.of(context).pop(true);
                 }
               },
@@ -486,14 +1282,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                       DeliveryConfirmationSection(order: orderWithDetails),
                                       if (orderWithDetails.orderDetails.isNotEmpty) ...[  
                                         const SizedBox(height: 8),
-                                        // Nút báo cáo hàng hư hại
-                                        DamageReportWithLocation(
-                                          order: orderWithDetails,
-                                          onReported: _loadOrderDetails,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        // Nút báo cáo người nhận từ chối
-                                        OrderRejectionWithLocation(
+                                        // Combined button: Báo cáo hàng hư hại + người nhận từ chối
+                                        CombinedIssueReportWithLocation(
                                           order: orderWithDetails,
                                           onReported: _loadOrderDetails,
                                         ),
@@ -504,8 +1294,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     ? Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          // Nút báo cáo người nhận từ chối (IN_TRANSIT only)
-                                          OrderRejectionWithLocation(
+                                          // Combined button for reporting issues (damage/rejection)
+                                          CombinedIssueReportWithLocation(
                                             order: orderWithDetails,
                                             onReported: _loadOrderDetails,
                                           ),
@@ -563,7 +1353,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                             // DO NOT create new NavigationScreen with pushNamed
                                             if (_globalLocationManager.isGlobalTrackingActive &&
                                                 _globalLocationManager.currentOrderId == orderWithDetails.id) {
-                                              debugPrint('✅ Seal confirmed, popping back to NavigationScreen with result = true');
                                               Navigator.of(context).pop(true); // Pop with result to signal resume
                                             }
                                           }

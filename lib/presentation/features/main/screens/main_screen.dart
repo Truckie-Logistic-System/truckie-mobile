@@ -25,7 +25,6 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     // Initialize selected index from widget parameter
     _selectedIndex = widget.initialTab;
-    debugPrint('🏠 MainScreen initialized with tab: $_selectedIndex');
   }
 
   // Tạo màn hình tương ứng với tab được chọn
@@ -44,7 +43,6 @@ class _MainScreenState extends State<MainScreen> {
 
   // Chuyển tab - screen sẽ được rebuild và fetch data mới
   void _onItemTapped(int index) {
-    debugPrint('🔄 MainScreen: Switching to tab $index');
     setState(() {
       _selectedIndex = index;
     });

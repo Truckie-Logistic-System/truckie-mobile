@@ -28,14 +28,12 @@ class LocationQueueService {
       _box = await Hive.openBox<Map>(_boxName);
       _isInitialized = true;
 
-      debugPrint(
-        '✅ LocationQueueService initialized with $queueSize queued items',
-      );
+      
 
       // Clean old items if queue is too large
       await _cleanOldItems();
     } catch (e) {
-      debugPrint('❌ Failed to initialize LocationQueueService: $e');
+      
       rethrow;
     }
   }
@@ -50,7 +48,7 @@ class LocationQueueService {
     required DateTime timestamp,
   }) async {
     if (!_isInitialized || _box == null) {
-      debugPrint('❌ LocationQueueService not initialized');
+      
       return;
     }
 
@@ -69,16 +67,14 @@ class LocationQueueService {
       // Add to queue
       await _box!.add(locationData);
 
-      debugPrint(
-        '📦 Location queued: $latitude, $longitude (queue size: $queueSize)',
-      );
+      
 
       // Clean old items if queue is getting too large
       if (queueSize > _maxQueueSize) {
         await _cleanOldItems();
       }
     } catch (e) {
-      debugPrint('❌ Failed to queue location: $e');
+      
     }
   }
 
@@ -105,10 +101,10 @@ class LocationQueueService {
         return timestampA.compareTo(timestampB);
       });
 
-      debugPrint('📦 Retrieved ${locations.length} queued locations');
+      
       return locations;
     } catch (e) {
-      debugPrint('❌ Failed to get queued locations: $e');
+      
       return [];
     }
   }
@@ -125,12 +121,12 @@ class LocationQueueService {
         final item = _box!.getAt(i);
         if (item != null && item['id'] == id) {
           await _box!.deleteAt(i);
-          debugPrint('🗑️ Removed location from queue: $id');
+          
           break;
         }
       }
     } catch (e) {
-      debugPrint('❌ Failed to remove location from queue: $e');
+      
     }
   }
 
@@ -142,9 +138,9 @@ class LocationQueueService {
 
     try {
       await _box!.clear();
-      debugPrint('🗑️ Location queue cleared');
+      
     } catch (e) {
-      debugPrint('❌ Failed to clear location queue: $e');
+      
     }
   }
 
@@ -196,7 +192,7 @@ class LocationQueueService {
         'isInitialized': true,
       };
     } catch (e) {
-      debugPrint('❌ Failed to get queue stats: $e');
+      
       return {
         'size': 0,
         'oldestTimestamp': null,
@@ -241,10 +237,10 @@ class LocationQueueService {
       }
 
       if (itemsToRemove.isNotEmpty) {
-        debugPrint('🧹 Cleaned ${itemsToRemove.length} old items from queue');
+        
       }
     } catch (e) {
-      debugPrint('❌ Failed to clean old items: $e');
+      
     }
   }
 
@@ -286,7 +282,7 @@ class LocationQueueService {
 
       return locations;
     } catch (e) {
-      debugPrint('❌ Failed to get locations by time range: $e');
+      
       return [];
     }
   }
@@ -301,7 +297,7 @@ class LocationQueueService {
       final locations = await getQueuedLocations();
       return jsonEncode(locations);
     } catch (e) {
-      debugPrint('❌ Failed to export queue as JSON: $e');
+      
       return '[]';
     }
   }
@@ -311,6 +307,6 @@ class LocationQueueService {
     // Note: We don't close the Hive box here as it might be used elsewhere
     // The box will be closed when the app terminates
     _isInitialized = false;
-    debugPrint('🔌 LocationQueueService disposed');
+    
   }
 }

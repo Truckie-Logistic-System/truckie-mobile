@@ -28,7 +28,7 @@ class RequestDeduplicator {
     }
     
     // Too soon, block request
-    debugPrint('⚠️ [RequestDeduplicator] Blocking duplicate request: $key (${timeSinceLastRequest.inMilliseconds}ms since last)');
+    
     return false;
   }
   
@@ -72,7 +72,7 @@ class RequestDeduplicator {
   ///     await _repository.uploadPhoto(file);
   ///   },
   ///   onBlocked: () {
-  ///     print('請求正在進行中...');
+  ///     
   ///   },
   /// );
   /// ```
@@ -121,7 +121,7 @@ class RequestDeduplicator {
       final age = now.difference(timestamp);
       final shouldRemove = age > maxAge;
       if (shouldRemove) {
-        debugPrint('🧹 [RequestDeduplicator] Cleaning up old entry: $key (age: ${age.inMinutes}m)');
+        
       }
       return shouldRemove;
     });

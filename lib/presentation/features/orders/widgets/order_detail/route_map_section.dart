@@ -346,7 +346,6 @@ class _RouteMapSectionState extends State<RouteMapSection>
       });
 
       // Debug thông tin
-      debugPrint('VietMap controller created');
     }
   }
 
@@ -355,9 +354,6 @@ class _RouteMapSectionState extends State<RouteMapSection>
         !_isMapReady ||
         _isDisposed ||
         !_isMapInitialized) {
-      debugPrint(
-        'Cannot draw routes: controller=${_mapController != null}, ready=$_isMapReady, initialized=$_isMapInitialized',
-      );
       return;
     }
 
@@ -377,8 +373,6 @@ class _RouteMapSectionState extends State<RouteMapSection>
       for (int i = 0; i < widget.viewModel.routeSegments.length; i++) {
         final route = widget.viewModel.routeSegments[i];
         if (route.isEmpty) continue;
-
-        debugPrint('Drawing route $i with ${route.length} points');
         allPoints.addAll(route);
 
         // Lấy màu cho đoạn đường này
@@ -496,11 +490,8 @@ class _RouteMapSectionState extends State<RouteMapSection>
             ),
           ),
         );
-
-        debugPrint('Camera moved to show all routes');
       }
     } catch (e) {
-      debugPrint('Error drawing routes: $e');
       if (!_isDisposed) {
         setState(() {
           _hasError = true;

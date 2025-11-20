@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
-import 'package:flutter/painting.dart' as painting;
 
 /// Utility for compressing images before upload to reduce bandwidth and storage
 /// Uses Flutter's built-in image codec for compression
@@ -24,16 +24,12 @@ class ImageCompressor {
     int maxHeight = 1080,
   }) async {
     try {
-      debugPrint('📸 [ImageCompressor] Starting compression...');
-      debugPrint('   - Original file: ${file.path}');
-      
       // Get original file size
       final originalSize = await file.length();
-      debugPrint('   - Original size: ${(originalSize / 1024).toStringAsFixed(1)} KB');
+      
       
       // If file is already small enough, return original
       if (originalSize < 500 * 1024) { // 500 KB
-        debugPrint('✅ [ImageCompressor] File already small enough, skipping compression');
         return file;
       }
       
@@ -41,7 +37,7 @@ class ImageCompressor {
       final bytes = await file.readAsBytes();
       
       // Decode image
-      final codec = await painting.instantiateImageCodec(
+      final codec = await ui.instantiateImageCodec(
         bytes,
         targetWidth: maxWidth,
         targetHeight: maxHeight,
@@ -49,16 +45,12 @@ class ImageCompressor {
       
       final frame = await codec.getNextFrame();
       final image = frame.image;
-      
-      debugPrint('   - Decoded dimensions: ${image.width}x${image.height}');
-      
       // Convert to bytes with compression
       final byteData = await image.toByteData(
-        format: painting.ImageByteFormat.png,
+        format: ui.ImageByteFormat.png,
       );
       
       if (byteData == null) {
-        debugPrint('❌ [ImageCompressor] Failed to convert image to bytes');
         return file; // Return original if compression fails
       }
       
@@ -77,19 +69,12 @@ class ImageCompressor {
       final compressedSize = await compressedFile.length();
       final compressionRatio = ((1 - compressedSize / originalSize) * 100).toStringAsFixed(1);
       
-      debugPrint('✅ [ImageCompressor] Compression complete');
-      debugPrint('   - Compressed size: ${(compressedSize / 1024).toStringAsFixed(1)} KB');
-      debugPrint('   - Compression: $compressionRatio% reduction');
-      debugPrint('   - Output file: $tempPath');
-      
       // Clean up
       image.dispose();
       codec.dispose();
       
       return compressedFile;
     } catch (e, stackTrace) {
-      debugPrint('❌ [ImageCompressor] Compression failed: $e');
-      debugPrint('Stack trace: $stackTrace');
       return file; // Return original file if compression fails
     }
   }
@@ -101,8 +86,6 @@ class ImageCompressor {
     int maxWidth = 1920,
     int maxHeight = 1080,
   }) async {
-    debugPrint('📸 [ImageCompressor] Compressing ${files.length} images in parallel...');
-    
     final futures = files.map((file) => compressImage(
       file: file,
       quality: quality,
@@ -113,8 +96,6 @@ class ImageCompressor {
     final results = await Future.wait(futures);
     
     final successCount = results.where((r) => r != null).length;
-    debugPrint('✅ [ImageCompressor] Compressed $successCount/${files.length} images');
-    
     return results;
   }
   
@@ -138,7 +119,7 @@ class ImageCompressor {
   static Future<Size?> getImageDimensions(File file) async {
     try {
       final bytes = await file.readAsBytes();
-      final codec = await painting.instantiateImageCodec(bytes);
+      final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       final image = frame.image;
       
@@ -149,7 +130,6 @@ class ImageCompressor {
       
       return size;
     } catch (e) {
-      debugPrint('❌ [ImageCompressor] Failed to get dimensions: $e');
       return null;
     }
   }

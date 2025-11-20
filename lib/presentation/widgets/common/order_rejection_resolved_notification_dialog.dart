@@ -281,8 +281,7 @@ class OrderRejectionResolvedNotificationDialog extends StatelessWidget {
                     height: 48,
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        debugPrint('✅ [OrderRejectionResolvedDialog] User confirmed, navigating...');
-                        
+
                         // Close dialog
                         Navigator.of(context).pop();
                         
@@ -294,7 +293,7 @@ class OrderRejectionResolvedNotificationDialog extends StatelessWidget {
                         
                         // Navigate to navigation screen
                         if (context.mounted) {
-                          debugPrint('🗺️ [OrderRejectionResolvedDialog] Navigating to navigation screen...');
+
                           Navigator.of(context).pushNamedAndRemoveUntil(
                             '/navigation',
                             (route) => false,
@@ -331,7 +330,7 @@ class OrderRejectionResolvedNotificationDialog extends StatelessWidget {
                     height: 40,
                     child: TextButton(
                       onPressed: () {
-                        debugPrint('🔄 [OrderRejectionResolvedDialog] Closing dialog without navigation');
+
                         Navigator.of(context).pop();
                       },
                       style: TextButton.styleFrom(

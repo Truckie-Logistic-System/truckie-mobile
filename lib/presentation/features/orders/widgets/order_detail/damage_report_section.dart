@@ -71,10 +71,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
           _selectedIssueType = damageTypes.first;
         }
       });
-      
-      debugPrint('✅ Loaded ${damageTypes.length} DAMAGE issue types');
     } catch (e) {
-      debugPrint('❌ Error loading damage issue types: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -176,7 +173,6 @@ class _DamageReportSectionState extends State<DamageReportSection> {
         },
       );
     } catch (e) {
-      debugPrint('❌ Could not find vehicle assignment for current user: $e');
       return null;
     }
   }
@@ -227,14 +223,12 @@ class _DamageReportSectionState extends State<DamageReportSection> {
         ),
       ).then((result) {
         if (result == true && mounted) {
-          debugPrint('✅ Damage reported successfully from order detail screen');
           // Pop back to navigation screen so driver can continue trip and resume simulator
           // Pass true to indicate issue was reported successfully
           Navigator.of(context).pop(true);
         }
       });
     }).catchError((e) {
-      debugPrint('❌ Error loading issue types: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi: $e'),
@@ -288,13 +282,8 @@ class _DamageReportSectionState extends State<DamageReportSection> {
     setState(() {
       _isLoading = true;
     });
-
-    debugPrint('📦 Bắt đầu báo cáo hàng hư hại với ${_damageImages.length} ảnh...');
-
     try {
       // Use location passed from parent widget (consistent with seal report approach)
-      debugPrint('📍 Using location: ${widget.currentLatitude}, ${widget.currentLongitude}');
-
       // CRITICAL FIX: Get vehicle assignment ID from CURRENT DRIVER
       // Bug: vehicleAssignments.first might belong to another driver in multi-trip orders
       final vehicleAssignment = _getCurrentUserVehicleAssignment(context);
@@ -321,9 +310,6 @@ class _DamageReportSectionState extends State<DamageReportSection> {
         locationLatitude: widget.currentLatitude,
         locationLongitude: widget.currentLongitude,
       );
-
-      debugPrint('✅ Báo cáo hàng hư hại thành công');
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -345,7 +331,6 @@ class _DamageReportSectionState extends State<DamageReportSection> {
         });
       }
     } catch (e) {
-      debugPrint('❌ Exception khi báo cáo hàng hư hại: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -734,7 +719,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Chụp hoặc chọn ảnh hàng hư hại',
+                        'Chụp ảnh hàng hư hại',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 14,

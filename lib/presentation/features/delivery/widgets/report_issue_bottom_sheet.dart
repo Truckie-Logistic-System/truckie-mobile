@@ -58,9 +58,9 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
     try {
       final types = await _issueRepository.getActiveIssueTypes();
       
-      // debugPrint('📋 Loaded ${types.length} issue types:');
+      // 
       // for (var type in types) {
-      //   debugPrint('   - ${type.issueTypeName}: ${type.issueCategory.value}');
+      //   
       // }
       
       setState(() {
@@ -68,7 +68,6 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
         _isLoadingTypes = false;
       });
     } catch (e) {
-      debugPrint('❌ Error loading issue types: $e');
       setState(() {
         _isLoadingTypes = false;
       });
@@ -91,15 +90,8 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
       (type) => type.id == issueTypeId,
       orElse: () => _issueTypes.first,
     );
-
-    debugPrint('📋 Selected issue type: ${selectedType.issueTypeName}');
-    debugPrint('📋 Category: ${selectedType.issueCategory}');
-    debugPrint('📋 Category value: ${selectedType.issueCategory.value}');
-
     // Check if it's SEAL_REPLACEMENT category
     if (selectedType.issueCategory == IssueCategory.sealReplacement) {
-      debugPrint('🔓 SEAL_REPLACEMENT category detected, showing seal replacement form');
-      
       // Close current bottom sheet
       Navigator.pop(context);
       
@@ -117,11 +109,8 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
 
       // If issue was created successfully, refresh data
       if (result != null && mounted) {
-        debugPrint('✅ Seal issue created, refreshing data...');
       }
     } else if (selectedType.issueCategory == IssueCategory.damage) {
-      debugPrint('📦 DAMAGE category detected, showing damage report form');
-      
       // Check if we have order details
       if (widget.orderWithDetails == null || widget.orderWithDetails!.orderDetails.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,10 +136,6 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
       }).toList();
       
       // Show damage report bottom sheet
-      debugPrint('📍 [ReportIssueBottomSheet] Opening damage report with location:');
-      debugPrint('   - Latitude: ${widget.currentLocation?.latitude}');
-      debugPrint('   - Longitude: ${widget.currentLocation?.longitude}');
-      
       final result = await showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -166,20 +151,13 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
 
       // If damage report was created successfully, close report issue sheet and notify parent
       if (result == true && mounted) {
-        debugPrint('✅ Damage report created, closing report issue sheet...');
         Navigator.pop(context, true); // Close report issue bottom sheet and return success
       }
     } else if (selectedType.issueCategory == IssueCategory.penalty) {
-      debugPrint('🚨 PENALTY category detected, showing penalty report form');
-      
       // Close current bottom sheet
       Navigator.pop(context);
       
       // Show penalty report bottom sheet
-      debugPrint('📍 [ReportIssueBottomSheet] Opening penalty report with location:');
-      debugPrint('   - Latitude: ${widget.currentLocation?.latitude}');
-      debugPrint('   - Longitude: ${widget.currentLocation?.longitude}');
-      
       final result = await showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -194,8 +172,16 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
 
       // If issue was created successfully, refresh data
       if (result != null && mounted) {
-        debugPrint('✅ Penalty report created, refreshing data...');
       }
+    } else if (selectedType.issueCategory == IssueCategory.reroute) {
+      // TODO: Reroute feature not yet implemented in mobile
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tính năng tái định tuyến đang được phát triển'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
     } else {
       // For other categories, just update selected ID
       setState(() {
@@ -294,22 +280,13 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
     });
 
     try {
-      debugPrint('📤 Submitting issue...');
-      debugPrint('   - Description: ${_descriptionController.text}');
-      debugPrint('   - Issue Type ID: $_selectedIssueTypeId');
-      debugPrint('   - Vehicle Assignment ID: ${widget.vehicleAssignmentId}');
-      debugPrint('   - Location: ${widget.currentLocation?.latitude}, ${widget.currentLocation?.longitude}');
-
-      final issue = await _issueRepository.createIssue(
+      await _issueRepository.createIssue(
         description: _descriptionController.text.trim(),
         issueTypeId: _selectedIssueTypeId!,
         vehicleAssignmentId: widget.vehicleAssignmentId,
         locationLatitude: widget.currentLocation?.latitude,
         locationLongitude: widget.currentLocation?.longitude,
       );
-
-      debugPrint('✅ Issue created successfully: ${issue.id}');
-
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -321,7 +298,6 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error submitting issue: $e');
       setState(() {
         _isSubmitting = false;
       });
@@ -365,7 +341,7 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: Colors.red.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(

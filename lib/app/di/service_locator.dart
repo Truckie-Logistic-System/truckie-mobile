@@ -61,7 +61,6 @@ Future<void> setupServiceLocator() async {
   try {
     // Check if already setup to avoid duplicate registration on hot reload
     if (getIt.isRegistered<SharedPreferences>()) {
-      debugPrint('ℹ️ Service locator already setup, skipping...');
       return;
     }
     
@@ -70,13 +69,9 @@ Future<void> setupServiceLocator() async {
     getIt.registerSingleton<SharedPreferences>(sharedPreferences);
 
     // Token storage service
-    debugPrint('Registering TokenStorageService...');
     final tokenStorageService = TokenStorageService();
     getIt.registerSingleton<TokenStorageService>(tokenStorageService);
-    debugPrint('TokenStorageService registered successfully');
-
     // API Client with base URL from constants
-    debugPrint('Initializing ApiClient with base URL: ${ApiConstants.baseUrl}');
     getIt.registerLazySingleton<ApiClient>(
       () => ApiClient(baseUrl: ApiConstants.baseUrl),
     );
@@ -87,10 +82,7 @@ Future<void> setupServiceLocator() async {
     );
 
     // Register NotificationService as singleton
-    debugPrint('Registering NotificationService...');
     getIt.registerSingleton<NotificationService>(NotificationService());
-    debugPrint('✅ NotificationService registered');
-
     // WebSocket services
     // Sử dụng mock service cho testing - đổi thành false để sử dụng dịch vụ thật
     final bool useMockWebSocket = false;
@@ -262,7 +254,6 @@ Future<void> setupServiceLocator() async {
 
   // View models
   // Register AuthViewModel as LazySingleton to maintain state across the app
-  debugPrint('📝 Registering AuthViewModel...');
   getIt.registerLazySingleton<AuthViewModel>(
     () => AuthViewModel(
       loginUseCase: getIt<LoginUseCase>(),
@@ -272,8 +263,6 @@ Future<void> setupServiceLocator() async {
     ),
     // Remove instanceName to allow direct access via getIt<AuthViewModel>()
   );
-  debugPrint('✅ AuthViewModel registered');
-
   // NOTE: LocationTrackingViewModel removed - testing feature
 
   getIt.registerFactory<AccountViewModel>(
@@ -312,10 +301,7 @@ Future<void> setupServiceLocator() async {
     // CRITICAL: Không dùng LazySingleton vì khi có 2 giả lập chạy cùng lúc,
     // device 2 sẽ overwrite route segments của device 1
     getIt.registerFactory<NavigationViewModel>(() => NavigationViewModel());
-    debugPrint('✅ All service locator registrations complete');
   } catch (e) {
-    debugPrint('❌ Error during service locator setup: $e');
-    debugPrint('Stack trace: ${StackTrace.current}');
     rethrow;
   }
 }

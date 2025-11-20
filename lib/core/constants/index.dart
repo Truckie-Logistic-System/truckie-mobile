@@ -17,3 +17,6 @@ export 'regex_patterns.dart';
 
 // Features
 export 'feature_flags.dart';
+
+// Status Constants
+export 'vehicle_assignment_status.dart';

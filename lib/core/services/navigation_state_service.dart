@@ -53,9 +53,8 @@ class NavigationStateService {
         await _prefs.setDouble(_keyCurrentBearing, currentBearing);
       }
 
-      debugPrint('✅ Navigation state saved for order: $orderId');
     } catch (e) {
-      debugPrint('❌ Error saving navigation state: $e');
+
     }
   }
 
@@ -76,7 +75,7 @@ class NavigationStateService {
         await _prefs.setInt(_keyCurrentSegmentIndex, segmentIndex);
       }
     } catch (e) {
-      debugPrint('❌ Error updating position: $e');
+
     }
   }
 
@@ -102,7 +101,7 @@ class NavigationStateService {
         try {
           trackingStartTime = DateTime.parse(trackingStartTimeStr);
         } catch (e) {
-          debugPrint('Error parsing tracking start time: $e');
+
         }
       }
 
@@ -118,7 +117,7 @@ class NavigationStateService {
         trackingStartTime: trackingStartTime,
       );
     } catch (e) {
-      debugPrint('❌ Error getting saved navigation state: $e');
+
       return null;
     }
   }
@@ -135,9 +134,9 @@ class NavigationStateService {
       await _prefs.remove(_keyCurrentLongitude);
       await _prefs.remove(_keyCurrentBearing);
       await _prefs.remove(_keyTrackingStartTime);
-      debugPrint('✅ Navigation state cleared');
+
     } catch (e) {
-      debugPrint('❌ Error clearing navigation state: $e');
+
     }
   }
 
@@ -149,6 +148,16 @@ class NavigationStateService {
   /// Get active order ID if exists
   String? getActiveOrderId() {
     return _prefs.getString(_keyActiveOrderId);
+  }
+  
+  /// Save just the active order ID (lightweight alternative to saveNavigationState)
+  /// Used when we only need to persist orderId without full navigation state
+  Future<void> saveActiveOrderId(String orderId) async {
+    try {
+      await _prefs.setString(_keyActiveOrderId, orderId);
+    } catch (e) {
+      // Silent fail - non-critical operation
+    }
   }
 }
 

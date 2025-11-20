@@ -8,9 +8,9 @@ class HotReloadHelper {
     try {
       // AuthViewModel is managed by service locator as LazySingleton
       // No need to reset it manually - it will be recreated on demand
-      debugPrint('ℹ️ Service locator will manage AuthViewModel lifecycle');
+
     } catch (e) {
-      debugPrint('Error resetting instances for hot reload: $e');
+
     }
   }
 }

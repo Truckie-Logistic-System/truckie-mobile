@@ -243,7 +243,7 @@ class _ReturnDeliveryConfirmationButtonState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Chụp hoặc chọn ảnh xác nhận',
+                        'Chụp ảnh xác nhận',
                         style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: 14,

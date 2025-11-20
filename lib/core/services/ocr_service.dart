@@ -25,7 +25,7 @@ class OCRService {
     // Kiểm tra chất lượng ảnh trước khi xử lý OCR
     final qualityCheck = await _checkImageQuality(imageFile);
     if (!qualityCheck.isValid) {
-      print('⚠️ ${qualityCheck.warning}');
+
       // Vẫn tiếp tục OCR nhưng với cảnh báo
     }
 
@@ -33,20 +33,19 @@ class OCRService {
     String? result = await _tryLatinOptimizedOCR(imageFile);
 
     if (result != null && result.isNotEmpty) {
-      print('✅ Latin-optimized OCR thành công: $result');
+
       return result;
     }
 
     // Fallback: Thử với default recognizer
-    print('🔄 Latin-optimized OCR thất bại, chuyển sang Default OCR...');
+
     result = await _tryDefaultOCR(imageFile);
 
     if (result != null && result.isNotEmpty) {
-      print('✅ Default OCR thành công: $result');
+
       return result;
     }
 
-    print('❌ Cả Latin-optimized và Default OCR đều thất bại');
     return null;
   }
 
@@ -59,30 +58,25 @@ class OCRService {
       final inputImage = InputImage.fromFile(imageFile);
       final recognizedText = await _latinOptimizedRecognizer!.processImage(inputImage);
 
-      print('📝 [LATIN-OPTIMIZED] OCR Raw text: ${recognizedText.text}');
-      print('📝 [LATIN-OPTIMIZED] OCR All blocks:');
       for (var block in recognizedText.blocks) {
-        print('  Block: ${block.text}');
+
         for (var line in block.lines) {
-          print('    Line: ${line.text}');
+
         }
       }
       
       // Tìm kiếm các pattern số trong text với phân tích theo vị trí
       final extractedNumbers = _extractNumbersWithContext(recognizedText);
-      
-      print('🔢 [LATIN-OPTIMIZED] OCR Extracted numbers: $extractedNumbers');
-      
+
       if (extractedNumbers.isNotEmpty) {
         // Trả về số phù hợp nhất (đã được sort theo priority trong _extractNumbersWithContext)
         final result = extractedNumbers.first;
         return result;
       }
-      
-      print('❌ [LATIN-OPTIMIZED] OCR No numbers found');
+
       return null;
     } catch (e) {
-      print('❌ [LATIN-OPTIMIZED] OCR Error: $e');
+
       return null;
     }
   }
@@ -96,35 +90,29 @@ class OCRService {
       final inputImage = InputImage.fromFile(imageFile);
       final recognizedText = await _defaultRecognizer!.processImage(inputImage);
 
-      print('📝 [DEFAULT] OCR Raw text: ${recognizedText.text}');
-      print('📝 [DEFAULT] OCR All blocks:');
       for (var block in recognizedText.blocks) {
-        print('  Block: ${block.text}');
+
         for (var line in block.lines) {
-          print('    Line: ${line.text}');
+
         }
       }
       
       // Tìm kiếm các pattern số trong text với phân tích theo vị trí
       final extractedNumbers = _extractNumbersWithContext(recognizedText);
-      
-      print('🔢 [DEFAULT] OCR Extracted numbers: $extractedNumbers');
-      
+
       if (extractedNumbers.isNotEmpty) {
         // Trả về số phù hợp nhất (đã được sort theo priority trong _extractNumbersWithContext)
         final result = extractedNumbers.first;
-        print('✅ [DEFAULT] OCR Best match: $result');
+
         return result;
       }
-      
-      print('❌ [DEFAULT] OCR No numbers found');
+
       return null;
     } catch (e) {
-      print('❌ [DEFAULT] OCR Error: $e');
+
       return null;
     }
   }
-
 
   /// Trích xuất tất cả các số từ text với context
   List<String> _extractNumbersWithContext(RecognizedText recognizedText) {
@@ -154,7 +142,7 @@ class OCRService {
         if (cleanNum.length > largestNumberLength && cleanNum.length >= 4) {
           largestNumber = num; // FIX: Lưu số gốc (có dấu thập phân), không phải số đã xóa dấu
           largestNumberLength = cleanNum.length;
-          print('🔍 Found number in block: $num → cleaned: $cleanNum (length: $largestNumberLength)');
+          
         }
       }
     }
@@ -163,7 +151,7 @@ class OCRService {
     if (largestNumber.isNotEmpty && largestNumberLength >= 4 && largestNumberLength <= 8) {
       numbers.add(largestNumber);
       numberPriority[largestNumber] = 95; // Ưu tiên rất cao
-      print('🎯 Found largest number block: $largestNumber (length: $largestNumberLength)');
+      
       
       // FIX: Nếu số lớn có 6 chữ số, thử tách thành số thập phân
       // Ví dụ: "874592" → "87459.2" (tách ở vị trí thứ 5)
@@ -175,7 +163,7 @@ class OCRService {
         
         numbers.add(decimalVersion);
         numberPriority[decimalVersion] = 96; // Ưu tiên cao hơn số nguyên
-        print('🎯 Detected possible decimal: $largestNumber → $decimalVersion (priority: 96)');
+        
       }
     }
     
@@ -188,8 +176,7 @@ class OCRService {
         bool hasOdometerKeyword = odometerKeywords.any((keyword) => lineText.contains(keyword));
         
         if (hasOdometerKeyword) {
-          print('🎯 Found odometer keyword line: ${line.text}');
-          
+
           // Trích xuất số từ dòng này
           String cleanLine = line.text.replaceAll(RegExp(r'[^\d\s.,\-]'), ' ');
           // FIX: GIỮ LẠI dấu phẩy/chấm (không xóa)
@@ -202,7 +189,7 @@ class OCRService {
           if (compactNumber.isNotEmpty && cleanNumForLength.length >= 4) {
             numbers.add(compactNumber);
             numberPriority[compactNumber] = 100; // Ưu tiên cao nhất
-            print('✅ Extracted from odometer keyword line: $compactNumber');
+
           }
         }
       }
@@ -217,12 +204,12 @@ class OCRService {
       bool hasKeyword = odometerKeywords.any((keyword) => blockText.contains(keyword));
       
       if (hasKeyword) {
-        print('🎯 Found keyword block at index $i: $blockText');
+
         // Tìm số trong block này và block kế bên (đặc biệt là block TIẾP THEO)
         for (int j = i - 1; j <= i + 2; j++) {
           if (j >= 0 && j < recognizedText.blocks.length) {
             var nearBlock = recognizedText.blocks[j];
-            print('🔍 Checking near block at $j: ${nearBlock.text}');
+
             String cleanBlock = nearBlock.text.replaceAll(RegExp(r'[^\d\s.,\-]'), ' ');
             // FIX: GIỮ LẠI dấu phẩy/chấm (không xóa)
             // Chỉ xóa khoảng trắng
@@ -234,7 +221,7 @@ class OCRService {
             if (compactNumber.isNotEmpty && cleanNumForLength.length >= 4) {
               numbers.add(compactNumber);
               numberPriority[compactNumber] = 90; // Ưu tiên cao
-              print('🔍 Found number near keyword: $compactNumber');
+
             }
           }
         }
@@ -254,8 +241,7 @@ class OCRService {
     // Xử lý trường hợp số bị tách rời (ví dụ: "873 15.6" thay vì "87315.6")
     // Tìm các cặp số gần nhau có thể ghép lại
     // FIX: Luôn thử ghép số tách rời, không chỉ khi numbers.isEmpty
-    print('🔍 DEBUG: allNumbers = $allNumbers');
-    
+
     // FIX: Tìm "873" và "15.6" trong text gốc để ghép đúng thứ tự
     // Vì Set không giữ thứ tự, nên cần tìm lại từ text gốc
     String fullText = recognizedText.text;
@@ -264,15 +250,14 @@ class OCRService {
     var allNumbersOrdered = RegExp(r'\d+[.,]?\d*').allMatches(fullText)
         .map((m) => m.group(0)!)
         .toList();
-    print('🔍 DEBUG: allNumbersOrdered (by appearance) = $allNumbersOrdered');
+    
     
     // Lọc số từ 2 chữ số trở lên (bao gồm số có dấu thập phân)
     var twoDigitNumbers = allNumbersOrdered.where((num) {
       String cleanNum = num.replaceAll(RegExp(r'[.,]'), '');
       return cleanNum.length >= 2 && cleanNum.length <= 4;
     }).toList();
-    print('🔍 DEBUG: twoDigitNumbers = $twoDigitNumbers');
-    
+
     if (twoDigitNumbers.length >= 2) {
       // Thử ghép các số gần nhau
       for (int i = 0; i < twoDigitNumbers.length - 1; i++) {
@@ -303,7 +288,7 @@ class OCRService {
                 num2WithDecimal = num2;
               }
               combined = num1 + num2WithDecimal;
-              print('🔍 DEBUG: Detected decimal: $num1 + $num2 (value=$num2Value < 200) → $num2WithDecimal → $combined');
+              
             } else {
               // Ghép bình thường
               combined = num1 + num2;
@@ -317,7 +302,7 @@ class OCRService {
         }
         
         String cleanCombined = combined.replaceAll(RegExp(r'[.,]'), '');
-        print('🔍 DEBUG: Trying to combine $num1 + $num2 = $combined (length: ${cleanCombined.length})');
+        
         
         // RESPONSIVE FIX: Mở rộng range từ 5-7 thành 4-8 để chấp nhận các độ phân giải khác nhau
         if (cleanCombined.length >= 4 && cleanCombined.length <= 8) {
@@ -325,7 +310,7 @@ class OCRService {
           // FIX: Tăng priority lên 95 (cao hơn 90 của "near keyword")
           // Vì số ghép (đặc biệt là có dấu thập phân) thường chính xác hơn
           numberPriority[combined] = 95;
-          print('🔢 Ghép số tách rời: $num1 + $num2 = $combined (priority: 95)');
+          
         }
       }
     }
@@ -349,12 +334,12 @@ class OCRService {
         if (validLongNumbers.isNotEmpty) {
           numbers.add(validLongNumbers.first);
           numberPriority[validLongNumbers.first] = 25; // Ưu tiên thấp nhưng vẫn khả thi
-          print('🔢 Ảnh cắt fallback - dùng số dài nhất hợp lệ: ${validLongNumbers.first}');
+
         } else if (longNumbers.isNotEmpty) {
           // Nếu không có số hợp lệ, lấy số dài nhất bất kể
           numbers.add(longNumbers.first);
           numberPriority[longNumbers.first] = 20; // Ưu tiên rất thấp
-          print('🔢 Ảnh cắt emergency fallback - dùng số dài nhất: ${longNumbers.first}');
+
         }
       }
     }
@@ -384,9 +369,9 @@ class OCRService {
       return b.length.compareTo(a.length);
     });
     
-    print('🔢 [LATIN-OPTIMIZED] OCR Extracted numbers (sorted by priority): $sortedNumbers');
+    
     if (sortedNumbers.isNotEmpty) {
-      print('✅ [LATIN-OPTIMIZED] OCR Best match (by priority): ${sortedNumbers.first} (priority: ${numberPriority[sortedNumbers.first]})');
+      
     }
     
     return sortedNumbers;
@@ -423,8 +408,7 @@ class OCRService {
       final directMatches = RegExp(r'\d+[.,]?\d*').allMatches(text);
       numbers.addAll(directMatches.map((match) => match.group(0)!));
     }
-    
-    print('🔢 _extractNumbers: text=$text → numbers=$numbers');
+
     return numbers.toList();
   }
 
@@ -539,7 +523,7 @@ class OCRService {
 
       return _ImageQualityCheck(isValid: true, warning: null);
     } catch (e) {
-      print('Lỗi khi kiểm tra chất lượng ảnh: $e');
+
       return _ImageQualityCheck(isValid: true, warning: null); // Không block nếu có lỗi
     }
   }
@@ -550,7 +534,7 @@ class OCRService {
       _latinOptimizedRecognizer?.close();
       _defaultRecognizer?.close();
     } catch (e) {
-      print('Lỗi khi dispose OCR: $e');
+
     }
   }
 }

@@ -131,9 +131,6 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
     setState(() {
       _isLoading = true;
     });
-
-    debugPrint('📸 Bắt đầu gửi ${_confirmationImages.length} ảnh xác nhận giao hàng...');
-
     try {
       final viewModel = Provider.of<OrderDetailViewModel>(
         context,
@@ -143,9 +140,6 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
         imageFiles: _confirmationImages,
         description: 'Ảnh xác nhận khách hàng nhận hàng',
       );
-
-      debugPrint('📸 Kết quả gửi ảnh: $success');
-
       if (success) {
         // Play success sound for delivery confirmation
         SoundUtils.playSuccessSound();
@@ -165,15 +159,12 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
           // NavigationScreen is waiting for this result via await pushNamed()
           if (_globalLocationManager.isGlobalTrackingActive &&
               _globalLocationManager.currentOrderId == widget.order.id) {
-            debugPrint('✅ Delivery confirmed, popping back to NavigationScreen with result = true');
             Navigator.of(context).pop(true);
           }
         }
       } else {
         // Play error sound for failed delivery confirmation
         SoundUtils.playErrorSound();
-        
-        debugPrint('❌ Lỗi: ${viewModel.photoUploadError}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -188,8 +179,6 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
     } catch (e) {
       // Play error sound for exception
       SoundUtils.playErrorSound();
-      
-      debugPrint('❌ Exception khi xác nhận giao hàng: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -514,7 +503,7 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Chụp hoặc chọn ảnh xác nhận',
+                        'Chụp ảnh xác nhận',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 14,

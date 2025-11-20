@@ -23,9 +23,7 @@ class TruckieApp extends StatelessWidget {
         // Luôn bắt đầu từ splash screen
         const String initialRoute = AppRoutes.splash;
 
-        // debugPrint(
-        //   'Building app with auth status: ${authViewModel.status}, initialRoute: $initialRoute',
-        // );
+        // 
 
         return MaterialApp(
           title: 'Truckie Driver',

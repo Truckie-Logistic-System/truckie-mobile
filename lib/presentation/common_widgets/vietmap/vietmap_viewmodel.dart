@@ -50,15 +50,16 @@ class VietMapViewModel extends ChangeNotifier {
       _hasError = false;
       notifyListeners();
 
-      // Fetch map style from API
-      final styleString = await _vietMapService.getMobileStyles();
+      // Fetch map style URL from API (OPTIMIZED approach)
+      // SDK handles caching, progressive loading, and tile optimization
+      final styleUrl = await _vietMapService.getMobileStyleUrl();
 
       if (_isDisposed) return;
 
-      _mapStyle = styleString;
+      _mapStyle = styleUrl;
 
-      // Create default config
-      _mapConfig = VietMapConfig.defaultConfig(styleString);
+      // Create default config with style URL
+      _mapConfig = VietMapConfig.defaultConfig(styleUrl);
 
       _isLoading = false;
       notifyListeners();
@@ -68,7 +69,6 @@ class VietMapViewModel extends ChangeNotifier {
       _isLoading = false;
       _hasError = true;
       _errorMessage = e.toString();
-      debugPrint('Error initializing map: $e');
       notifyListeners();
     }
   }

@@ -38,9 +38,9 @@ class ApiService {
     final token = tokenStorageService.getAccessToken();
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
-      // debugPrint('Using token in headers: ${token.substring(0, 15)}...');
+      // 
     } else {
-      // debugPrint('No token available for headers');
+      // 
 
       // Thử refresh token nếu không có token
       final refreshed = await _refreshToken();
@@ -49,9 +49,7 @@ class ApiService {
         final newToken = tokenStorageService.getAccessToken();
         if (newToken != null && newToken.isNotEmpty) {
           headers['Authorization'] = 'Bearer $newToken';
-          // debugPrint(
-          //   'Using new token after refresh: ${newToken.substring(0, 15)}...',
-          // );
+          // 
         }
       }
     }
@@ -65,7 +63,7 @@ class ApiService {
 
     // Nếu không có token, thử refresh
     if (token == null || token.isEmpty) {
-      // debugPrint('No token available, attempting to refresh...');
+      // 
       return await _refreshToken();
     }
 
@@ -89,12 +87,12 @@ class ApiService {
       }
 
       // Debug log
-      // debugPrint('GET Request: $uri');
-      // debugPrint('Headers: $headers');
+      // 
+      // 
 
       // Kiểm tra xem có token không
       if (!headers.containsKey('Authorization')) {
-        // debugPrint('WARNING: No Authorization header for request to $endpoint');
+        // 
       }
 
       final response = await client.get(uri, headers: headers);
@@ -106,27 +104,23 @@ class ApiService {
     } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
-        // debugPrint(
-        //   'Unauthorized error for $endpoint, attempting to refresh token...',
-        // );
+        // 
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
-          // debugPrint('Token refreshed, retrying request to $endpoint');
+          // 
           return get(endpoint);
         } else {
           // Nếu refresh token thất bại, gọi callback
-          // debugPrint('Token refresh failed, handling failure for $endpoint');
+          // 
           _handleTokenRefreshFailed();
         }
       } else {
-        // debugPrint(
-        //   'Already refreshing token, cannot handle unauthorized error for $endpoint',
-        // );
+        // 
       }
       rethrow;
     } catch (e) {
-      // debugPrint('GET Error for $endpoint: ${e.toString()}');
+      // 
       throw ServerException(message: e.toString());
     }
   }
@@ -139,9 +133,9 @@ class ApiService {
       final headers = await _getHeaders();
 
       // Debug log
-      // debugPrint('POST Request: $baseUrl$endpoint');
-      // debugPrint('Headers: $headers');
-      // debugPrint('Body: $body');
+      // 
+      // 
+      // 
 
       final response = await client.post(
         Uri.parse('$baseUrl$endpoint'),
@@ -156,7 +150,7 @@ class ApiService {
     } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
-        // debugPrint('Unauthorized error, attempting to refresh token...');
+        // 
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -168,7 +162,7 @@ class ApiService {
       }
       rethrow;
     } catch (e) {
-      // debugPrint('POST Error: ${e.toString()}');
+      // 
       throw ServerException(message: e.toString());
     }
   }
@@ -181,9 +175,9 @@ class ApiService {
       final headers = await _getHeaders();
 
       // Debug log
-      // debugPrint('PUT Request: $baseUrl$endpoint');
-      // debugPrint('Headers: $headers');
-      // debugPrint('Body: $body');
+      // 
+      // 
+      // 
 
       final response = await client.put(
         Uri.parse('$baseUrl$endpoint'),
@@ -198,7 +192,7 @@ class ApiService {
     } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
-        // debugPrint('Unauthorized error, attempting to refresh token...');
+        // 
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -210,7 +204,7 @@ class ApiService {
       }
       rethrow;
     } catch (e) {
-      // debugPrint('PUT Error: ${e.toString()}');
+      // 
       throw ServerException(message: e.toString());
     }
   }
@@ -223,8 +217,8 @@ class ApiService {
       final headers = await _getHeaders();
 
       // Debug log
-      // debugPrint('DELETE Request: $baseUrl$endpoint');
-      // debugPrint('Headers: $headers');
+      // 
+      // 
 
       final response = await client.delete(
         Uri.parse('$baseUrl$endpoint'),
@@ -238,7 +232,7 @@ class ApiService {
     } on UnauthorizedException {
       // Xử lý token hết hạn
       if (!_isRefreshing) {
-        // debugPrint('Unauthorized error, attempting to refresh token...');
+        // 
         final refreshed = await _refreshToken();
         if (refreshed) {
           // Thử lại request với token mới
@@ -250,7 +244,7 @@ class ApiService {
       }
       rethrow;
     } catch (e) {
-      // debugPrint('DELETE Error: ${e.toString()}');
+      // 
       throw ServerException(message: e.toString());
     }
   }
@@ -263,15 +257,13 @@ class ApiService {
       // Lấy refresh token từ secure storage
       final refreshToken = await tokenStorageService.getRefreshToken();
       if (refreshToken == null || refreshToken.isEmpty) {
-        // debugPrint('No refresh token available');
+        // 
         _isRefreshing = false;
         await tokenStorageService.clearAllTokens();
         return false;
       }
 
-      // debugPrint(
-      //   'Refreshing token with refresh token: ${refreshToken.substring(0, 15)}...',
-      // );
+      // 
 
       final response = await client.post(
         Uri.parse('$baseUrl/auths/mobile/token/refresh'),
@@ -285,9 +277,7 @@ class ApiService {
         final responseData = json.decode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           final newAccessToken = responseData['data']['accessToken'];
-          // debugPrint(
-          //   'New access token received: ${newAccessToken.substring(0, 15)}...',
-          // );
+          // 
 
           // Lưu token mới
           await tokenStorageService.saveAccessToken(newAccessToken);
@@ -295,9 +285,7 @@ class ApiService {
           // Kiểm tra xem token đã được lưu chưa
           final savedToken = tokenStorageService.getAccessToken();
           if (savedToken != newAccessToken) {
-            // debugPrint(
-            //   'WARNING: Token mismatch after saving! This is a critical error.',
-            // );
+            // 
           }
 
           // Thông báo cho AuthViewModel về token mới
@@ -310,9 +298,9 @@ class ApiService {
                 await dynamicViewModel.handleTokenRefreshed(newAccessToken);
               }
             }
-            // debugPrint('AuthViewModel updated with new token');
+            // 
           } catch (e) {
-            // debugPrint('Error updating AuthViewModel: $e');
+            // 
           }
 
           _isRefreshing = false;
@@ -320,14 +308,12 @@ class ApiService {
         }
       }
 
-      // debugPrint(
-      //   'Token refresh failed with status code: ${response.statusCode}',
-      // );
+      // 
       _isRefreshing = false;
       await tokenStorageService.clearAllTokens();
       return false;
     } catch (e) {
-      // debugPrint('Error refreshing token: $e');
+      // 
       _isRefreshing = false;
       await tokenStorageService.clearAllTokens();
       return false;
@@ -344,13 +330,13 @@ class ApiService {
     try {
       await tokenStorageService.clearAllTokens();
     } catch (e) {
-      // debugPrint('Error clearing user data: $e');
+      // 
     }
   }
 
   // Gọi callback khi refresh token thất bại
   void _handleTokenRefreshFailed() {
-    // debugPrint('Token refresh failed, handling failure');
+    // 
 
     // Xóa dữ liệu người dùng
     _clearUserData();
@@ -362,9 +348,9 @@ class ApiService {
   }
 
   void _logResponse(String method, String endpoint, http.Response response) {
-    // debugPrint('$method Response: $endpoint');
-    // debugPrint('Status Code: ${response.statusCode}');
-    // debugPrint('Response Body: ${response.body}');
+    // 
+    // 
+    // 
   }
 
   dynamic _processResponse(http.Response response, String endpoint) {

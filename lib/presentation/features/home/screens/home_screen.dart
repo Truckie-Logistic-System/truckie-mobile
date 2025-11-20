@@ -41,18 +41,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Tải lại thông tin tài xế khi màn hình được hiển thị lại
     if (_authViewModel.status == AuthStatus.authenticated) {
-      debugPrint('🔄 HomeScreen didChangeDependencies: Refreshing driver info');
       _authViewModel.refreshDriverInfo();
     }
   }
 
   // Public method để refresh data từ bên ngoài
   void refreshHomeData() {
-    debugPrint('🔄 HomeScreen: Manual refresh triggered');
     if (_authViewModel.status == AuthStatus.authenticated) {
       // Force refresh token trước, sau đó refresh driver info
       _authViewModel.forceRefreshToken().then((success) {
-        debugPrint('🔄 HomeScreen: Force refresh token result: $success');
         if (success) {
           _authViewModel.refreshDriverInfo();
         }
@@ -73,7 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () {
-                debugPrint('🔄 HomeScreen: Refresh button pressed');
                 refreshHomeData();
               },
               tooltip: 'Làm mới',

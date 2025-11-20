@@ -62,64 +62,84 @@ class ImageBased3DTruckMarker extends StatelessWidget {
     final directionIndex = _getDirectionIndex();
     final imagePath = _getImagePath(directionIndex);
 
-    // Use Transform to ensure perfect centering
-    // Offset by half size to center the marker on the exact lat/lng point
-    return Transform.translate(
-      offset: Offset(-size / 2, -size / 2),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            // Shadow - at the bottom center
-            Positioned(
-              left: size * 0.15,
-              bottom: size * 0.1,
-              child: Container(
-                width: size * 0.7,
-                height: size * 0.15,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(size * 0.15),
-                  color: Colors.black.withOpacity(0.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 3,
-                      spreadRadius: 1,
+    // Wrap in RepaintBoundary to isolate repaints and improve performance
+    return RepaintBoundary(
+      child: Transform.translate(
+        // OPTIMIZED: Better centering for isometric view
+        // Offset slightly up to compensate for 3D perspective
+        offset: Offset(-size / 2, -size / 2 - size * 0.05),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              // IMPROVED: Softer, more natural shadow for isometric view
+              Positioned(
+                left: size * 0.2,
+                bottom: size * 0.05,
+                child: Container(
+                  width: size * 0.6,
+                  height: size * 0.12,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(size * 0.06),
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.black.withOpacity(0.25),
+                        Colors.black.withOpacity(0.05),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
 
-            // 3D Truck Image - with proper perspective
-            Center(
-              child: Image.asset(
-                imagePath,
-                width: size,
-                height: size,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  // Fallback if image not found
-                  return Container(
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(size * 0.1),
-                    ),
-                    child: Icon(
-                      Icons.local_shipping,
-                      size: size * 0.5,
-                      color: Colors.grey[600],
-                    ),
-                  );
-                },
+              // 3D Truck Image - with proper perspective and caching
+              Center(
+                child: Image.asset(
+                  imagePath,
+                  width: size * 1.1, // Slightly larger for better visibility
+                  height: size * 1.1,
+                  fit: BoxFit.contain,
+                  // Enable caching to reduce decode time
+                  cacheWidth: (size * 1.1 * MediaQuery.of(context).devicePixelRatio).round(),
+                  filterQuality: FilterQuality.high, // Better quality for 3D images
+                  errorBuilder: (context, error, stackTrace) {
+                    // Fallback if image not found
+                    return Container(
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(size * 0.1),
+                      ),
+                      child: Icon(
+                        Icons.local_shipping,
+                        size: size * 0.5,
+                        color: Colors.grey[600],
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+              
+              // DEBUG: Optional direction indicator (remove in production)
+              // Positioned(
+              //   top: 0,
+              //   child: Container(
+              //     padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              //     decoration: BoxDecoration(
+              //       color: Colors.black.withOpacity(0.6),
+              //       borderRadius: BorderRadius.circular(4),
+              //     ),
+              //     child: Text(
+              //       '${bearing.toStringAsFixed(0)}°',
+              //       style: TextStyle(color: Colors.white, fontSize: 10),
+              //     ),
+              //   ),
+              // ),
+            ],
+          ),
         ),
       ),
     );

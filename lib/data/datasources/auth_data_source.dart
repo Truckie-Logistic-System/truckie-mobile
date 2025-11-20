@@ -58,38 +58,26 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<User> login(String username, String password) async {
     try {
-      debugPrint('🔐 [login] START - Attempting login for user: $username');
-
       // Sử dụng endpoint mobile
       final response = await _apiClient.dio.post('/auths/mobile', data: {
         'username': username,
         'password': password,
       });
-
-      debugPrint('🔐 [login] Response received from backend');
-
       if (response.data['success'] != true) {
-        debugPrint('❌ [login] Login failed: ${response.data['message']}');
         throw ServerException(
           message: response.data['message'] ?? 'Đăng nhập thất bại',
           statusCode: response.statusCode ?? 400,
         );
       }
-
-      debugPrint('✅ [login] Login successful, processing user data');
       final authResponseModel = AuthResponseModel.fromJson(response.data['data']);
       final authResponse = authResponseModel.toEntity();
 
-      debugPrint('✅ [login] Access token: ${authResponse.authToken.substring(0, 20)}...');
-      debugPrint('✅ [login] Refresh token: ${authResponse.refreshToken.substring(0, 20)}...');
+      
+      
 
       // Lưu tokens
       await tokenStorageService.saveAccessToken(authResponse.authToken);
-      debugPrint('✅ [login] Access token saved to memory');
-      
       await tokenStorageService.saveRefreshToken(authResponse.refreshToken);
-      debugPrint('✅ [login] Refresh token saved to secure storage');
-
       final user = User(
         id: authResponse.user.id,
         username: authResponse.user.username,
@@ -105,11 +93,9 @@ class AuthDataSourceImpl implements AuthDataSource {
       );
 
       await saveUserInfo(user);
-      debugPrint('✅ [login] User info saved to SharedPreferences');
-      debugPrint('✅ [login] Login completed successfully');
       return user;
     } catch (e) {
-      debugPrint('❌ [login] Login exception: ${e.toString()}');
+      
       if (e is ServerException) {
         rethrow;
       }
@@ -120,7 +106,7 @@ class AuthDataSourceImpl implements AuthDataSource {
   @override
   Future<User> refreshToken() async {
     try {
-      // debugPrint('Attempting to refresh token');
+      // 
 
       // Lấy refresh token từ secure storage
       final refreshToken = await tokenStorageService.getRefreshToken();
@@ -132,17 +118,11 @@ class AuthDataSourceImpl implements AuthDataSource {
       }
 
       // Sử dụng endpoint mobile
-      debugPrint('🔄 [refreshToken] Calling /auths/mobile/token/refresh');
-      debugPrint('🔄 [refreshToken] Refresh token: ${refreshToken.substring(0, 20)}...');
+      
       
       final response = await _apiClient.dio.post('/auths/mobile/token/refresh', data: {
         'refreshToken': refreshToken,
       });
-
-      debugPrint('🔄 [refreshToken] Response received from backend');
-      debugPrint('🔄 [refreshToken] Response status: ${response.statusCode}');
-      debugPrint('🔄 [refreshToken] Response data: ${response.data}');
-
       if (response.data['success'] == true && response.data['data'] != null) {
         final tokenData = response.data['data'];
         final newAccessToken = tokenData['accessToken'];
@@ -152,7 +132,6 @@ class AuthDataSourceImpl implements AuthDataSource {
         final newRefreshToken = tokenData['refreshToken'];
         
         if (newAccessToken == null || newAccessToken.isEmpty) {
-          debugPrint('❌ [refreshToken] ERROR: Backend did not return new access token!');
           throw ServerException(
             message: 'Backend did not return new access token',
             statusCode: 500,
@@ -160,17 +139,13 @@ class AuthDataSourceImpl implements AuthDataSource {
         }
         
         if (newRefreshToken == null || newRefreshToken.isEmpty) {
-          debugPrint('❌ [refreshToken] ERROR: Backend did not return new refresh token!');
-          debugPrint('❌ [refreshToken] This breaks token rotation - old token will be revoked!');
           throw ServerException(
             message: 'Backend did not return new refresh token - token rotation failed',
             statusCode: 500,
           );
         }
-
-        debugPrint('✅ [refreshToken] Token rotation successful');
-        debugPrint('✅ [refreshToken] New access token: ${newAccessToken.substring(0, 20)}...');
-        debugPrint('✅ [refreshToken] New refresh token: ${newRefreshToken.substring(0, 20)}...');
+        
+        
 
         // CRITICAL: Save both tokens FIRST - access token AND refresh token
         // This ensures we always have the latest refresh token from backend
@@ -178,9 +153,7 @@ class AuthDataSourceImpl implements AuthDataSource {
         try {
           await tokenStorageService.saveAccessToken(newAccessToken);
           await tokenStorageService.saveRefreshToken(newRefreshToken);
-          debugPrint('✅ [refreshToken] Tokens saved to storage');
         } catch (e) {
-          debugPrint('❌ [refreshToken] ERROR saving tokens: $e');
           rethrow;
         }
 
@@ -188,7 +161,6 @@ class AuthDataSourceImpl implements AuthDataSource {
         // Backend returns user info in the refresh token response
         final userData = tokenData['user'];
         if (userData != null) {
-          debugPrint('✅ [refreshToken] User info found in response');
           final userModel = UserModel.fromJson(userData);
           final user = User(
             id: userModel.id,
@@ -207,11 +179,8 @@ class AuthDataSourceImpl implements AuthDataSource {
           
           // Save user info to SharedPreferences
           await saveUserInfo(user);
-          debugPrint('✅ [refreshToken] User info saved to SharedPreferences');
-          
           return user;
         } else {
-          debugPrint('⚠️ [refreshToken] No user info in response - creating minimal user');
           // Fallback: Create minimal user if backend doesn't return user info
           return User(
             id: 'temp_id',
@@ -234,21 +203,14 @@ class AuthDataSourceImpl implements AuthDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('❌ [refreshToken] DioException caught');
-      debugPrint('❌ [refreshToken] Status code: ${e.response?.statusCode}');
-      debugPrint('❌ [refreshToken] Response data: ${e.response?.data}');
-      debugPrint('❌ [refreshToken] Error message: ${e.message}');
-      
       // Handle specific error codes
       if (e.response?.statusCode == 400) {
         final errorMessage = e.response?.data['message'] ?? 'Refresh token không hợp lệ';
-        debugPrint('❌ [refreshToken] 400 Bad Request: $errorMessage');
         throw ServerException(
           message: errorMessage,
           statusCode: 400,
         );
       } else if (e.response?.statusCode == 401) {
-        debugPrint('❌ [refreshToken] 401 Unauthorized: Refresh token đã hết hạn hoặc bị thu hồi');
         throw ServerException(
           message: 'Refresh token đã hết hạn hoặc bị thu hồi',
           statusCode: 401,
@@ -260,7 +222,7 @@ class AuthDataSourceImpl implements AuthDataSource {
         statusCode: e.response?.statusCode,
       );
     } catch (e) {
-      debugPrint('❌ [refreshToken] Unexpected error: ${e.toString()}');
+      
       if (e is ServerException) {
         rethrow;
       }
@@ -276,7 +238,7 @@ class AuthDataSourceImpl implements AuthDataSource {
     String confirmNewPassword,
   ) async {
     try {
-      // debugPrint('Attempting to change password for user: $username');
+      // 
 
       final response = await _apiClient.dio.put('/auths/change-password', data: {
         'username': username,
@@ -285,7 +247,7 @@ class AuthDataSourceImpl implements AuthDataSource {
         'confirmNewPassword': confirmNewPassword,
       });
 
-      // debugPrint('Change password response received: $response');
+      // 
 
       if (response.data['success'] == true) {
         return true;
@@ -295,7 +257,7 @@ class AuthDataSourceImpl implements AuthDataSource {
         );
       }
     } catch (e) {
-      // debugPrint('Change password exception: ${e.toString()}');
+      // 
       if (e is ServerException) {
         rethrow;
       }
@@ -315,7 +277,7 @@ class AuthDataSourceImpl implements AuthDataSource {
       });
 
       if (!response.data['success']) {
-        // debugPrint('Logout failed: ${response.data['message']}');
+        // 
         throw ServerException(
           message: response.data['message'] ?? 'Không thể làm mới token',
         );

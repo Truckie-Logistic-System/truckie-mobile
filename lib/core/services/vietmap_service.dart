@@ -8,9 +8,12 @@ import 'http_client_interface.dart';
 class VietMapService {
   final IHttpClient _apiClient;
   static const String _cacheKey = 'vietmap_mobile_styles';
+  static const String _cacheKeyStyleUrl = 'vietmap_style_url';
   static const Duration _cacheDuration = Duration(days: 7); // Cache 7 ngày
   String? _cachedStyle;
+  String? _cachedStyleUrl;
   DateTime? _cacheTimestamp;
+  DateTime? _styleUrlCacheTimestamp;
 
   // Cache for reverse geocoding (address from lat/lng)
   final Map<String, String> _addressCache = {};
@@ -23,7 +26,6 @@ class VietMapService {
     if (_cachedStyle != null && _cacheTimestamp != null) {
       final now = DateTime.now();
       if (now.difference(_cacheTimestamp!) < _cacheDuration) {
-        debugPrint('Sử dụng style map từ cache trong memory');
         return _cachedStyle!;
       }
     }
@@ -39,19 +41,16 @@ class VietMapService {
         final now = DateTime.now();
 
         if (now.difference(timestamp) < _cacheDuration) {
-          debugPrint('Sử dụng style map từ cache trong SharedPreferences');
           _cachedStyle = data['style'];
           _cacheTimestamp = timestamp;
           return _cachedStyle!;
         }
       }
     } catch (e) {
-      debugPrint('Lỗi khi đọc cache: $e');
     }
 
     // Nếu không có cache hoặc cache đã hết hạn, gọi API
     try {
-      debugPrint('Đang lấy style map từ API backend');
       final response = await _apiClient.dio.get('/vietmap/mobile-styles');
 
       if (response.data != null) {
@@ -95,7 +94,6 @@ class VietMapService {
           // Cập nhật styleString với các thay đổi
           styleString = json.encode(styleJson);
         } catch (e) {
-          debugPrint('Lỗi khi xử lý style JSON: $e');
         }
 
         // Lưu vào cache memory
@@ -110,9 +108,7 @@ class VietMapService {
             'timestamp': _cacheTimestamp!.toIso8601String(),
           };
           await prefs.setString(_cacheKey, json.encode(cacheData));
-          debugPrint('Style map đã được lưu vào cache');
         } catch (e) {
-          debugPrint('Lỗi khi lưu style map vào cache: $e');
         }
 
         return styleString;
@@ -120,11 +116,8 @@ class VietMapService {
         throw Exception('Không thể tải style map: response là null');
       }
     } catch (e) {
-      debugPrint('Lỗi khi lấy style map từ API: $e');
-
       // Nếu có lỗi và có cache cũ, sử dụng cache cũ
       if (_cachedStyle != null) {
-        debugPrint('Sử dụng cache cũ do lỗi API');
         return _cachedStyle!;
       }
 
@@ -133,16 +126,85 @@ class VietMapService {
     }
   }
 
+  /// OPTIMIZED: Get VietMap style URL for SDK
+  /// Returns direct URL to VietMap Vector style (SDK handles caching & optimization)
+  /// This is the RECOMMENDED approach per VietMap SDK documentation
+  Future<String> getMobileStyleUrl() async {
+    // Check memory cache
+    if (_cachedStyleUrl != null && _styleUrlCacheTimestamp != null) {
+      final now = DateTime.now();
+      if (now.difference(_styleUrlCacheTimestamp!) < _cacheDuration) {
+        return _cachedStyleUrl!;
+      }
+    }
+
+    // Check SharedPreferences cache
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString(_cacheKeyStyleUrl);
+
+      if (cachedData != null) {
+        final Map<String, dynamic> data = json.decode(cachedData);
+        final timestamp = DateTime.parse(data['timestamp']);
+        final now = DateTime.now();
+
+        if (now.difference(timestamp) < _cacheDuration) {
+          _cachedStyleUrl = data['styleUrl'];
+          _styleUrlCacheTimestamp = timestamp;
+          return _cachedStyleUrl!;
+        }
+      }
+    } catch (e) {
+    }
+
+    // Fetch from backend
+    try {
+      final response = await _apiClient.dio.get('/vietmap/mobile-style-url');
+
+      if (response.data != null && response.data['styleUrl'] != null) {
+        final styleUrl = response.data['styleUrl'] as String;
+        
+
+        // Save to memory cache
+        _cachedStyleUrl = styleUrl;
+        _styleUrlCacheTimestamp = DateTime.now();
+
+        // Save to SharedPreferences
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cacheData = {
+            'styleUrl': styleUrl,
+            'timestamp': _styleUrlCacheTimestamp!.toIso8601String(),
+          };
+          await prefs.setString(_cacheKeyStyleUrl, json.encode(cacheData));
+        } catch (e) {
+        }
+
+        return styleUrl;
+      } else {
+        throw Exception('Không thể tải style URL: response không hợp lệ');
+      }
+    } catch (e) {
+      // Fallback to old cache if available
+      if (_cachedStyleUrl != null) {
+        return _cachedStyleUrl!;
+      }
+
+      rethrow;
+    }
+  }
+
   // Xóa cache khi cần thiết
   Future<void> clearCache() async {
     _cachedStyle = null;
+    _cachedStyleUrl = null;
     _cacheTimestamp = null;
+    _styleUrlCacheTimestamp = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cacheKey);
-      debugPrint('Đã xóa cache style map');
+      await prefs.remove(_cacheKeyStyleUrl);
     } catch (e) {
-      debugPrint('Lỗi khi xóa cache style map: $e');
     }
   }
 
@@ -153,12 +215,10 @@ class VietMapService {
     
     // Check cache first
     if (_addressCache.containsKey(cacheKey)) {
-      debugPrint('🗺️ Using cached address for: $latitude, $longitude');
       return _addressCache[cacheKey];
     }
 
     try {
-      debugPrint('🗺️ Reverse geocoding: $latitude, $longitude');
       final response = await _apiClient.dio.get(
         '/vietmap/reverse',
         queryParameters: {
@@ -171,8 +231,6 @@ class VietMapService {
       if (response.data != null && response.data is List && (response.data as List).isNotEmpty) {
         final firstResult = (response.data as List)[0];
         final address = firstResult['display'];
-        debugPrint('✅ Địa chỉ: $address');
-        
         // Cache the address
         _addressCache[cacheKey] = address;
         
@@ -180,7 +238,6 @@ class VietMapService {
       }
       return null;
     } catch (e) {
-      debugPrint('❌ Lỗi reverse geocoding: $e');
       return null;
     }
   }

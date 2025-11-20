@@ -38,12 +38,7 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
   void initState() {
     super.initState();
     _issueRepository = getIt<IssueRepository>();
-    
-    debugPrint('🚨 PenaltyReportBottomSheet initialized');
-    debugPrint('   - Vehicle Assignment ID: ${widget.vehicleAssignmentId}');
-    debugPrint('   - Issue Type ID: ${widget.issueTypeId}');
-    debugPrint('   - Latitude: ${widget.currentLatitude}');
-    debugPrint('   - Longitude: ${widget.currentLongitude}');
+
   }
 
   @override
@@ -154,13 +149,7 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      debugPrint('📤 Reporting traffic penalty...');
-      debugPrint('   - Vehicle Assignment ID: ${widget.vehicleAssignmentId}');
-      debugPrint('   - Issue Type ID: ${widget.issueTypeId}');
-      debugPrint('   - Violation Type: ${_violationTypeController.text}');
-      debugPrint('   - Image path: ${_violationRecordImage!.path}');
-      debugPrint('   - Location: ${widget.currentLatitude}, ${widget.currentLongitude}');
-      
+
       await _issueRepository.reportPenaltyIssue(
         vehicleAssignmentId: widget.vehicleAssignmentId,
         issueTypeId: widget.issueTypeId,
@@ -169,8 +158,6 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
         locationLatitude: widget.currentLatitude,
         locationLongitude: widget.currentLongitude,
       );
-
-      debugPrint('✅ Penalty report submitted successfully');
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -183,7 +170,7 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error reporting penalty: $e');
+
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -399,7 +386,7 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Chụp hoặc chọn ảnh biên bản',
+                                  'Chụp ảnh biên bản',
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.grey[600],

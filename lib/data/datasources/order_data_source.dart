@@ -32,11 +32,7 @@ class OrderDataSourceImpl implements OrderDataSource {
   Future<Either<Failure, bool>> updateToOngoingDelivered(String orderId) async {
     try {
       final endpoint = '/orders/$orderId/start-ongoing-delivery';
-      debugPrint('🔵 Updating order to ONGOING_DELIVERED');
-      debugPrint('   - Order ID: $orderId');
-      debugPrint('   - Endpoint: $endpoint');
-      debugPrint('   - Full URL: ${_apiClient.dio.options.baseUrl}$endpoint');
-      
+
       final response = await _apiClient.dio.put(endpoint);
 
       if (response.statusCode == 200) {
@@ -58,7 +54,7 @@ class OrderDataSourceImpl implements OrderDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('DioException: ${e.message}');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
@@ -73,11 +69,7 @@ class OrderDataSourceImpl implements OrderDataSource {
   Future<Either<Failure, bool>> updateToDelivered(String orderId) async {
     try {
       final endpoint = '/orders/$orderId/arrive-at-delivery';
-      debugPrint('🔵 Updating order to DELIVERED');
-      debugPrint('   - Order ID: $orderId');
-      debugPrint('   - Endpoint: $endpoint');
-      debugPrint('   - Full URL: ${_apiClient.dio.options.baseUrl}$endpoint');
-      
+
       final response = await _apiClient.dio.put(endpoint);
 
       if (response.statusCode == 200) {
@@ -99,7 +91,7 @@ class OrderDataSourceImpl implements OrderDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('DioException: ${e.message}');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
@@ -114,11 +106,7 @@ class OrderDataSourceImpl implements OrderDataSource {
   Future<Either<Failure, bool>> updateToSuccessful(String orderId) async {
     try {
       final endpoint = '/orders/$orderId/complete-trip';
-      debugPrint('🔵 Updating order to SUCCESSFUL');
-      debugPrint('   - Order ID: $orderId');
-      debugPrint('   - Endpoint: $endpoint');
-      debugPrint('   - Full URL: ${_apiClient.dio.options.baseUrl}$endpoint');
-      
+
       final response = await _apiClient.dio.put(endpoint);
 
       if (response.statusCode == 200) {
@@ -140,7 +128,7 @@ class OrderDataSourceImpl implements OrderDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('DioException: ${e.message}');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
@@ -158,12 +146,7 @@ class OrderDataSourceImpl implements OrderDataSource {
   }) async {
     try {
       final endpoint = '/orders/vehicle-assignment/$assignmentId/status';
-      debugPrint('🔵 Updating OrderDetail status');
-      debugPrint('   - Assignment ID: $assignmentId');
-      debugPrint('   - Status: ${status.value}');
-      debugPrint('   - Endpoint: $endpoint');
-      debugPrint('   - Full URL: ${_apiClient.dio.options.baseUrl}$endpoint');
-      
+
       final response = await _apiClient.dio.put(
         endpoint,
         queryParameters: {'status': status.value},
@@ -172,10 +155,10 @@ class OrderDataSourceImpl implements OrderDataSource {
       if (response.statusCode == 200) {
         final responseData = response.data;
         if (responseData['success'] == true) {
-          debugPrint('✅ Successfully updated OrderDetail status to ${status.value}');
+
           return const Right(true);
         } else {
-          debugPrint('❌ Failed to update OrderDetail status: ${responseData['message']}');
+
           return Left(
             ServerFailure(
               message: responseData['message'] ?? 'Lỗi khi cập nhật trạng thái chi tiết đơn hàng',
@@ -183,7 +166,7 @@ class OrderDataSourceImpl implements OrderDataSource {
           );
         }
       } else {
-        debugPrint('❌ HTTP Error: ${response.statusCode}');
+
         return Left(
           ServerFailure(
             message: 'Lỗi khi cập nhật trạng thái: ${response.statusCode}',
@@ -191,16 +174,15 @@ class OrderDataSourceImpl implements OrderDataSource {
         );
       }
     } on DioException catch (e) {
-      debugPrint('❌ DioException: ${e.message}');
-      debugPrint('   - Response: ${e.response?.data}');
+
       return Left(
         ServerFailure(message: e.message ?? 'Lỗi kết nối đến máy chủ'),
       );
     } on ServerException catch (e) {
-      debugPrint('❌ ServerException: ${e.message}');
+
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      debugPrint('❌ Unknown error: $e');
+
       return Left(ServerFailure(message: e.toString()));
     }
   }

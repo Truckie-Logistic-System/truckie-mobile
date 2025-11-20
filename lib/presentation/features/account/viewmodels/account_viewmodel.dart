@@ -59,7 +59,7 @@ class AccountViewModel extends BaseViewModel {
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
           // Nếu refresh token thành công, thử lại
-          // debugPrint('Token refreshed, retrying to get driver info...');
+          // 
           await getDriverInfo(userId);
           return;
         }
@@ -76,7 +76,6 @@ class AccountViewModel extends BaseViewModel {
 
   // Force refresh driver info - bỏ qua kiểm tra loading state
   Future<void> refreshDriverInfo(String userId) async {
-    debugPrint('🔄 AccountViewModel: Force refreshing driver info...');
     _status = AccountStatus.loading;
     notifyListeners();
 
@@ -91,7 +90,6 @@ class AccountViewModel extends BaseViewModel {
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
           // Nếu refresh token thành công, thử lại
-          debugPrint('🔄 AccountViewModel: Token refreshed, retrying force refresh...');
           await refreshDriverInfo(userId);
           return;
         }
@@ -101,7 +99,6 @@ class AccountViewModel extends BaseViewModel {
       (driver) {
         _status = AccountStatus.loaded;
         _driver = driver;
-        debugPrint('✅ AccountViewModel: Force refresh completed');
         notifyListeners();
       },
     );

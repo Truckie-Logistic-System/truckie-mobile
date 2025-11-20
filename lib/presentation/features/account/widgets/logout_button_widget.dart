@@ -80,11 +80,9 @@ class _LogoutButtonWidgetState extends State<LogoutButtonWidget> {
                       // Ignore the response
                     } catch (e) {
                       // Ignore errors during logout API call
-                      debugPrint('Error calling logout API: $e');
                     }
                   }
                 } catch (e) {
-                  debugPrint('Error during logout: $e');
                   // If there's an error, still try to navigate to login
                   if (mounted) {
                     Navigator.pushReplacementNamed(context, '/login');

@@ -31,11 +31,10 @@ class DriverRoleChecker {
     );
     
     if (userVehicleAssignment == null) {
-      debugPrint('   ❌ NOT MATCHED: Current user is not primary driver of any vehicle assignment');
       return false;
     }
     
-    // debugPrint('   ✅ MATCHED: Current user IS PRIMARY DRIVER');
+    // 
     return true;
   }
   

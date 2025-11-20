@@ -57,10 +57,8 @@ class ResponsiveSizeUtils {
     _textScaleFactor = mediaQuery.textScaleFactor;
 
     // Debug log to confirm initialization
-    // debugPrint(
-    //   'ResponsiveSizeUtils initialized: $_screenWidth x $_screenHeight',
-    // );
-    // debugPrint('Scale factors: W=$_widthScaleFactor, H=$_heightScaleFactor');
+    // 
+    // 
   }
 
   /// Private constructor
@@ -72,7 +70,7 @@ class ResponsiveSizeUtils {
   /// Get responsive width
   static double getWidth(double width) {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Using default width.');
+      // 
       return width;
     }
     return width * _instance!._widthScaleFactor;
@@ -81,7 +79,7 @@ class ResponsiveSizeUtils {
   /// Get responsive height
   static double getHeight(double height) {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Using default height.');
+      // 
       return height;
     }
     return height * _instance!._heightScaleFactor;
@@ -90,9 +88,7 @@ class ResponsiveSizeUtils {
   /// Get responsive font size
   static double getFontSize(double fontSize) {
     if (_instance == null) {
-      // debugPrint(
-      //   'ResponsiveSizeUtils not initialized. Using default font size.',
-      // );
+      // 
       return fontSize;
     }
 
@@ -116,9 +112,7 @@ class ResponsiveSizeUtils {
   /// Get screen width
   static double get screenWidth {
     if (_instance == null) {
-      // debugPrint(
-      //   'ResponsiveSizeUtils not initialized. Using default screen width.',
-      // );
+      // 
       return 375.0;
     }
     return _instance!._screenWidth;
@@ -127,9 +121,7 @@ class ResponsiveSizeUtils {
   /// Get screen height
   static double get screenHeight {
     if (_instance == null) {
-      // debugPrint(
-      //   'ResponsiveSizeUtils not initialized. Using default screen height.',
-      // );
+      // 
       return 812.0;
     }
     return _instance!._screenHeight;
@@ -138,9 +130,7 @@ class ResponsiveSizeUtils {
   /// Get status bar height
   static double get statusBarHeight {
     if (_instance == null) {
-      // debugPrint(
-      //   'ResponsiveSizeUtils not initialized. Using default status bar height.',
-      // );
+      // 
       return 24.0;
     }
     return _instance!._statusBarHeight;
@@ -149,9 +139,7 @@ class ResponsiveSizeUtils {
   /// Get bottom padding
   static double get bottomPadding {
     if (_instance == null) {
-      // debugPrint(
-      //   'ResponsiveSizeUtils not initialized. Using default bottom padding.',
-      // );
+      // 
       return 0.0;
     }
     return _instance!._bottomPadding;
@@ -160,7 +148,7 @@ class ResponsiveSizeUtils {
   /// Check if device is a phone (smaller screen)
   static bool get isPhone {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Assuming phone.');
+      // 
       return true;
     }
     return _instance!._screenWidth < 600;
@@ -169,7 +157,7 @@ class ResponsiveSizeUtils {
   /// Check if device is a tablet (larger screen)
   static bool get isTablet {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Assuming not tablet.');
+      // 
       return false;
     }
     return _instance!._screenWidth >= 600;
@@ -182,7 +170,7 @@ class ResponsiveSizeUtils {
     double large = 24.0,
   }) {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Using medium padding.');
+      // 
       return EdgeInsets.all(medium);
     }
 
@@ -202,7 +190,7 @@ class ResponsiveSizeUtils {
     double large = 24.0,
   }) {
     if (_instance == null) {
-      // debugPrint('ResponsiveSizeUtils not initialized. Using medium spacing.');
+      // 
       return medium;
     }
 

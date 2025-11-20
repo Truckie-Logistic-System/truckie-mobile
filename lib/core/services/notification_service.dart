@@ -6,11 +6,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../utils/sound_utils.dart';
 import '../constants/api_constants.dart';
 import '../services/token_storage_service.dart';
+import '../services/navigation_state_service.dart';
 import '../../presentation/widgets/common/seal_assignment_notification_dialog.dart';
 import '../../presentation/widgets/common/damage_resolved_notification_dialog.dart';
 import '../../presentation/widgets/common/order_rejection_resolved_notification_dialog.dart';
+import '../../presentation/features/delivery/widgets/report_seal_issue_bottom_sheet.dart';
 import '../../app/di/service_locator.dart';
 import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
+import '../../domain/repositories/order_repository.dart';
+import '../../domain/repositories/issue_repository.dart';
+import '../../domain/entities/order_detail.dart';
 
 /// Singleton service for managing WebSocket notifications
 /// Automatically connects when driver is authenticated 
@@ -50,6 +55,19 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   bool _localNotificationsInitialized = false;
 
+  // ✅ CRITICAL: Stream controllers for dialog events (to avoid context issues)
+  final StreamController<Map<String, dynamic>> _sealAssignmentController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get sealAssignmentStream => _sealAssignmentController.stream;
+  
+  final StreamController<Map<String, dynamic>> _damageResolvedController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get damageResolvedStream => _damageResolvedController.stream;
+  
+  final StreamController<Map<String, dynamic>> _orderRejectionResolvedController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get orderRejectionResolvedStream => _orderRejectionResolvedController.stream;
+  
+  final StreamController<Map<String, dynamic>> _paymentTimeoutController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get paymentTimeoutStream => _paymentTimeoutController.stream;
+
   /// Initialize flutter_local_notifications
   Future<void> _initializeLocalNotifications() async {
     if (_localNotificationsInitialized) return;
@@ -74,14 +92,14 @@ class NotificationService {
       await _flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
-          debugPrint('📲 [NotificationService] Notification tapped: ${response.payload}');
+          
         },
       );
 
       _localNotificationsInitialized = true;
-      debugPrint('✅ [NotificationService] Local notifications initialized');
+      
     } catch (e) {
-      debugPrint('❌ [NotificationService] Error initializing local notifications: $e');
+      
     }
   }
 
@@ -126,41 +144,41 @@ class NotificationService {
         payload: payload,
       );
 
-      debugPrint('✅ [NotificationService] Local notification shown: $title');
+      
     } catch (e) {
-      debugPrint('❌ [NotificationService] Error showing notification: $e');
+      
     }
   }
 
   /// Initialize with navigator key for showing dialogs
   void initialize(GlobalKey<NavigatorState> navigatorKey) {
     if (_isInitialized) {
-      // debugPrint('⚠️ [NotificationService] Already initialized, skipping...');
+      
       return;
     }
     
-    // debugPrint('🔧 [NotificationService] Initializing...');
+    
     _navigatorKey = navigatorKey;
     _authViewModel = getIt<AuthViewModel>();
     _listenToNotifications();
     _isInitialized = true;
-    // debugPrint('✅ [NotificationService] Initialized successfully');
+    
   }
 
   /// Connect to WebSocket with driver ID
   Future<void> connect(String driverId) async {
-    debugPrint('🔄 [NotificationService] ========================================');
-    debugPrint('🔄 [NotificationService] connect() called for driver: $driverId');
-    debugPrint('🔄 [NotificationService] Current driver: $_currentDriverId');
-    debugPrint('🔄 [NotificationService] Is connected: $isConnected');
-    debugPrint('🔄 [NotificationService] Stomp client connected: ${_stompClient?.connected}');
-    debugPrint('🔄 [NotificationService] Retry count: $_retryCount');
-    debugPrint('🔄 [NotificationService] ========================================');
+    
+    
+    
+    
+    
+    
+    
 
     // CRITICAL: Always disconnect to ensure fresh connection
     // Even if isConnected is false, the client might still exist and try to reconnect
     if (_stompClient != null) {
-      debugPrint('🔄 [NotificationService] Cleaning up existing client...');
+      
       disconnect();
       // Give old client time to fully disconnect
       await Future.delayed(const Duration(milliseconds: 500));
@@ -169,21 +187,21 @@ class NotificationService {
     // Reset manual disconnect flag when starting new connection
     _isManualDisconnect = false;
     _currentDriverId = driverId;
-    debugPrint('🔌 [NotificationService] ========================================');
-    debugPrint('🔌 [NotificationService] Connecting for driver ID: $driverId');
-    debugPrint('🔌 [NotificationService] ========================================');
+    
+    
+    
 
     // Get JWT token for authentication
     final tokenStorageService = getIt<TokenStorageService>();
     final jwtToken = tokenStorageService.getAccessToken();
     
     if (jwtToken == null || jwtToken.isEmpty) {
-      debugPrint('❌ [NotificationService] No JWT token available');
+      
       return;
     }
 
     final wsUrl = '${ApiConstants.wsBaseUrl}${ApiConstants.wsVehicleTrackingEndpoint}';
-    debugPrint('🔌 [NotificationService] Connecting to WebSocket URL: $wsUrl');
+    
 
     // Create a new completer for this connection attempt
     _connectionCompleter = Completer<void>();
@@ -193,25 +211,34 @@ class NotificationService {
         url: wsUrl,
         webSocketConnectHeaders: {'Authorization': 'Bearer $jwtToken'},
         onConnect: (StompFrame frame) {
-          debugPrint('✅ [NotificationService] ========================================');
-          debugPrint('✅ [NotificationService] WebSocket connected successfully!');
-          debugPrint('✅ [NotificationService] Frame: ${frame.body}');
-          debugPrint('✅ [NotificationService] Headers: ${frame.headers}');
-          debugPrint('✅ [NotificationService] Command: ${frame.command}');
-          debugPrint('✅ [NotificationService] ========================================');
-          debugPrint('📡 [NotificationService] Now subscribing to driver notifications...');
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
           _subscribeToDriverNotifications(driverId);
           // Reset retry count on successful connection
           _retryCount = 0;
           
+          // Check and log connection status after successful connection
+          Future.delayed(const Duration(seconds: 1), () {
+            checkConnectionStatus();
+          });
+          
           // Complete the connection completer
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
             _connectionCompleter!.complete();
-            debugPrint('✅ [NotificationService] Connection completer completed');
+            
           }
         },
         onWebSocketError: (dynamic error) {
-          debugPrint('❌ [NotificationService] WebSocket error: $error');
+          
           
           // Complete the completer with error
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
@@ -221,7 +248,7 @@ class NotificationService {
           _handleWebSocketError(error);
         },
         onStompError: (StompFrame frame) {
-          debugPrint('❌ [NotificationService] STOMP error: ${frame.body}');
+          
           
           // Complete the completer with error
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
@@ -231,20 +258,20 @@ class NotificationService {
           _handleStompError(frame);
         },
         onDisconnect: (StompFrame frame) {
-          debugPrint('🔌 [NotificationService] ========================================');
-          debugPrint('🔌 [NotificationService] WebSocket disconnected');
-          debugPrint('🔌 [NotificationService] Frame: ${frame.body}');
-          debugPrint('🔌 [NotificationService] Current driver: $_currentDriverId');
-          debugPrint('🔌 [NotificationService] Retry count: $_retryCount');
-          debugPrint('🔌 [NotificationService] ========================================');
+          
+          
+          
+          
+          
+          
           
           // CRITICAL: Auto-reconnect when connection is lost
           // This ensures driver always receives notifications even after network issues
           if (_currentDriverId != null && !_isManualDisconnect) {
-            debugPrint('🔄 [NotificationService] Connection lost, scheduling auto-reconnect...');
+            
             _retryConnection();
           } else {
-            debugPrint('⚠️ [NotificationService] Manual disconnect or no driver ID, skipping auto-reconnect');
+            
           }
         },
         // CRITICAL: Disable auto-reconnect to prevent reconnection with stale tokens
@@ -255,75 +282,87 @@ class NotificationService {
       ),
     );
 
-    debugPrint('🚀 [NotificationService] Activating StompClient...');
+    
     _stompClient!.activate();
-    debugPrint('🚀 [NotificationService] StompClient activated, waiting for connection...');
+    
     
     // Wait for connection to complete (with timeout)
     try {
       await _connectionCompleter!.future.timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          // debugPrint('⏱️ [NotificationService] Connection timeout after 10 seconds');
+          // 
           throw TimeoutException('WebSocket connection timeout');
         },
       );
-      // debugPrint('✅ [NotificationService] Connection completed successfully');
+      // 
     } catch (e) {
-      // debugPrint('❌ [NotificationService] Connection failed: $e');
+      // 
       // Don't rethrow - let the app continue even if connection fails
     }
   }
 
   /// Subscribe to driver-specific notification topic
   void _subscribeToDriverNotifications(String driverId) {
+    print('📡 [NotificationService] _subscribeToDriverNotifications called');
+    print('   Driver ID: $driverId');
+    
     // Unsubscribe from previous subscription if exists
     if (_currentSubscription != null) {
-      // debugPrint('🔄 [NotificationService] Unsubscribing from previous subscription...');
+      print('   Unsubscribing from previous subscription...');
       try {
         _currentSubscription.unsubscribe();
       } catch (e) {
-        // debugPrint('⚠️ [NotificationService] Error unsubscribing: $e');
+        print('   Error unsubscribing: $e');
       }
       _currentSubscription = null;
     }
     
     final topic = '/topic/driver/$driverId/notifications';
-    debugPrint('📡 [NotificationService] ========================================');
-    debugPrint('📡 [NotificationService] Subscribing to topic: $topic');
-    debugPrint('📡 [NotificationService] Driver ID: $driverId');
-    debugPrint('📡 [NotificationService] ========================================');
+    print('   Subscribing to topic: $topic');
+    
+    
+    
+    
 
     _currentSubscription = _stompClient!.subscribe(
       destination: topic,
       callback: (StompFrame frame) {
-        debugPrint('📬 [NotificationService] ========================================');
-        debugPrint('📬 [NotificationService] Received message on topic: $topic');
-        debugPrint('📬 [NotificationService] Frame body: ${frame.body}');
-        debugPrint('📬 [NotificationService] ========================================');
+        print('📬 WebSocket message received on topic: $topic');
+        print('   Frame headers: ${frame.headers}');
+        print('   Frame body length: ${frame.body?.length ?? 0}');
         
         if (frame.body != null) {
           try {
+            print('🔍 Parsing JSON body...');
             final notification = jsonDecode(frame.body!);
-            debugPrint('📲 [NotificationService] Parsed notification type: ${notification['type']}');
-            debugPrint('📲 [NotificationService] Notification data: $notification');
+            print('✅ JSON parsed successfully: $notification');
+            print('   Notification type: ${notification['type']}');
+            
             _notificationController.add(notification);
+            print('📤 Notification added to stream controller');
           } catch (e) {
-            // debugPrint('❌ [NotificationService] Error parsing notification: $e');
-            // debugPrint('❌ [NotificationService] Raw body: ${frame.body}');
+            print('❌ JSON parse error: $e');
+            print('   Raw body: ${frame.body}');
           }
         } else {
-          // debugPrint('⚠️ [NotificationService] Received frame with null body');
+          print('⚠️ Frame body is null');
         }
       },
     );
+    
+    print('✅ [NotificationService] Successfully subscribed to topic: $topic');
+    print('   Subscription active: ${_currentSubscription != null}');
   }
 
   /// Listen to notification stream and handle notifications
   void _listenToNotifications() {
+    print('🎧 Setting up notification stream listener...');
     _notificationController.stream.listen((notification) {
+      print('🔊 Notification stream received: $notification');
       _handleNotification(notification);
     });
+    print('✅ Notification stream listener setup complete');
   }
 
   /// Handle incoming notification
@@ -333,20 +372,21 @@ class NotificationService {
     final body = notification['message'] as String?;
     final priority = notification['priority'] as String?;
 
-    debugPrint('========================================');
-    debugPrint('📲 [NotificationService] Handling notification');
-    debugPrint('   - Type: $type');
-    debugPrint('   - Title: $title');
-    debugPrint('   - Body: $body');
-    debugPrint('   - Priority: $priority');
-    debugPrint('   - Full notification: $notification');
-    debugPrint('========================================');
+    print('📨 _handleNotification called');
+    print('   Type: $type');
+    print('   Title: $title');
+    print('   Body: $body');
+    print('   Priority: $priority');
+    print('   Full notification: $notification');
 
     switch (type) {
       case 'SEAL_ASSIGNMENT':
+        print('🔄 [NotificationService] Dispatching SEAL_ASSIGNMENT to handler');
+        print('   🎯 Starting seal assignment flow...');
         _showSealAssignmentNotification(notification);
         break;
       case 'RETURN_PAYMENT_SUCCESS':
+        print('🔄 Dispatching to _handleReturnPaymentSuccess');
         _handleReturnPaymentSuccess(notification);
         break;
       case 'RETURN_PAYMENT_TIMEOUT':
@@ -362,7 +402,7 @@ class NotificationService {
         _handleOrderRejectionResolved(notification);
         break;
       default:
-        debugPrint('⚠️ [NotificationService] Unknown notification type: $type');
+        
     }
 
     // Show local notification for all types
@@ -381,17 +421,17 @@ class NotificationService {
   /// After bottom sheet submit → Fetch order → Auto resume simulation
   void _showSealAssignmentNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
-      debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
       
       // CRITICAL: Retry after a delay to wait for MaterialApp to mount
       // This fixes the issue where dialogs don't show on first app launch
       if (retryCount < 5) {
-        debugPrint('⏳ [NotificationService] Retrying seal assignment dialog in 500ms (attempt ${retryCount + 1}/5)');
+        
         Future.delayed(const Duration(milliseconds: 500), () {
           _showSealAssignmentNotification(notification, retryCount: retryCount + 1);
         });
       } else {
-        debugPrint('❌ [NotificationService] Failed to show seal assignment dialog after 5 retries');
+        
       }
       return;
     }
@@ -399,17 +439,21 @@ class NotificationService {
     // Play sound for seal assignment notification
     SoundUtils.playSealAssignmentSound();
 
+    print('🔍 Parsing seal assignment notification data...');
     final issue = notification['issue'] as Map<String, dynamic>?;
     if (issue == null) {
-      debugPrint('❌ [NotificationService] Missing issue data in notification');
+      print('❌ Issue data is null in notification');
       return;
     }
     
+    print('   Issue data found: $issue');
     final issueId = issue['id'] as String?;
     if (issueId == null) {
-      debugPrint('❌ [NotificationService] Missing issue ID in notification');
+      print('❌ Issue ID is null');
       return;
     }
+    
+    print('   Issue ID: $issueId');
     
     // Create unique notification ID from issue ID and timestamp
     final timestamp = notification['timestamp'] ?? DateTime.now().toIso8601String();
@@ -417,7 +461,7 @@ class NotificationService {
     
     // Check if this exact notification was already shown
     if (_lastNotificationId == notificationId || _shownNotifications.contains(notificationId)) {
-      debugPrint('⚠️ [NotificationService] Duplicate notification detected, skipping: $notificationId');
+      
       return;
     }
     
@@ -431,7 +475,7 @@ class NotificationService {
       _shownNotifications.removeAll(_shownNotifications.take(toRemove));
     }
     
-    debugPrint('✅ [NotificationService] New SEAL_ASSIGNMENT notification: $notificationId');
+    
 
     // Extract seal codes from issue
     final oldSeal = issue['oldSeal'] as Map<String, dynamic>?;
@@ -442,102 +486,52 @@ class NotificationService {
     final currentRoute = _getCurrentRouteName();
     final isOnNavigationScreen = currentRoute == '/navigation';
     
-    debugPrint('🔍 [NotificationService] Current route: $currentRoute');
-    debugPrint('🔍 [NotificationService] Is on navigation screen: $isOnNavigationScreen');
+    // ✅ CRITICAL: Check if stream has listeners before emitting
+    if (!_sealAssignmentController.hasListener) {
+      print('⚠️ Seal assignment: No listeners yet, scheduling retry...');
+      
+      if (retryCount < 5) {
+        print('🔄 Will retry in 300ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _showSealAssignmentNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        print('❌ Max retries reached, no listeners available');
+      }
+      return;
+    }
     
-    // Show global notification dialog
-    showDialog(
-      context: _navigatorKey!.currentContext!,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.orange.shade600, size: 32),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Thay thế seal',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              notification['message'] ?? 'Nhân viên đã gán seal mới cho xe của bạn',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Seal cũ: ${oldSeal?['sealCode'] ?? 'N/A'}',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Seal mới: ${newSeal?['sealCode'] ?? 'N/A'}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Nhân viên: ${staff?['fullName'] ?? 'N/A'}',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              // Pattern 2: Action-required notification
-              // Navigate to navigation screen + show bottom sheet (DON'T auto-resume)
-              if (!isOnNavigationScreen) {
-                debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there first...');
-                _navigateToNavigationScreenForAction(
-                  shouldShowSealBottomSheet: true,
-                  issueIdForSeal: issueId,
-                );
-              } else {
-                debugPrint('✅ [NotificationService] Already on navigation screen, triggering bottom sheet...');
-                // Already on navigation screen, just trigger to show bottom sheet
-                _showSealBottomSheetController.add(issueId);
-              }
-            },
-            child: const Text('Xác nhận', style: TextStyle(fontSize: 16)),
-          ),
-        ],
-      ),
-    );
+    // ✅ CRITICAL: Emit event to stream instead of showing dialog directly
+    // This allows NavigationScreen to show dialog with proper BuildContext
+    print('📢 [NotificationService] Emitting seal assignment event to stream');
+    print('   Has listeners: ${_sealAssignmentController.hasListener}');
+    print('   Listener count: ${_sealAssignmentController.hasListener ? "1+" : "0"}');
+    print('   Issue ID: $issueId');
+    print('   Old Seal: ${oldSeal?['sealCode']}');
+    print('   New Seal: ${newSeal?['sealCode']}');
+    print('   Staff: ${staff?['fullName']}');
+    print('   Is on NavigationScreen: $isOnNavigationScreen');
     
-    debugPrint('🔄 [NotificationService] SEAL_ASSIGNMENT dialog displayed globally');
+    final eventData = {
+      'issueId': issueId,
+      'oldSeal': oldSeal,
+      'newSeal': newSeal,
+      'staff': staff,
+      'isOnNavigationScreen': isOnNavigationScreen,
+    };
+    
+    print('📦 [NotificationService] Event data prepared: ${eventData.keys}');
+    _sealAssignmentController.add(eventData);
+    print('✅ [NotificationService] Seal assignment event emitted to ${_sealAssignmentController.hasListener ? "active listeners" : "NO LISTENERS (will be lost!)"}');
   }
 
   /// Refresh pending seals in navigation screen
   void refreshPendingSeals() {
-    // debugPrint('🔄 [NotificationService] Triggering pending seals refresh...');
+    // 
     
     // 🆕 Navigate to navigation screen to trigger refresh
     if (_navigatorKey?.currentContext != null) {
-      // debugPrint('🔄 [NotificationService] Navigating to navigation screen for refresh...');
+      // 
       
       // Navigate to navigation screen - this will trigger _fetchPendingSealReplacements()
       Navigator.of(_navigatorKey!.currentContext!).pushNamedAndRemoveUntil(
@@ -549,13 +543,13 @@ class NotificationService {
         },
       );
     } else {
-      // debugPrint('⚠️ [NotificationService] Cannot navigate - navigator key or context is null');
+      // 
     }
   }
   
   /// Trigger manual refresh of navigation screen without navigation
   void triggerNavigationScreenRefresh() {
-    // debugPrint('🔄 [NotificationService] Triggering navigation screen refresh...');
+    // 
     
     // 🆕 Send a refresh signal to navigation screen
     // This will be handled by NavigationScreen through a stream or callback
@@ -569,16 +563,35 @@ class NotificationService {
   // Stream controller for showing seal bottom sheet
   final _showSealBottomSheetController = StreamController<String>.broadcast();
   Stream<String> get showSealBottomSheetStream => _showSealBottomSheetController.stream;
+  
+  // Stream controller for return payment success notification
+  final _returnPaymentSuccessController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get returnPaymentSuccessStream => _returnPaymentSuccessController.stream;
 
   /// Force reconnect with current driver (useful after token refresh)
   Future<void> forceReconnect() async {
     if (_currentDriverId != null) {
-      // debugPrint('🔄 [NotificationService] Force reconnecting for driver: $_currentDriverId');
+      
       _retryCount = 0; // Reset retry count for fresh attempt
       await connect(_currentDriverId!);
     } else {
-      // debugPrint('⚠️ [NotificationService] No current driver to reconnect');
+      
     }
+  }
+
+  /// Debug method to check WebSocket connection status
+  void checkConnectionStatus() {
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
   }
 
   /// Disconnect from WebSocket
@@ -592,11 +605,11 @@ class NotificationService {
     
     // Unsubscribe first
     if (_currentSubscription != null) {
-      // debugPrint('🔄 [NotificationService] Unsubscribing...');
+      // 
       try {
         _currentSubscription.unsubscribe();
       } catch (e) {
-        // debugPrint('⚠️ [NotificationService] Error unsubscribing: $e');
+        // 
       }
       _currentSubscription = null;
     }
@@ -605,10 +618,10 @@ class NotificationService {
     // This prevents zombie clients from attempting reconnection with stale tokens
     if (_stompClient != null) {
       try {
-        // debugPrint('🔌 [NotificationService] Deactivating WebSocket client');
+        // 
         _stompClient!.deactivate();
       } catch (e) {
-        // debugPrint('⚠️ [NotificationService] Error deactivating client: $e');
+        // 
       }
       _stompClient = null; // CRITICAL: Set to null to prevent reconnect attempts
     }
@@ -619,16 +632,16 @@ class NotificationService {
     // Clear notification tracking
     _shownNotifications.clear();
     _lastNotificationId = null;
-    // debugPrint('🧹 [NotificationService] Cleared notification tracking');
+    // 
   }
 
   /// Handle WebSocket error with token refresh logic
   Future<void> _handleWebSocketError(dynamic error) async {
-    // debugPrint('❌ [NotificationService] WebSocket error: $error');
+    // 
     
     // Check if error is related to authentication (401)
     if (error.toString().contains('401') || error.toString().contains('unauthorized')) {
-      // debugPrint('🔄 [NotificationService] Authentication error detected, attempting token refresh...');
+      // 
       await _handleAuthError();
     } else {
       // For other errors, just retry connection with exponential backoff
@@ -638,12 +651,12 @@ class NotificationService {
 
   /// Handle STOMP error with token refresh logic
   Future<void> _handleStompError(StompFrame frame) async {
-    // debugPrint('❌ [NotificationService] STOMP error: ${frame.body}');
+    // 
     
     // Check if error is related to authentication
     if (frame.body?.toString().contains('401') == true || 
         frame.body?.toString().contains('unauthorized') == true) {
-      // debugPrint('🔄 [NotificationService] STOMP authentication error detected, attempting token refresh...');
+      // 
       await _handleAuthError();
     } else {
       // For other errors, just retry connection
@@ -664,140 +677,94 @@ class NotificationService {
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [NotificationService] Error getting route name: $e');
+      
     }
     return null;
   }
 
   /// Handle return payment success notification
-  /// Customer paid, journey is now ACTIVE, driver can proceed with return
+  /// Customer paid, journey is now ACTIVE, driver MUST report seal removal before proceeding
   void _handleReturnPaymentSuccess(Map<String, dynamic> notification, {int retryCount = 0}) {
-    debugPrint('✅ [NotificationService] Return payment SUCCESS - Customer paid');
+    print('🔔 RETURN_PAYMENT_SUCCESS notification received: $notification');
+    print('📱 Retry count: $retryCount');
+    print('🗝️ Navigator key available: ${_navigatorKey != null}');
     
     final issueId = notification['issueId'] as String?;
     final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
     final returnJourneyId = notification['returnJourneyId'] as String?;
     final orderId = notification['orderId'] as String?;
     
-    debugPrint('📦 [NotificationService] Payment notification data:');
-    debugPrint('   - issueId: $issueId');
-    debugPrint('   - vehicleAssignmentId: $vehicleAssignmentId');
-    debugPrint('   - returnJourneyId: $returnJourneyId');
-    debugPrint('   - orderId: $orderId');
+    print('📦 Extracted data - issueId: $issueId, vehicleAssignmentId: $vehicleAssignmentId, orderId: $orderId');
     
-    // Play success sound
-    SoundUtils.playPaymentSuccessSound();
     
-    // Check current route to determine navigation behavior
-    final currentRoute = _getCurrentRouteName();
-    final isOnNavigationScreen = currentRoute == '/navigation';
     
-    debugPrint('🔍 [NotificationService] Current route: $currentRoute');
-    debugPrint('🔍 [NotificationService] Is on navigation screen: $isOnNavigationScreen');
     
-    // Show simple success dialog to driver
-    if (_navigatorKey?.currentContext != null) {
-      showDialog(
-        context: _navigatorKey!.currentContext!,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          contentPadding: const EdgeInsets.all(24),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Success icon
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_circle_outline,
-                  color: Colors.green.shade600,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Message
-              const Text(
-                'Khách hàng đã thanh toán\nVui lòng trả hàng về điểm lấy hàng',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  
-                  // Refresh order list to show updated journey
-                  _refreshOrderList();
-                  
-                  // Handle navigation based on current screen
-                  if (isOnNavigationScreen) {
-                    // Already on navigation screen - just trigger refresh to resume simulation
-                    debugPrint('✅ [NotificationService] On navigation screen, triggering refresh to resume');
-                    triggerNavigationScreenRefresh();
-                  } else {
-                    // Not on navigation screen - navigate there with simulation mode
-                    debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there');
-                    _navigateToNavigationScreen(orderId: orderId);
-                  }
-                  
-                  debugPrint('🗺️ [NotificationService] Handled payment success for return journey: $returnJourneyId');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Đã hiểu',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        ),
-      );
-    } else {
+    
+    
+    
+    // CRITICAL: Check if navigator key is available
+    if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
+      print('⚠️ Navigator key not available, scheduling retry...');
+      print('   _navigatorKey: $_navigatorKey');
+      print('   currentContext: ${_navigatorKey?.currentContext}');
+      
       // CRITICAL: Retry after a delay to wait for MaterialApp to mount
-      // This fixes the issue where dialogs don't show on first app launch
-      if (retryCount < 5) {
-        debugPrint('⏳ [NotificationService] Retrying payment success dialog in 500ms (attempt ${retryCount + 1}/5)');
+      if (retryCount < 3) {
+        print('🔄 Will retry in 500ms (attempt ${retryCount + 1}/3)');
         Future.delayed(const Duration(milliseconds: 500), () {
           _handleReturnPaymentSuccess(notification, retryCount: retryCount + 1);
         });
       } else {
-        debugPrint('❌ [NotificationService] Failed to show payment success dialog after 5 retries');
+        print('❌ Max retries reached, notification dialog cannot be shown');
       }
+      return;
     }
+    
+    print('✅ Navigator key available, checking for listeners...');
+    
+    // ✅ CRITICAL: Check if stream has listeners before emitting
+    // Broadcast streams don't buffer - if no listener, event is lost
+    if (!_returnPaymentSuccessController.hasListener) {
+      print('⚠️ No listeners yet, scheduling retry...');
+      
+      // Retry after delay to wait for NavigationScreen to mount and setup listeners
+      if (retryCount < 5) {
+        print('🔄 Will retry in 300ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _handleReturnPaymentSuccess(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        print('❌ Max retries reached, no listeners available');
+      }
+      return;
+    }
+    
+    print('✅ Listener detected, emitting return payment event...');
+    
+    // Play success sound
+    SoundUtils.playPaymentSuccessSound();
+    
+    // 🔐 CRITICAL: Emit event to stream instead of showing dialog directly
+    // This allows screens to show dialog with proper context that has Provider access
+    _returnPaymentSuccessController.add({
+      'issueId': issueId,
+      'vehicleAssignmentId': vehicleAssignmentId,
+      'orderId': orderId,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    
+    // Refresh order list to show updated journey
+    _refreshOrderList();
+    
+    print('✅ Return payment event emitted to stream');
   }
   
   /// Navigate to navigation screen with simulation mode
   /// Pattern 1: Info-only notification - auto resume after fetch
   void _navigateToNavigationScreen({String? orderId}) {
     if (_navigatorKey?.currentContext != null) {
-      debugPrint('🗺️ [NotificationService] Navigating to navigation screen (Pattern 1: auto-resume)...');
-      debugPrint('   - orderId: $orderId');
+      
+      
       
       Navigator.of(_navigatorKey!.currentContext!).pushNamedAndRemoveUntil(
         '/navigation',
@@ -808,7 +775,7 @@ class NotificationService {
         },
       );
     } else {
-      debugPrint('❌ [NotificationService] Cannot navigate - navigator key or context is null');
+      
     }
   }
   
@@ -819,15 +786,18 @@ class NotificationService {
     String? issueIdForSeal,
   }) {
     if (_navigatorKey?.currentContext != null) {
-      debugPrint('🗺️ [NotificationService] Navigating to navigation screen (Pattern 2: show bottom sheet)...');
-      debugPrint('   - shouldShowSealBottomSheet: $shouldShowSealBottomSheet');
-      debugPrint('   - issueIdForSeal: $issueIdForSeal');
+      
+      
+      
+      // CRITICAL: Get orderId from NavigationStateService (saved during tracking)
+      final navigationStateService = getIt<NavigationStateService>();
+      final savedOrderId = navigationStateService.getActiveOrderId();
       
       Navigator.of(_navigatorKey!.currentContext!).pushNamedAndRemoveUntil(
         '/navigation',
         (route) => false,
         arguments: {
-          'orderId': null,
+          'orderId': savedOrderId, // Pass orderId from saved state
           'isSimulationMode': false, // DON'T auto-start simulation
           'shouldShowSealBottomSheet': shouldShowSealBottomSheet,
           'issueIdForSeal': issueIdForSeal,
@@ -842,31 +812,70 @@ class NotificationService {
         });
       }
     } else {
-      debugPrint('❌ [NotificationService] Cannot navigate - navigator key or context is null');
+      
     }
   }
   
   /// Handle return payment timeout notification
-  /// Payment deadline passed, journey remains INACTIVE
-  void _handleReturnPaymentTimeout(Map<String, dynamic> notification) {
-    debugPrint('⏰ [NotificationService] Return payment TIMEOUT - Continue original route');
+  /// Payment deadline passed, journey remains INACTIVE, driver continues to carrier
+  void _handleReturnPaymentTimeout(Map<String, dynamic> notification, {int retryCount = 0}) {
     
+    
+    
+    
+    
+    
+    final issue = notification['issue'] as Map<String, dynamic>?;
     final issueId = notification['issueId'] as String?;
     final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
     
-    // Refresh order list
-    _refreshOrderList();
+    // Play warning sound
+    SoundUtils.playWarningSound();
+    
+    // Check current route
+    final currentRoute = _getCurrentRouteName();
+    final isOnNavigationScreen = currentRoute == '/navigation';
+    
+    // ✅ CRITICAL: Check if stream has listeners before emitting
+    if (!_paymentTimeoutController.hasListener) {
+      print('⚠️ Payment timeout: No listeners yet, scheduling retry...');
+      
+      if (retryCount < 5) {
+        print('🔄 Will retry in 300ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _handleReturnPaymentTimeout(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        print('❌ Max retries reached, no listeners available');
+      }
+      return;
+    }
+    
+    // ✅ CRITICAL: Emit event to stream instead of showing dialog directly
+    print('📢 Emitting payment timeout event to stream');
+    _paymentTimeoutController.add({
+      'issue': issue,
+      'issueId': issueId,
+      'vehicleAssignmentId': vehicleAssignmentId,
+      'isOnNavigationScreen': isOnNavigationScreen,
+    });
   }
   
   /// Handle return payment rejected notification
   /// Customer rejected payment, journey remains INACTIVE
+  /// NOTE: This notification does NOT show dialog, only refreshes order list
   void _handleReturnPaymentRejected(Map<String, dynamic> notification) {
-    debugPrint('❌ [NotificationService] Return payment REJECTED - Customer refused to pay');
+    
     
     final issueId = notification['issueId'] as String?;
     final vehicleAssignmentId = notification['vehicleAssignmentId'] as String?;
     
-    // Refresh order list
+    
+    
+    
+    
+    
+    // Refresh order list to show updated status
     _refreshOrderList();
   }
   
@@ -875,12 +884,12 @@ class NotificationService {
   /// Pattern 1: Info-only notification
   /// Flow: Confirm modal → Navigate to navigation screen (if needed) → Fetch order → Auto resume simulation
   void _handleDamageResolved(Map<String, dynamic> notification, {int retryCount = 0}) {
-    debugPrint('📦 [NotificationService] Damage issue RESOLVED - Driver can continue trip');
+    
     
     final issue = notification['issue'] as Map<String, dynamic>?;
     final issueId = issue?['id'] as String?;
     
-    debugPrint('✅ [NotificationService] Damage issue $issueId resolved, showing global dialog');
+    
     
     // Play sound for damage resolved notification
     SoundUtils.playDamageResolvedSound();
@@ -893,30 +902,30 @@ class NotificationService {
   /// Pattern 1: Info-only notification - navigate + fetch + auto-resume
   void _showDamageResolvedNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
-      debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
       
       // CRITICAL: Retry after a delay to wait for MaterialApp to mount
       if (retryCount < 5) {
-        debugPrint('⏳ [NotificationService] Retrying damage resolved dialog in 500ms (attempt ${retryCount + 1}/5)');
+        
         Future.delayed(const Duration(milliseconds: 500), () {
           _showDamageResolvedNotification(notification, retryCount: retryCount + 1);
         });
       } else {
-        debugPrint('❌ [NotificationService] Failed to show damage resolved dialog after 5 retries');
+        
       }
       return;
     }
 
     final issue = notification['issue'] as Map<String, dynamic>?;
     if (issue == null) {
-      debugPrint('❌ [NotificationService] Missing issue data in notification');
+      
       return;
     }
     
     // Get issue ID and check for duplicates
     final issueId = issue['id'] as String?;
     if (issueId == null) {
-      debugPrint('❌ [NotificationService] Missing issue ID in notification');
+      
       return;
     }
     
@@ -926,7 +935,7 @@ class NotificationService {
     
     // Check if this notification was already shown
     if (_lastNotificationId == notificationId || _shownNotifications.contains(notificationId)) {
-      debugPrint('⚠️ [NotificationService] Duplicate notification detected, skipping: $notificationId');
+      
       return;
     }
     
@@ -940,86 +949,33 @@ class NotificationService {
       _shownNotifications.removeAll(_shownNotifications.take(toRemove));
     }
     
-    debugPrint('✅ [NotificationService] New DAMAGE_RESOLVED notification: $notificationId');
+    
     
     // Check current route
     final currentRoute = _getCurrentRouteName();
     final isOnNavigationScreen = currentRoute == '/navigation';
     
-    debugPrint('🔍 [NotificationService] Current route: $currentRoute');
-    debugPrint('🔍 [NotificationService] Is on navigation screen: $isOnNavigationScreen');
+    // ✅ CRITICAL: Check if stream has listeners before emitting
+    if (!_damageResolvedController.hasListener) {
+      print('⚠️ Damage resolved: No listeners yet, scheduling retry...');
+      
+      if (retryCount < 5) {
+        print('🔄 Will retry in 300ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _showDamageResolvedNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        print('❌ Max retries reached, no listeners available');
+      }
+      return;
+    }
     
-    // Show global notification dialog
-    showDialog(
-      context: _navigatorKey!.currentContext!,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Sự cố đã được xử lý',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              notification['message'] ?? 'Sự cố hàng hóa đã được xử lý xong. Bạn có thể tiếp tục hành trình.',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Hành trình sẽ tự động tiếp tục',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              // Pattern 1: Info-only notification
-              // Navigate to navigation screen (if needed) + fetch + auto-resume
-              if (!isOnNavigationScreen) {
-                debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there...');
-                _navigateToNavigationScreen();
-              } else {
-                debugPrint('✅ [NotificationService] Already on navigation screen, triggering refresh...');
-                // Already on navigation screen, just trigger refresh to fetch + resume
-                triggerNavigationScreenRefresh();
-              }
-            },
-            child: const Text('Đã hiểu', style: TextStyle(fontSize: 16)),
-          ),
-        ],
-      ),
-    );
-    
-    debugPrint('🔄 [NotificationService] DAMAGE_RESOLVED dialog displayed globally');
+    // ✅ CRITICAL: Emit event to stream instead of showing dialog directly
+    print('📢 Emitting damage resolved event to stream');
+    _damageResolvedController.add({
+      'issue': issue,
+      'isOnNavigationScreen': isOnNavigationScreen,
+    });
   }
   
   /// Handle order rejection resolved notification
@@ -1027,12 +983,12 @@ class NotificationService {
   /// Pattern 1: Info-only notification
   /// Flow: Confirm modal → Navigate to navigation screen (if needed) → Fetch order → Auto resume simulation
   void _handleOrderRejectionResolved(Map<String, dynamic> notification) {
-    debugPrint('📦 [NotificationService] ORDER_REJECTION issue RESOLVED - Driver can proceed');
+    
     
     final issue = notification['issue'] as Map<String, dynamic>?;
     final issueId = issue?['id'] as String?;
     
-    debugPrint('✅ [NotificationService] ORDER_REJECTION issue $issueId resolved, showing global dialog');
+    
     
     // Play sound for order rejection resolved notification
     SoundUtils.playOrderRejectionResolvedSound();
@@ -1045,30 +1001,30 @@ class NotificationService {
   /// Pattern 1: Info-only notification - navigate + fetch + auto-resume
   void _showOrderRejectionResolvedNotification(Map<String, dynamic> notification, {int retryCount = 0}) {
     if (_navigatorKey == null || _navigatorKey!.currentContext == null) {
-      debugPrint('❌ [NotificationService] Navigator key is null, cannot show dialog');
+      
       
       // CRITICAL: Retry after a delay to wait for MaterialApp to mount
       if (retryCount < 5) {
-        debugPrint('⏳ [NotificationService] Retrying order rejection resolved dialog in 500ms (attempt ${retryCount + 1}/5)');
+        
         Future.delayed(const Duration(milliseconds: 500), () {
           _showOrderRejectionResolvedNotification(notification, retryCount: retryCount + 1);
         });
       } else {
-        debugPrint('❌ [NotificationService] Failed to show order rejection resolved dialog after 5 retries');
+        
       }
       return;
     }
 
     final issue = notification['issue'] as Map<String, dynamic>?;
     if (issue == null) {
-      debugPrint('❌ [NotificationService] Missing issue data in notification');
+      
       return;
     }
     
     // Get issue ID and check for duplicates
     final issueId = issue['id'] as String?;
     if (issueId == null) {
-      debugPrint('❌ [NotificationService] Missing issue ID in notification');
+      
       return;
     }
     
@@ -1078,7 +1034,7 @@ class NotificationService {
     
     // Check if this notification was already shown
     if (_lastNotificationId == notificationId || _shownNotifications.contains(notificationId)) {
-      debugPrint('⚠️ [NotificationService] Duplicate notification detected, skipping: $notificationId');
+      
       return;
     }
     
@@ -1092,93 +1048,40 @@ class NotificationService {
       _shownNotifications.removeAll(_shownNotifications.take(toRemove));
     }
     
-    debugPrint('✅ [NotificationService] New ORDER_REJECTION_RESOLVED notification: $notificationId');
+    
 
     // Check current route
     final currentRoute = _getCurrentRouteName();
     final isOnNavigationScreen = currentRoute == '/navigation';
     
-    debugPrint('🔍 [NotificationService] Current route: $currentRoute');
-    debugPrint('🔍 [NotificationService] Is on navigation screen: $isOnNavigationScreen');
+    // ✅ CRITICAL: Check if stream has listeners before emitting
+    if (!_orderRejectionResolvedController.hasListener) {
+      print('⚠️ Order rejection resolved: No listeners yet, scheduling retry...');
+      
+      if (retryCount < 5) {
+        print('🔄 Will retry in 300ms (attempt ${retryCount + 1}/5)');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _showOrderRejectionResolvedNotification(notification, retryCount: retryCount + 1);
+        });
+      } else {
+        print('❌ Max retries reached, no listeners available');
+      }
+      return;
+    }
     
-    // Show global notification dialog
-    showDialog(
-      context: _navigatorKey!.currentContext!,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Yêu cầu trả hàng đã xử lý',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              notification['message'] ?? 'Nhân viên đã xử lý yêu cầu trả hàng. Bạn có thể tiếp tục hành trình.',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Hành trình sẽ tự động tiếp tục',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              // Pattern 1: Info-only notification
-              // Navigate to navigation screen (if needed) + fetch + auto-resume
-              if (!isOnNavigationScreen) {
-                debugPrint('🗺️ [NotificationService] Not on navigation screen, navigating there...');
-                _navigateToNavigationScreen();
-              } else {
-                debugPrint('✅ [NotificationService] Already on navigation screen, triggering refresh...');
-                // Already on navigation screen, just trigger refresh to fetch + resume
-                triggerNavigationScreenRefresh();
-              }
-            },
-            child: const Text('Đã hiểu', style: TextStyle(fontSize: 16)),
-          ),
-        ],
-      ),
-    );
-    
-    debugPrint('🔄 [NotificationService] ORDER_REJECTION_RESOLVED dialog displayed globally');
+    // ✅ CRITICAL: Emit event to stream instead of showing dialog directly
+    print('📢 Emitting order rejection resolved event to stream');
+    _orderRejectionResolvedController.add({
+      'issue': issue,
+      'isOnNavigationScreen': isOnNavigationScreen,
+    });
   }
   
   /// Trigger order list refresh
   /// Note: Since OrderListViewModel is registered as Factory, we cannot directly refresh
   /// The UI will auto-refresh when user navigates to orders screen via Provider
   void _refreshOrderList() {
-    debugPrint('🔄 [NotificationService] Order list needs refresh - will update when user opens orders screen');
+    
     // TODO: Implement proper event-based refresh mechanism
     // For now, rely on UI auto-refresh when screen becomes active
   }
@@ -1186,18 +1089,18 @@ class NotificationService {
   /// Handle authentication errors by refreshing token
   Future<void> _handleAuthError() async {
     if (_retryCount >= _maxRetries) {
-      // debugPrint('❌ [NotificationService] Max retries reached, giving up');
+      // 
       return;
     }
 
-    // debugPrint('🔄 [NotificationService] Attempting force token refresh (attempt ${_retryCount + 1}/$_maxRetries)...');
+    // 
     
     try {
       // Attempt to force refresh token
       final refreshSuccess = await _authViewModel?.forceRefreshToken();
       
       if (refreshSuccess == true) {
-        // debugPrint('✅ [NotificationService] Force token refresh successful, reconnecting...');
+        // 
         _retryCount++;
         // Wait a bit before reconnecting
         await Future.delayed(Duration(seconds: 2 * _retryCount));
@@ -1207,7 +1110,7 @@ class NotificationService {
           await connect(_currentDriverId!);
         }
       } else {
-        // debugPrint('❌ [NotificationService] Force token refresh failed');
+        // 
         _retryCount++;
         
         // If refresh failed, try again after longer delay
@@ -1217,7 +1120,7 @@ class NotificationService {
         }
       }
     } catch (e) {
-      // debugPrint('❌ [NotificationService] Error during force token refresh: $e');
+      // 
       _retryCount++;
       
       // Try again after longer delay
@@ -1234,8 +1137,8 @@ class NotificationService {
     _reconnectTimer?.cancel();
     
     if (_retryCount >= _maxRetries) {
-      debugPrint('❌ [NotificationService] Max retries ($_maxRetries) reached');
-      debugPrint('⚠️ [NotificationService] Will retry again in 60 seconds...');
+      
+      
       
       // Even after max retries, schedule one more attempt after longer delay
       // This ensures we keep trying indefinitely with longer intervals
@@ -1247,21 +1150,150 @@ class NotificationService {
     }
 
     _retryCount++;
-    debugPrint('🔄 [NotificationService] Retrying connection (attempt $_retryCount/$_maxRetries)...');
+    
     
     // Exponential backoff: min(5 * attempt, 30) seconds
     final delaySeconds = (_retryCount * 5).clamp(5, 30);
-    debugPrint('⏳ [NotificationService] Next retry in $delaySeconds seconds...');
+    
     
     // Schedule retry with exponential backoff
     _reconnectTimer = Timer(Duration(seconds: delaySeconds), () async {
       if (_currentDriverId != null && !_isManualDisconnect) {
-        debugPrint('🔌 [NotificationService] Attempting reconnect for driver: $_currentDriverId');
+        
         await connect(_currentDriverId!);
       } else {
-        debugPrint('⚠️ [NotificationService] Cannot retry: driver=$_currentDriverId, manualDisconnect=$_isManualDisconnect');
+        
       }
     });
+  }
+
+  /// Open seal removal report bottom sheet (mandatory for return flow)
+  /// Driver MUST report seal removal before proceeding with return delivery
+  Future<void> _openSealRemovalReportSheet({
+    required BuildContext context,
+    String? vehicleAssignmentId,
+    bool isOnNavigationScreen = false,
+  }) async {
+    if (vehicleAssignmentId == null) {
+      
+      return;
+    }
+
+    try {
+      // Use the same approach as normal flow - get IN_USE seal via dedicated API
+      // This is more reliable than fetching full order details
+      final issueRepository = getIt<IssueRepository>();
+      
+      // Fetch IN_USE seal for this vehicle assignment
+      final inUseSealData = await issueRepository.getInUseSeal(vehicleAssignmentId);
+      
+      if (inUseSealData == null) {
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không tìm thấy seal nào đang sử dụng'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Parse seal data - backend returns Map<String, dynamic>
+      final List<VehicleSeal> activeSeals = [];
+      if (inUseSealData is Map<String, dynamic>) {
+        // Single seal returned as object
+        activeSeals.add(VehicleSeal(
+          id: inUseSealData['id'] ?? '',
+          description: inUseSealData['description'] ?? '',
+          sealDate: inUseSealData['sealDate'] != null 
+              ? DateTime.parse(inUseSealData['sealDate']) 
+              : DateTime.now(),
+          status: inUseSealData['status'] ?? 'IN_USE',
+          sealCode: inUseSealData['sealCode'] ?? '',
+          sealAttachedImage: inUseSealData['sealAttachedImage'],
+        ));
+      } else if (inUseSealData is List) {
+        // Multiple seals returned as array (backward compatibility)
+        for (var sealMap in inUseSealData) {
+          if (sealMap is Map<String, dynamic>) {
+            activeSeals.add(VehicleSeal(
+              id: sealMap['id'] ?? '',
+              description: sealMap['description'] ?? '',
+              sealDate: sealMap['sealDate'] != null 
+                  ? DateTime.parse(sealMap['sealDate']) 
+                  : DateTime.now(),
+              status: sealMap['status'] ?? 'IN_USE',
+              sealCode: sealMap['sealCode'] ?? '',
+              sealAttachedImage: sealMap['sealAttachedImage'],
+            ));
+          }
+        }
+      }
+
+      if (activeSeals.isEmpty) {
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể tải thông tin seal'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      
+
+      // Show seal removal report bottom sheet (MANDATORY)
+      final sealReportResult = await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        isDismissible: false, // Cannot dismiss - must report
+        enableDrag: false, // Cannot drag to dismiss
+        builder: (context) => ReportSealIssueBottomSheet(
+          vehicleAssignmentId: vehicleAssignmentId,
+          currentLatitude: null, // Will get from location service
+          currentLongitude: null,
+          availableSeals: activeSeals,
+        ),
+      );
+
+      
+
+      // After seal removal report submitted successfully
+      // Result will be non-null if submission was successful
+      if (sealReportResult != null) {
+        
+        
+        // Show waiting message for staff to assign new seal
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🔓 Đã báo cáo seal bị gỡ. Vui lòng chờ staff gán seal mới...'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+
+        // Refresh order list
+        _refreshOrderList();
+
+        // Navigate to appropriate screen
+        if (!isOnNavigationScreen) {
+          
+          _navigateToNavigationScreen(); // Navigation screen will restore from state
+        } else {
+          
+          triggerNavigationScreenRefresh();
+        }
+      }
+    } catch (e) {
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi mở báo cáo seal: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   /// Dispose resources

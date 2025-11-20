@@ -291,7 +291,6 @@ class _DriverInfoFormState extends State<DriverInfoForm> {
             await _authViewModel.refreshDriverInfo();
           }
         } catch (e) {
-          debugPrint('Error refreshing driver info: $e');
         }
 
         // Call the callback to notify parent that update is complete

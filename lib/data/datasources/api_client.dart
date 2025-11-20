@@ -54,66 +54,39 @@ class ApiClient implements IHttpClient {
           // 
           // Token has 1 hour validity, no need to refresh proactively.
           // Token will be refreshed on 401 error instead.
-          
-          debugPrint('📤 [ApiClient] Request: ${options.method} ${options.path}');
-          
           // CRITICAL: Do NOT add Authorization header for refresh token endpoint!
           // The refresh token endpoint only needs refreshToken in the request body,
           // not the expired access token in the Authorization header.
           // Adding expired token causes 401/400 errors from backend.
           if (options.path.contains('/auths/mobile/token/refresh')) {
-            debugPrint('🔄 [ApiClient] REFRESH TOKEN REQUEST - Skipping Authorization header');
-            debugPrint('🔄 [ApiClient] Request headers: ${options.headers}');
-            debugPrint('🔄 [ApiClient] Request body: ${options.data}');
-            debugPrint('🔄 [ApiClient] Request method: ${options.method}');
-            debugPrint('🔄 [ApiClient] Request path: ${options.path}');
-            debugPrint('🔄 [ApiClient] Full URL: ${options.uri}');
             return handler.next(options);
           }
           
           final token = _tokenStorageService.getAccessToken();
           if (token != null) {
-            debugPrint(
-              '✅ [ApiClient] Using token in request: ${token.substring(0, 15)}...',
-            );
+            
             options.headers['Authorization'] = 'Bearer $token';
           } else {
-            debugPrint('❌ [ApiClient] NO TOKEN AVAILABLE! Request will fail with 401');
           }
           
           // Check token expiry (optional - for proactive refresh)
           if (token != null && _isTokenExpiringSoon(token)) {
-            debugPrint('⚠️ [ApiClient] Token expiring soon - consider proactive refresh');
           }
           
           return handler.next(options);
         },
         onError: (DioException e, handler) async {
-          debugPrint('❌ DIO ERROR:');
-          debugPrint('   - Type: ${e.type}');
-          debugPrint('   - Message: ${e.message}');
-          debugPrint('   - Status Code: ${e.response?.statusCode}');
-          debugPrint('   - URL: ${e.requestOptions.path}');
-          debugPrint('   - Headers: ${e.requestOptions.headers}');
-          
           // Handle 401 Unauthorized errors
           if (e.response?.statusCode == 401) {
-            debugPrint('🔓 401 Unauthorized - Checking if already refreshing...');
-            debugPrint('🔓 Request URL: ${e.requestOptions.method} ${e.requestOptions.path}');
-            debugPrint('🔓 Authorization header: ${e.requestOptions.headers['Authorization']}');
-            debugPrint('🔓 Current _isRefreshing: $_isRefreshing');
-            
             // CRITICAL: Use lock to prevent concurrent refresh calls
             // Check BEFORE any async operation
             if (_isRefreshing) {
-              debugPrint('🔓 401 Unauthorized - Already refreshing, queuing this request');
-              
               // Clean up old requests before adding new one
               _cleanupOldQueuedRequests();
               
               // Check queue size limit
               if (_requestQueue.length >= _maxQueueSize) {
-                debugPrint('⚠️ Request queue full (${_requestQueue.length}/$_maxQueueSize), dropping oldest request');
+                
                 _requestQueue.removeAt(0);
               }
               
@@ -121,40 +94,32 @@ class ApiClient implements IHttpClient {
                 error: e,
                 timestamp: DateTime.now(),
               ));
-              debugPrint('🔓 Queue size: ${_requestQueue.length}');
               return handler.next(e);
             }
             
             // Set lock IMMEDIATELY before any async operation
             _isRefreshing = true;
-            debugPrint('🔓 401 Unauthorized - Setting _isRefreshing = true');
-            debugPrint('🔓 401 Unauthorized - Calling refresh token callback (ONLY ONCE)');
+            
             
             // Call the callback if it's set (callback will refresh token)
             if (_onUnauthorizedCallback != null) {
               try {
                 await _onUnauthorizedCallback!();
-                debugPrint('🔓 401 Unauthorized - Callback completed successfully');
-                
                 // After callback completes, get new token and retry the request
                 final newToken = _tokenStorageService.getAccessToken();
                 if (newToken != null) {
-                  debugPrint('✅ [401 Retry] Got new token, retrying original request');
-                  
                   // Update the request with new token
                   e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
                   
                   // Retry the original request
                   try {
                     final response = await dio.fetch(e.requestOptions);
-                    debugPrint('✅ [401 Retry] Request succeeded with new token');
                     _isRefreshing = false;
                     
                     // Clean up old queued requests before processing
                     _cleanupOldQueuedRequests();
                     
                     // Process queued requests
-                    debugPrint('🔓 Processing ${_requestQueue.length} queued requests');
                     final queue = _requestQueue.toList();
                     _requestQueue.clear();
                     
@@ -163,40 +128,33 @@ class ApiClient implements IHttpClient {
                       final age = DateTime.now().difference(queuedRequest.timestamp);
                       
                       if (age > _queueTimeout) {
-                        debugPrint('⏰ Skipping queued request (timeout ${age.inSeconds}s): ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
+                        
                         continue;
                       }
-                      
-                      debugPrint('🔓 Retrying queued request: ${queuedError.requestOptions.method} ${queuedError.requestOptions.path}');
                       queuedError.requestOptions.headers['Authorization'] = 'Bearer $newToken';
                       try {
                         await dio.fetch(queuedError.requestOptions);
                       } catch (retryError) {
-                        debugPrint('❌ Error retrying queued request: $retryError');
                       }
                     }
                     
                     return handler.resolve(response);
                   } catch (retryError) {
-                    debugPrint('❌ [401 Retry] Request failed even with new token: $retryError');
                     _isRefreshing = false;
                     _requestQueue.clear();
                     return handler.next(e);
                   }
                 } else {
-                  debugPrint('❌ [401 Retry] No new token available after callback - user logged out');
                   _isRefreshing = false;
                   _requestQueue.clear();
                   return handler.next(e);
                 }
               } catch (ex) {
-                debugPrint('❌ Error in unauthorized callback: $ex');
                 _isRefreshing = false;
                 _requestQueue.clear();
                 return handler.next(e);
               }
             } else {
-              debugPrint('⚠️ No unauthorized callback set');
               _isRefreshing = false;
               return handler.next(e);
             }
@@ -205,7 +163,7 @@ class ApiClient implements IHttpClient {
           return handler.next(e);
         },
         onResponse: (response, handler) {
-          // debugPrint('DIO RESPONSE [${response.statusCode}]');
+          // 
           return handler.next(response);
         },
       ),
@@ -224,7 +182,7 @@ class ApiClient implements IHttpClient {
       final age = now.difference(queuedRequest.timestamp);
       final isOld = age > _queueTimeout;
       if (isOld) {
-        debugPrint('🧹 Removing old queued request (age: ${age.inSeconds}s): ${queuedRequest.error.requestOptions.method} ${queuedRequest.error.requestOptions.path}');
+        
       }
       return isOld;
     });
@@ -253,7 +211,6 @@ class ApiClient implements IHttpClient {
       // Return true if expiring within 5 minutes
       return timeUntilExpiry.inMinutes < 5;
     } catch (e) {
-      debugPrint('❌ [ApiClient] Error checking token expiry: $e');
       return false;
     }
   }

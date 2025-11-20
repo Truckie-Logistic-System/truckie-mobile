@@ -10,7 +10,7 @@ class ConnectivityService {
   ConnectivityService._internal();
   
   final Connectivity _connectivity = Connectivity();
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   
   // Current connection status
   bool _isConnected = true;
@@ -22,41 +22,37 @@ class ConnectivityService {
   
   /// Initialize connectivity monitoring
   Future<void> initialize() async {
-    debugPrint('🌐 [ConnectivityService] Initializing...');
+    
     
     // Check initial connectivity
     await _updateConnectionStatus();
     
     // Listen to connectivity changes
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      (List<ConnectivityResult> results) {
-        _handleConnectivityChange(results);
+      (ConnectivityResult result) {
+        _handleConnectivityChange(result);
       },
       onError: (error) {
-        debugPrint('❌ [ConnectivityService] Error: $error');
+        
       },
     );
     
-    debugPrint('✅ [ConnectivityService] Initialized, connected: $_isConnected');
+    
   }
   
   /// Handle connectivity changes
-  void _handleConnectivityChange(List<ConnectivityResult> results) {
+  void _handleConnectivityChange(ConnectivityResult result) {
     final wasConnected = _isConnected;
     
     // Check if any result indicates connection
-    _isConnected = results.any((result) =>
-      result == ConnectivityResult.mobile ||
-      result == ConnectivityResult.wifi ||
-      result == ConnectivityResult.ethernet
-    );
+    _isConnected = result != ConnectivityResult.none;
     
     // Log change
     if (wasConnected != _isConnected) {
       if (_isConnected) {
-        debugPrint('✅ [ConnectivityService] Connected - ${results.join(', ')}');
+        
       } else {
-        debugPrint('❌ [ConnectivityService] Disconnected');
+        
       }
       
       // Broadcast change
@@ -70,7 +66,7 @@ class ConnectivityService {
       final results = await _connectivity.checkConnectivity();
       _handleConnectivityChange(results);
     } catch (e) {
-      debugPrint('❌ [ConnectivityService] Error checking connectivity: $e');
+      
       _isConnected = false;
     }
   }
@@ -84,27 +80,27 @@ class ConnectivityService {
   /// Get connection type
   Future<String> getConnectionType() async {
     try {
-      final results = await _connectivity.checkConnectivity();
+      final result = await _connectivity.checkConnectivity();
       
-      if (results.isEmpty || results.contains(ConnectivityResult.none)) {
+      if (result == ConnectivityResult.none) {
         return 'Không có kết nối';
       }
       
-      if (results.contains(ConnectivityResult.wifi)) {
+      if (result == ConnectivityResult.wifi) {
         return 'WiFi';
       }
       
-      if (results.contains(ConnectivityResult.mobile)) {
+      if (result == ConnectivityResult.mobile) {
         return 'Di động';
       }
       
-      if (results.contains(ConnectivityResult.ethernet)) {
+      if (result == ConnectivityResult.ethernet) {
         return 'Ethernet';
       }
       
       return 'Khác';
     } catch (e) {
-      debugPrint('❌ [ConnectivityService] Error getting connection type: $e');
+      
       return 'Không xác định';
     }
   }
@@ -113,10 +109,10 @@ class ConnectivityService {
   Future<bool> waitForConnection({
     Duration timeout = const Duration(seconds: 10),
   }) async {
-    debugPrint('⏳ [ConnectivityService] Waiting for connection (max ${timeout.inSeconds}s)...');
+    
     
     if (_isConnected) {
-      debugPrint('✅ [ConnectivityService] Already connected');
+      
       return true;
     }
     
@@ -127,7 +123,7 @@ class ConnectivityService {
     // Listen for connection
     subscription = connectionStream.listen((isConnected) {
       if (isConnected && !completer.isCompleted) {
-        debugPrint('✅ [ConnectivityService] Connection restored');
+        
         timeoutTimer?.cancel();
         subscription?.cancel();
         completer.complete(true);
@@ -137,7 +133,7 @@ class ConnectivityService {
     // Set timeout
     timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        debugPrint('⏰ [ConnectivityService] Wait timeout');
+        
         subscription?.cancel();
         completer.complete(false);
       }
@@ -152,7 +148,7 @@ class ConnectivityService {
     VoidCallback? onDisconnected,
   }) async {
     if (!_isConnected) {
-      debugPrint('⚠️ [ConnectivityService] Operation blocked - no connection');
+      
       onDisconnected?.call();
       return null;
     }
@@ -160,7 +156,7 @@ class ConnectivityService {
     try {
       return await operation();
     } catch (e) {
-      debugPrint('❌ [ConnectivityService] Operation failed: $e');
+      
       rethrow;
     }
   }
@@ -176,31 +172,31 @@ class ConnectivityService {
       try {
         return await operation();
       } catch (e) {
-        debugPrint('⚠️ [ConnectivityService] Initial attempt failed: $e');
+        
       }
     }
     
     // Wait for connection
-    debugPrint('⏳ [ConnectivityService] Waiting for connection to retry...');
+    
     final connected = await waitForConnection(timeout: timeout);
     
     if (connected) {
-      debugPrint('🔄 [ConnectivityService] Retrying operation...');
+      
       try {
         return await operation();
       } catch (e) {
-        debugPrint('❌ [ConnectivityService] Retry failed: $e');
+        
         return onTimeout();
       }
     }
     
-    debugPrint('❌ [ConnectivityService] Connection timeout, using fallback');
+    
     return onTimeout();
   }
   
   /// Dispose service
   void dispose() {
-    debugPrint('🗑️ [ConnectivityService] Disposing...');
+    
     _connectivitySubscription?.cancel();
     _connectionStreamController.close();
   }

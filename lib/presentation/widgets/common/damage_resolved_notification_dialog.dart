@@ -59,7 +59,7 @@ class DamageResolvedNotificationDialog extends StatelessWidget {
               height: 48,
               child: ElevatedButton(
                 onPressed: () {
-                  debugPrint('✅ [DamageResolvedDialog] User confirmed');
+
                   Navigator.of(context).pop();
                   onConfirm?.call();
                 },

@@ -43,9 +43,6 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
     _issueRepository = getIt<IssueRepository>();
     
     // Debug log initial location
-    debugPrint('🌍 DamageReportBottomSheet initialized with location:');
-    debugPrint('   - Latitude: ${widget.currentLatitude}');
-    debugPrint('   - Longitude: ${widget.currentLongitude}');
   }
 
   @override
@@ -165,23 +162,11 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      debugPrint('📤 Reporting damaged goods...');
-      debugPrint('   - Vehicle Assignment ID: ${widget.vehicleAssignmentId}');
-      debugPrint('   - Issue Type ID: ${widget.issueTypeId}');
-      debugPrint('   - Order Detail IDs: $_selectedOrderDetailIds');
-      debugPrint('   - Description: ${_descriptionController.text}');
-      debugPrint('   - ⚠️ LOCATION BEING SENT TO API:');
-      debugPrint('      * Latitude: ${widget.currentLatitude}');
-      debugPrint('      * Longitude: ${widget.currentLongitude}');
-      debugPrint('   - Number of images: ${_damageImages.length}');
-      
       // CRITICAL: Verify location is not null and not Google HQ
       if (widget.currentLatitude == null || widget.currentLongitude == null) {
-        debugPrint('   ❌ WARNING: Location is NULL!');
       } else if (widget.currentLatitude == 37.4219983 && widget.currentLongitude == -122.084) {
-        debugPrint('   ❌ WARNING: Location is Google HQ! Should be simulated location!');
       } else {
-        debugPrint('   ✅ Location appears valid (not Google HQ)');
+        
       }
       
       // Report for each selected order detail
@@ -197,9 +182,6 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
           locationLongitude: widget.currentLongitude,
         );
       }
-
-      debugPrint('✅ Damage report submitted successfully for ${_selectedOrderDetailIds.length} items');
-
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -211,7 +193,6 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error reporting damage: $e');
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -538,7 +519,7 @@ class _DamageReportBottomSheetState extends State<DamageReportBottomSheet> {
                                 ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Chụp hoặc chọn ảnh hàng hư hại',
+                                      'Chụp ảnh hàng hư hại',
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.grey[600],

@@ -144,8 +144,9 @@ class AppRoutes {
           settings: settings, // CRITICAL: Set settings to enable popUntil by route name
           builder: (_) => ResponsiveWrapper(
             child: NavigationScreen(
-              orderId: args['orderId'] as String,
+              orderId: args['orderId'] as String?,  // Allow null orderId
               isSimulationMode: args['isSimulationMode'] as bool? ?? false,
+              autoResume: args['autoResume'] as bool? ?? false, // Parse autoResume flag
             ),
           ),
         );

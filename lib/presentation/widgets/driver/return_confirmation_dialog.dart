@@ -49,7 +49,7 @@ class _ReturnConfirmationDialogState extends State<ReturnConfirmationDialog> {
         });
       }
     } catch (e) {
-      debugPrint('Error capturing photo: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Không thể chụp ảnh')),
       );
@@ -95,7 +95,7 @@ class _ReturnConfirmationDialogState extends State<ReturnConfirmationDialog> {
       Navigator.of(context).pop();
       widget.onConfirmed();
     } catch (e) {
-      debugPrint('Error confirming return: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi: ${e.toString()}'),

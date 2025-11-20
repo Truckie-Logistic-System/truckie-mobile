@@ -21,12 +21,6 @@ class IssueRepositoryImpl implements IssueRepository {
     double? locationLongitude,
   }) async {
     try {
-      debugPrint('📤 Creating issue via API...');
-      debugPrint('   - Description: $description');
-      debugPrint('   - Issue Type ID: $issueTypeId');
-      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
-      debugPrint('   - Location: $locationLatitude, $locationLongitude');
-
       final response = await _apiClient.post(
         '/issue',
         data: {
@@ -37,12 +31,8 @@ class IssueRepositoryImpl implements IssueRepository {
           if (locationLongitude != null) 'locationLongitude': locationLongitude,
         },
       );
-
-      debugPrint('✅ Issue created successfully');
       return Issue.fromJson(response.data['data'] as Map<String, dynamic>);
     } catch (e, stackTrace) {
-      debugPrint('❌ Error creating issue: $e');
-      debugPrint('Stack trace: $stackTrace');
       // Use ErrorMapper for user-friendly message
       final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
       throw Exception('Không thể tạo sự cố: $friendlyMessage');
@@ -60,18 +50,10 @@ class IssueRepositoryImpl implements IssueRepository {
       // Basic UUID format validation validation (UUID v4 format)
       final uuidPattern = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
       if (!uuidPattern.hasMatch(id.toLowerCase())) {
-        debugPrint('⚠️ Warning: ID "$id" may not be a valid UUID format');
       }
-      
-      debugPrint('📤 Fetching issue by ID: $id');
-
       final response = await _apiClient.get('/issues/$id');
-
-      debugPrint('✅ Issue fetched successfully');
       return Issue.fromJson(response.data['data'] as Map<String, dynamic>);
     } catch (e, stackTrace) {
-      debugPrint('❌ Error fetching issue: $e');
-      debugPrint('Stack trace: $stackTrace');
       // Use ErrorMapper for user-friendly message
       final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
       throw Exception('Không thể tải thông tin sự cố: $friendlyMessage');
@@ -81,23 +63,15 @@ class IssueRepositoryImpl implements IssueRepository {
   @override
   Future<List<IssueType>> getAllIssueTypes() async {
     try {
-      debugPrint('📤 Fetching all issue types...');
-      debugPrint('📤 Calling API endpoint: /issue-types');
-
       final response = await _apiClient.get('/issue-types');
-      debugPrint('✅ Response status: ${response.statusCode}');
-      debugPrint('✅ Response data keys: ${response.data.keys.toList()}');
+      
 
       final data = response.data['data'] as List<dynamic>;
       final issueTypes = data
           .map((json) => IssueType.fromJson(json as Map<String, dynamic>))
           .toList();
-
-      debugPrint('✅ Fetched ${issueTypes.length} issue types');
       return issueTypes;
     } catch (e, stackTrace) {
-      debugPrint('❌ Error fetching issue types: $e');
-      debugPrint('Stack trace: $stackTrace');
       // Use ErrorMapper for user-friendly message
       final friendlyMessage = ErrorMapper.mapToUserFriendlyMessage(e);
       throw Exception('Không thể tải danh sách loại sự cố: $friendlyMessage');
@@ -110,7 +84,6 @@ class IssueRepositoryImpl implements IssueRepository {
       final types = await getAllIssueTypes();
       return types.where((type) => type.isActive).toList();
     } catch (e) {
-      debugPrint('Error getting active issue types: $e');
       rethrow;
     }
   }
@@ -126,8 +99,6 @@ class IssueRepositoryImpl implements IssueRepository {
     double? locationLongitude,
   }) async {
     try {
-      debugPrint('📤 Uploading seal removal image: $sealRemovalImage');
-      
       // Create multipart form data
       final formData = FormData.fromMap({
         'vehicleAssignmentId': vehicleAssignmentId,
@@ -148,13 +119,11 @@ class IssueRepositoryImpl implements IssueRepository {
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Seal removal issue reported successfully');
         return Issue.fromJson(response.data['data']);
       } else {
         throw Exception('Failed to report seal issue');
       }
     } catch (e) {
-      debugPrint('❌ Error reporting seal issue: $e');
       rethrow;
     }
   }
@@ -179,7 +148,6 @@ class IssueRepositoryImpl implements IssueRepository {
         throw Exception('Failed to confirm new seal');
       }
     } catch (e) {
-      debugPrint('Error confirming new seal: $e');
       rethrow;
     }
   }
@@ -199,20 +167,16 @@ class IssueRepositoryImpl implements IssueRepository {
   @override
   Future<dynamic> getInUseSeal(String vehicleAssignmentId) async {
     try {
-      debugPrint('📤 Getting IN_USE seal for vehicle assignment: $vehicleAssignmentId');
       final response = await _apiClient.get(
         '/issues/vehicle-assignment/$vehicleAssignmentId/in-use-seal',
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Got IN_USE seal: ${response.data['data']}');
         return response.data['data'];
       } else {
-        debugPrint('⚠️ No IN_USE seal found');
         return null;
       }
     } catch (e) {
-      debugPrint('❌ Error getting IN_USE seal: $e');
       rethrow;
     }
   }
@@ -220,7 +184,6 @@ class IssueRepositoryImpl implements IssueRepository {
   @override
   Future<List<Issue>> getPendingSealReplacements(String vehicleAssignmentId) async {
     try {
-      debugPrint('📤 Getting pending seal replacements for vehicle assignment: $vehicleAssignmentId');
       final response = await _apiClient.get(
         '/issues/vehicle-assignment/$vehicleAssignmentId/pending-seal-replacements',
       );
@@ -228,14 +191,12 @@ class IssueRepositoryImpl implements IssueRepository {
       if (response.statusCode == 200 && response.data['data'] != null) {
         final List<dynamic> issuesJson = response.data['data'];
         final issues = issuesJson.map((json) => Issue.fromJson(json)).toList();
-        debugPrint('✅ Got ${issues.length} pending seal replacement(s)');
+        
         return issues;
       } else {
-        debugPrint('⚠️ No pending seal replacements found');
         return [];
       }
     } catch (e) {
-      debugPrint('❌ Error getting pending seal replacements: $e');
       // Return empty list instead of throwing to avoid breaking UI
       return [];
     }
@@ -252,13 +213,6 @@ class IssueRepositoryImpl implements IssueRepository {
     double? locationLongitude,
   }) async {
     try {
-      debugPrint('📦 Reporting damaged goods issue...');
-      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
-      debugPrint('   - Issue Type ID: $issueTypeId');
-      debugPrint('   - Order Detail ID: $orderDetailId');
-      debugPrint('   - Description: $description');
-      debugPrint('   - Damage images count: ${damageImagePaths.length}');
-
       // Create multipart form data
       final formData = FormData();
       formData.fields.add(MapEntry('vehicleAssignmentId', vehicleAssignmentId));
@@ -276,7 +230,6 @@ class IssueRepositoryImpl implements IssueRepository {
       // Add multiple image files
       for (int i = 0; i < damageImagePaths.length; i++) {
         final imagePath = damageImagePaths[i];
-        debugPrint('📤 Adding damage image ${i + 1}: $imagePath');
         formData.files.add(
           MapEntry(
             'damageImages',
@@ -294,13 +247,11 @@ class IssueRepositoryImpl implements IssueRepository {
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Damage issue reported successfully');
         return Issue.fromJson(response.data['data']);
       } else {
         throw Exception('Failed to report damage issue');
       }
     } catch (e) {
-      debugPrint('❌ Error reporting damage issue: $e');
       rethrow;
     }
   }
@@ -315,13 +266,6 @@ class IssueRepositoryImpl implements IssueRepository {
     double? locationLongitude,
   }) async {
     try {
-      debugPrint('🚨 Reporting traffic penalty violation issue...');
-      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
-      debugPrint('   - Issue Type ID: $issueTypeId');
-      debugPrint('   - Violation Type: $violationType');
-      debugPrint('   - Violation Image: $violationImagePath');
-      debugPrint('   - Location: $locationLatitude, $locationLongitude');
-
       // Create multipart form data
       final formData = FormData();
       formData.fields.add(MapEntry('vehicleAssignmentId', vehicleAssignmentId));
@@ -336,7 +280,6 @@ class IssueRepositoryImpl implements IssueRepository {
       }
 
       // Add violation record image file
-      debugPrint('📤 Adding traffic violation record image: $violationImagePath');
       formData.files.add(
         MapEntry(
           'trafficViolationRecordImage',
@@ -353,13 +296,10 @@ class IssueRepositoryImpl implements IssueRepository {
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Penalty issue reported successfully');
-        debugPrint('   - Issue ID: ${response.data['data']['id']}');
       } else {
         throw Exception('Failed to report penalty issue');
       }
     } catch (e) {
-      debugPrint('❌ Error reporting penalty: $e');
       rethrow;
     }
   }
@@ -374,11 +314,6 @@ class IssueRepositoryImpl implements IssueRepository {
     double? locationLongitude,
   }) async {
     try {
-      debugPrint('🚫 Reporting order rejection...');
-      debugPrint('   - Vehicle Assignment ID: $vehicleAssignmentId');
-      debugPrint('   - Selected packages: ${orderDetailIds.length}');
-      debugPrint('   - Order Detail IDs: $orderDetailIds');
-
       final response = await _apiClient.post(
         '/issues/order-rejection',
         data: {
@@ -390,13 +325,12 @@ class IssueRepositoryImpl implements IssueRepository {
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Order rejection reported for ${orderDetailIds.length} package(s)');
+        
         return Issue.fromJson(response.data['data']);
       } else {
         throw Exception('Failed to report order rejection');
       }
     } catch (e) {
-      debugPrint('❌ Error reporting order rejection: $e');
       rethrow;
     }
   }
@@ -404,19 +338,16 @@ class IssueRepositoryImpl implements IssueRepository {
   @override
   Future<dynamic> getOrderRejectionDetail(String issueId) async {
     try {
-      debugPrint('📤 Getting ORDER_REJECTION detail for issue: $issueId');
       final response = await _apiClient.get(
         '/issues/order-rejection/$issueId/detail',
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Got ORDER_REJECTION detail');
         return response.data['data'];
       } else {
         throw Exception('Failed to get order rejection detail');
       }
     } catch (e) {
-      debugPrint('❌ Error getting order rejection detail: $e');
       rethrow;
     }
   }
@@ -427,9 +358,7 @@ class IssueRepositoryImpl implements IssueRepository {
     required List<dynamic> returnDeliveryImages,
   }) async {
     try {
-      debugPrint('📦 Confirming return delivery...');
-      debugPrint('   - Issue ID: $issueId');
-      debugPrint('   - Return delivery images: ${returnDeliveryImages.length} photo(s)');
+      
 
       // Prepare FormData to send files directly (like PhotoCompletion)
       final formData = FormData();
@@ -451,9 +380,6 @@ class IssueRepositoryImpl implements IssueRepository {
           );
         }
       }
-
-      debugPrint('📤 Sending ${formData.files.length} files to backend...');
-
       // Send directly to backend, backend will upload to Cloudinary
       final response = await _apiClient.post(
         '/issues/order-rejection/confirm-return',
@@ -461,13 +387,11 @@ class IssueRepositoryImpl implements IssueRepository {
       );
 
       if (response.statusCode == 200 && response.data['data'] != null) {
-        debugPrint('✅ Return delivery confirmed successfully');
         return Issue.fromJson(response.data['data']);
       } else {
         throw Exception('Failed to confirm return delivery');
       }
     } catch (e) {
-      debugPrint('❌ Error confirming return delivery: $e');
       rethrow;
     }
   }

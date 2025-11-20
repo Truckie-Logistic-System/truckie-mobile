@@ -41,17 +41,11 @@ class _OrderRejectionWithLocationState extends State<OrderRejectionWithLocation>
     // This will return simulated location if simulation mode is active
     _currentLatitude = _globalLocationManager.currentLatitude;
     _currentLongitude = _globalLocationManager.currentLongitude;
-    
-    debugPrint('📍 [OrderRejectionWithLocation] Getting location from GlobalLocationManager:');
-    debugPrint('   - Latitude: $_currentLatitude');
-    debugPrint('   - Longitude: $_currentLongitude');
-    debugPrint('   - Is tracking active: ${_globalLocationManager.isGlobalTrackingActive}');
-    debugPrint('   - Is simulation mode: ${_globalLocationManager.isSimulationMode}');
-    
+
     if (_currentLatitude == null || _currentLongitude == null) {
-      debugPrint('   ⚠️ WARNING: Location is NULL from GlobalLocationManager!');
+
     } else {
-      debugPrint('   ✅ Location appears valid');
+
     }
   }
 

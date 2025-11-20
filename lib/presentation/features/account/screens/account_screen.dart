@@ -53,19 +53,19 @@ class _AccountScreenState extends State<AccountScreen> {
     // Tải lại dữ liệu khi màn hình được hiển thị lại
     if (_authViewModel.status == AuthStatus.authenticated &&
         _authViewModel.user != null) {
-      debugPrint('🔄 AccountScreen didChangeDependencies: Loading driver info');
+
       _accountViewModel.getDriverInfo(_authViewModel.user!.id);
     }
   }
 
   // Public method để refresh data từ bên ngoài
   void refreshAccountData() {
-    debugPrint('🔄 AccountScreen: Manual refresh triggered');
+
     if (_authViewModel.status == AuthStatus.authenticated &&
         _authViewModel.user != null) {
       // Force refresh token trước, sau đó force refresh driver info
       _authViewModel.forceRefreshToken().then((success) {
-        debugPrint('🔄 AccountScreen: Force refresh token result: $success');
+
         if (success && _authViewModel.user != null) {
           _accountViewModel.refreshDriverInfo(_authViewModel.user!.id);
         }
@@ -86,7 +86,7 @@ class _AccountScreenState extends State<AccountScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              debugPrint('🔄 AccountScreen: Refresh button pressed');
+
               refreshAccountData();
             },
             tooltip: 'Làm mới',

@@ -37,7 +37,7 @@ class OrderListViewModel extends BaseViewModel {
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
           // Nếu refresh token thành công, thử lại
-          // debugPrint('Token refreshed, retrying to get orders...');
+          // 
           await getDriverOrders();
           return;
         }
@@ -47,6 +47,14 @@ class OrderListViewModel extends BaseViewModel {
       (orders) {
         _state = OrderListState.loaded;
         _orders = orders;
+        
+        // Debug: Log all order statuses including CANCELLED
+        for (var order in orders) {
+        }
+        final cancelledCount = orders.where((o) => o.status == 'CANCELLED').length;
+        if (cancelledCount > 0) {
+        }
+        
         notifyListeners();
       },
     );
@@ -54,7 +62,6 @@ class OrderListViewModel extends BaseViewModel {
 
   // Force refresh orders - bỏ qua kiểm tra loading state
   Future<void> refreshOrders() async {
-    debugPrint('🔄 OrderListViewModel: Force refreshing orders...');
     _state = OrderListState.loading;
     notifyListeners();
 
@@ -69,7 +76,6 @@ class OrderListViewModel extends BaseViewModel {
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
           // Nếu refresh token thành công, thử lại
-          debugPrint('🔄 OrderListViewModel: Token refreshed, retrying force refresh...');
           await refreshOrders();
           return;
         }
@@ -79,7 +85,6 @@ class OrderListViewModel extends BaseViewModel {
       (orders) {
         _state = OrderListState.loaded;
         _orders = orders;
-        debugPrint('✅ OrderListViewModel: Force refresh completed, got ${orders.length} orders');
         notifyListeners();
       },
     );
@@ -87,7 +92,6 @@ class OrderListViewModel extends BaseViewModel {
 
   // Super force refresh - đảm bảo luôn được gọi, kể cả khi đang loading
   Future<void> superForceRefresh() async {
-    debugPrint('🔄 OrderListViewModel: SUPER FORCE refreshing orders...');
     _state = OrderListState.loading;
     notifyListeners();
 
@@ -97,13 +101,19 @@ class OrderListViewModel extends BaseViewModel {
       (failure) async {
         _state = OrderListState.error;
         _errorMessage = failure.message;
-        debugPrint('❌ OrderListViewModel: Super force refresh failed: ${failure.message}');
         notifyListeners();
       },
       (orders) {
         _state = OrderListState.loaded;
         _orders = orders;
-        debugPrint('✅ OrderListViewModel: Super force refresh completed, got ${orders.length} orders');
+        
+        // Debug: Log all order statuses including CANCELLED
+        
+        for (var order in orders) {
+        }
+        final cancelledCount = orders.where((o) => o.status == 'CANCELLED').length;
+        if (cancelledCount > 0) {
+        }
         notifyListeners();
       },
     );

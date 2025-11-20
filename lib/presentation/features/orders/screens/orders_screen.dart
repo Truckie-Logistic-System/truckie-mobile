@@ -65,7 +65,6 @@ class _OrdersScreenState extends State<OrdersScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Data will be loaded in initState when screen is first created
-    debugPrint('🔄 OrdersScreen didChangeDependencies called');
   }
 
   // Lắng nghe thay đổi từ OrderListViewModel để cập nhật UI
@@ -89,13 +88,11 @@ class _OrdersScreenState extends State<OrdersScreen>
   }
 
   Future<void> _loadOrders() async {
-    debugPrint('🔄 OrdersScreen: Loading orders...');
     await _orderListViewModel.superForceRefresh();
   }
 
   // Public method để refresh data từ bên ngoài
   void refreshOrders() {
-    debugPrint('🔄 OrdersScreen: Manual refresh triggered');
     _loadOrders();
   }
 
@@ -113,7 +110,6 @@ class _OrdersScreenState extends State<OrdersScreen>
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              debugPrint('🔄 OrdersScreen: Refresh button pressed');
               _orderListViewModel.superForceRefresh();
             },
             tooltip: 'Làm mới',
@@ -139,7 +135,6 @@ class _OrdersScreenState extends State<OrdersScreen>
                       Expanded(
                         child: RefreshIndicator(
                           onRefresh: () async {
-                            debugPrint('🔄 OrdersScreen: Pull to refresh triggered');
                             await _orderListViewModel.superForceRefresh();
                           },
                           color: AppColors.primary,
@@ -239,6 +234,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     'SUCCESSFUL',
     'RETURNING',
     'RETURNED',
+    'CANCELLED',  // Include CANCELLED to show cancelled orders
   ];
 
   /// Check if order status is valid for driver view (FULLY_PAID or later)
@@ -333,6 +329,14 @@ class _OrdersScreenState extends State<OrdersScreen>
                   setState(() => _selectedStatus = 'Gặp sự cố');
                 }
               }),
+              SizedBox(width: 8.w),
+              _buildFilterChip('Đã hủy', _selectedStatus == 'Đã hủy', (
+                selected,
+              ) {
+                if (selected) {
+                  setState(() => _selectedStatus = 'Đã hủy');
+                }
+              }),
             ],
           ),
         ),
@@ -403,7 +407,6 @@ class _OrdersScreenState extends State<OrdersScreen>
           
           // Reload orders after returning from detail screen
           if (mounted && result == true) {
-            debugPrint('🔄 Reloading orders after returning from detail screen');
             _loadOrders();
           }
         },

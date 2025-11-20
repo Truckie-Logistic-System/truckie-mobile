@@ -1,4 +1,5 @@
 export 'address_section.dart';
+export 'combined_issue_report_with_location.dart';
 export 'damage_report_section.dart';
 export 'damage_report_with_location.dart';
 export 'driver_info.dart';

@@ -91,13 +91,11 @@ class OrderDetailViewModel extends BaseViewModel {
       if (driver != null) {
         final phoneNumber = driver.userResponse?.phoneNumber;
         if (phoneNumber != null && phoneNumber.isNotEmpty) {
-          // debugPrint('✅ Got current user phone: $phoneNumber');
+          // 
           return phoneNumber;
         }
       }
-      debugPrint('⚠️ Could not get current user phone from AuthViewModel');
     } catch (e) {
-      debugPrint('❌ Error getting current user phone: $e');
     }
     return null;
   }
@@ -119,7 +117,7 @@ class OrderDetailViewModel extends BaseViewModel {
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
           // Nếu refresh token thành công, thử lại
-          // debugPrint('Token refreshed, retrying to get order details...');
+          // 
           await getOrderDetails(orderId);
           return;
         }
@@ -184,7 +182,6 @@ class OrderDetailViewModel extends BaseViewModel {
       try {
         // Skip segments with null pathCoordinatesJson (e.g., return journey placeholder segments)
         if (segment.pathCoordinatesJson == null || segment.pathCoordinatesJson!.isEmpty) {
-          debugPrint('Skipping segment ${segment.segmentOrder} with null/empty pathCoordinatesJson');
           continue;
         }
 
@@ -206,7 +203,6 @@ class OrderDetailViewModel extends BaseViewModel {
           _routeSegments.add(points);
         }
       } catch (e) {
-        debugPrint('Error parsing route segment: $e');
       }
     }
   }
@@ -217,19 +213,19 @@ class OrderDetailViewModel extends BaseViewModel {
   /// ngay cả khi Order đang PICKING_UP (do Trip 1 đã start)
   bool canStartDelivery() {
     if (_orderWithDetails == null) {
-      // debugPrint('❌ canStartDelivery: orderWithDetails is null');
+      // 
       return false;
     }
     
     // Must have vehicle assignments
     if (_orderWithDetails!.vehicleAssignments.isEmpty) {
-      // debugPrint('❌ canStartDelivery: no vehicle assignments');
+      // 
       return false;
     }
     
     // Must have order details with vehicle assignment ID
     if (_orderWithDetails!.orderDetails.isEmpty) {
-      // debugPrint('❌ canStartDelivery: no order details');
+      // 
       return false;
     }
     
@@ -238,21 +234,21 @@ class OrderDetailViewModel extends BaseViewModel {
     // because Trip 1 already started
     final detailStatus = getCurrentTripOrderDetailStatus();
     if (detailStatus == null) {
-      // debugPrint('❌ canStartDelivery: cannot get current trip detail status');
+      // 
       return false;
     }
     
     // Can start delivery if current trip's OrderDetail status is ASSIGNED_TO_DRIVER
     // Order Status might be FULLY_PAID or PICKING_UP (if another trip started)
     if (detailStatus != 'ASSIGNED_TO_DRIVER') {
-      // debugPrint('❌ canStartDelivery: detail status is $detailStatus, not ASSIGNED_TO_DRIVER');
+      // 
       return false;
     }
     
     // Order must be FULLY_PAID or PICKING_UP (another trip might have started)
     final orderStatus = _orderWithDetails!.status;
     if (orderStatus != 'FULLY_PAID' && orderStatus != 'PICKING_UP') {
-      // debugPrint('❌ canStartDelivery: order status is $orderStatus, not FULLY_PAID or PICKING_UP');
+      // 
       return false;
     }
     
@@ -260,7 +256,7 @@ class OrderDetailViewModel extends BaseViewModel {
     // Bug: orderDetails.first might belong to another driver's trip in multi-trip orders
     final vehicleAssignment = getCurrentUserVehicleAssignment();
     if (vehicleAssignment == null) {
-      // debugPrint('❌ canStartDelivery: cannot get current user vehicle assignment');
+      // 
       return false;
     }
     
@@ -291,7 +287,6 @@ class OrderDetailViewModel extends BaseViewModel {
         },
       );
     } catch (e) {
-      debugPrint('❌ Could not find vehicle assignment for current user');
       return null;
     }
 
@@ -306,7 +301,6 @@ class OrderDetailViewModel extends BaseViewModel {
       );
       return orderDetail.status;
     } catch (e) {
-      debugPrint('❌ Could not find order detail for vehicle assignment');
       return null;
     }
   }
@@ -376,8 +370,21 @@ class OrderDetailViewModel extends BaseViewModel {
     // CRITICAL FIX: If final odometer already uploaded, don't show button
     // This prevents showing button after RETURNED status completed with odometer
     if (_odometerReadingAtEnd != null && _odometerReadingAtEnd! > 0) {
-      debugPrint('⚠️ Final odometer already uploaded: $_odometerReadingAtEnd km');
+      // 
       return false;
+    }
+    
+    // CRITICAL: Nếu có bất kỳ package nào đang RETURNING, không cho phép upload odometer
+    // Driver phải hoàn thành việc trả hàng về pickup trước
+    final userVehicleAssignment = getCurrentUserVehicleAssignment();
+    if (userVehicleAssignment != null) {
+      final hasReturningPackage = _orderWithDetails!.orderDetails.any(
+        (od) => od.vehicleAssignmentId == userVehicleAssignment.id && 
+                od.status == 'RETURNING'
+      );
+      if (hasReturningPackage) {
+        return false;
+      }
     }
     
     final detailStatus = getCurrentTripOrderDetailStatus();
@@ -427,15 +434,19 @@ class OrderDetailViewModel extends BaseViewModel {
       return false;
     }
     
-    final detailStatus = getCurrentTripOrderDetailStatus();
-    if (detailStatus == null) {
+    // Get current user's vehicle assignment
+    final userVehicleAssignment = getCurrentUserVehicleAssignment();
+    if (userVehicleAssignment == null) {
       return false;
     }
     
-    // Có thể xác nhận trả hàng khi:
-    // - RETURNING: customer đã thanh toán, đang trên đường trả hàng về pickup
-    // - RETURN_IN_TRANSIT: đang trên đường trả hàng về pickup (alternative status)
-    return detailStatus == 'RETURNING';
+    // Kiểm tra nếu có ít nhất 1 OrderDetail với status RETURNING trong trip hiện tại
+    final hasReturningPackage = _orderWithDetails!.orderDetails.any(
+      (od) => od.vehicleAssignmentId == userVehicleAssignment.id && 
+              od.status == 'RETURNING'
+    );
+    
+    return hasReturningPackage;
   }
 
   /// Lấy vehicle assignment của driver hiện tại (primary driver)
@@ -460,7 +471,6 @@ class OrderDetailViewModel extends BaseViewModel {
         },
       );
     } catch (e) {
-      debugPrint('❌ Could not find vehicle assignment for current user: $e');
       // Fallback to first vehicle assignment if not found
       return _orderWithDetails!.vehicleAssignments.isNotEmpty 
           ? _orderWithDetails!.vehicleAssignments.first 
@@ -490,12 +500,7 @@ class OrderDetailViewModel extends BaseViewModel {
     _startDeliveryState = StartDeliveryState.loading;
     notifyListeners();
 
-    debugPrint(
-      '🚗 Bắt đầu gửi thông tin odometer: ${odometerReading.toString()}',
-    );
-    debugPrint('🚗 Đường dẫn ảnh odometer: ${odometerImage.path}');
-    debugPrint('🚗 Vehicle Assignment ID: $vehicleAssignmentId');
-
+    
     try {
       final result = await _createVehicleFuelConsumptionUseCase(
         vehicleAssignmentId: vehicleAssignmentId,
@@ -507,13 +512,10 @@ class OrderDetailViewModel extends BaseViewModel {
         (failure) async {
           _startDeliveryState = StartDeliveryState.error;
           _startDeliveryErrorMessage = failure.message;
-          debugPrint('❌ Lỗi khi bắt đầu chuyến xe: ${failure.message}');
-
           // Sử dụng handleUnauthorizedError từ BaseViewModel
           final shouldRetry = await handleUnauthorizedError(failure.message);
           if (shouldRetry) {
             // Nếu refresh token thành công, thử lại
-            debugPrint('🔄 Token đã được làm mới, thử lại...');
             return startDelivery(
               odometerReading: odometerReading,
               odometerImage: odometerImage,
@@ -525,13 +527,11 @@ class OrderDetailViewModel extends BaseViewModel {
         },
         (success) {
           _startDeliveryState = StartDeliveryState.success;
-          debugPrint('✅ Bắt đầu chuyến xe thành công!');
           notifyListeners();
           return true;
         },
       );
     } catch (e) {
-      debugPrint('❌ Lỗi không xác định khi bắt đầu chuyến xe: $e');
       _startDeliveryState = StartDeliveryState.error;
       _startDeliveryErrorMessage = 'Lỗi không xác định: $e';
       notifyListeners();
@@ -550,7 +550,6 @@ class OrderDetailViewModel extends BaseViewModel {
     String? description,
   }) async {
     if (_orderWithDetails == null) {
-      debugPrint('❌ Cannot upload photo: no order details');
       return false;
     }
 
@@ -558,7 +557,6 @@ class OrderDetailViewModel extends BaseViewModel {
     final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) {
-      debugPrint('❌ Cannot upload photo: no vehicle assignment ID');
       _photoUploadError = 'Không tìm thấy thông tin phân công xe';
       notifyListeners();
       return false;
@@ -567,8 +565,6 @@ class OrderDetailViewModel extends BaseViewModel {
     _isUploadingPhoto = true;
     _photoUploadError = '';
     notifyListeners();
-
-    debugPrint('📸 Uploading photo completion...');
     final result = await _photoCompletionRepository.uploadPhoto(
       vehicleAssignmentId,
       imageFile.path,
@@ -578,13 +574,11 @@ class OrderDetailViewModel extends BaseViewModel {
       (failure) {
         _isUploadingPhoto = false;
         _photoUploadError = failure.message;
-        debugPrint('❌ Failed to upload photo completion: ${failure.message}');
         notifyListeners();
         return false;
       },
       (success) {
         _isUploadingPhoto = false;
-        debugPrint('✅ Photo completion uploaded successfully');
         notifyListeners();
         return true;
       },
@@ -597,12 +591,10 @@ class OrderDetailViewModel extends BaseViewModel {
     String? description,
   }) async {
     if (_orderWithDetails == null) {
-      debugPrint('❌ Cannot upload photos: no order details');
       return false;
     }
 
     if (imageFiles.isEmpty) {
-      debugPrint('❌ Cannot upload photos: no images provided');
       _photoUploadError = 'Vui lòng chụp ít nhất một ảnh';
       notifyListeners();
       return false;
@@ -612,7 +604,6 @@ class OrderDetailViewModel extends BaseViewModel {
     final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) {
-      debugPrint('❌ Cannot upload photos: no vehicle assignment ID');
       _photoUploadError = 'Không tìm thấy thông tin phân công xe';
       notifyListeners();
       return false;
@@ -621,8 +612,6 @@ class OrderDetailViewModel extends BaseViewModel {
     _isUploadingPhoto = true;
     _photoUploadError = '';
     notifyListeners();
-
-    debugPrint('📸 Uploading ${imageFiles.length} photo completions...');
     // Upload all photos using the correct API endpoint
     final Either<Failure, bool> result = await _photoCompletionRepository.uploadMultiplePhotoCompletion(
       imageFiles: imageFiles,
@@ -634,14 +623,11 @@ class OrderDetailViewModel extends BaseViewModel {
       (failure) {
         _isUploadingPhoto = false;
         _photoUploadError = failure.message;
-        debugPrint('❌ Failed to upload photo completions: ${failure.message}');
         notifyListeners();
         return false;
       },
       (success) {
         _isUploadingPhoto = false;
-        debugPrint('✅ Photo completions uploaded successfully');
-        
         // NOTE: Backend handles status update automatically
         // When photo is uploaded, backend updates:
         // 1. OrderDetail status to DELIVERED (this trip)
@@ -656,28 +642,20 @@ class OrderDetailViewModel extends BaseViewModel {
   /// Update order status to ONGOING_DELIVERED when near delivery point (3km)
   Future<void> updateOrderStatusToOngoingDelivered() async {
     if (_orderWithDetails == null) {
-      debugPrint('❌ Cannot update status: no order details');
       return;
     }
 
     // Check current status - skip if already ONGOING_DELIVERED or DELIVERED
     final currentStatus = _orderWithDetails!.status;
-    debugPrint('📊 Current order status: $currentStatus');
-    
     if (currentStatus == 'ONGOING_DELIVERED' || currentStatus == 'DELIVERED') {
-      debugPrint('⏭️ Order already in $currentStatus status, skipping update');
       return;
     }
-
-    debugPrint('🔄 Updating order status to ONGOING_DELIVERED...');
     final result = await _updateToOngoingDeliveredUseCase(_orderWithDetails!.id);
     
     result.fold(
       (failure) {
-        debugPrint('❌ Failed to update order status to ONGOING_DELIVERED: ${failure.message}');
       },
       (success) {
-        debugPrint('✅ Successfully updated order status to ONGOING_DELIVERED');
         // Reload order details to reflect new status
         getOrderDetails(_orderWithDetails!.id);
       },
@@ -691,33 +669,22 @@ class OrderDetailViewModel extends BaseViewModel {
     final vehicleAssignmentId = getVehicleAssignmentId();
 
     if (vehicleAssignmentId == null) return;
-
-    debugPrint('🔍 Loading fuel consumption data...');
     final result = await _fuelConsumptionRepository.getByVehicleAssignmentId(vehicleAssignmentId);
     
     result.fold(
       (failure) {
-        debugPrint('⚠️ Failed to load fuel consumption data: ${failure.message}');
       },
       (response) {
-        debugPrint('📋 Fuel consumption response: $response');
-        debugPrint('   - Type: ${response.runtimeType}');
         if (response['success'] == true && response['data'] != null) {
           _fuelConsumptionId = response['data']['id'];
           // Check if final odometer reading has been uploaded
           final odometerEnd = response['data']['odometerReadingAtEnd'];
           if (odometerEnd != null) {
             _odometerReadingAtEnd = (odometerEnd is num) ? odometerEnd.toDouble() : null;
-            debugPrint('✅ Final odometer already uploaded: $_odometerReadingAtEnd km');
           } else {
             _odometerReadingAtEnd = null;
-            debugPrint('ℹ️ Final odometer not uploaded yet');
           }
-          debugPrint('✅ Fuel consumption ID loaded: $_fuelConsumptionId');
         } else {
-          debugPrint('⚠️ Response success=false or data is null');
-          debugPrint('   - success: ${response['success']}');
-          debugPrint('   - data: ${response['data']}');
         }
       },
     );
@@ -734,7 +701,6 @@ class OrderDetailViewModel extends BaseViewModel {
     }
 
     if (_fuelConsumptionId == null) {
-      debugPrint('❌ Cannot upload odometer: no fuel consumption ID');
       _odometerUploadError = 'Không tìm thấy thông tin nhiên liệu';
       notifyListeners();
       return false;
@@ -743,8 +709,6 @@ class OrderDetailViewModel extends BaseViewModel {
     _isUploadingOdometer = true;
     _odometerUploadError = '';
     notifyListeners();
-
-    debugPrint('📸 Uploading odometer end reading...');
     final result = await _fuelConsumptionRepository.updateFinalReading(
       fuelConsumptionId: _fuelConsumptionId!,
       odometerReadingAtEnd: odometerReading,
@@ -755,7 +719,6 @@ class OrderDetailViewModel extends BaseViewModel {
       (failure) {
         _isUploadingOdometer = false;
         _odometerUploadError = failure.message;
-        debugPrint('❌ Failed to upload odometer end: ${failure.message}');
         notifyListeners();
         return false;
       },
@@ -763,7 +726,6 @@ class OrderDetailViewModel extends BaseViewModel {
         _isUploadingOdometer = false;
         // Mark as uploaded to prevent showing button again
         _odometerReadingAtEnd = odometerReading;
-        debugPrint('✅ Odometer end reading uploaded successfully: $odometerReading km');
         notifyListeners();
         return true;
       },
