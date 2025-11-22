@@ -210,13 +210,25 @@ class NavigationViewModel extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      
+      // 🚨 CRITICAL FIX: Sort segments by segmentOrder before parsing
+      // Backend may return segments in wrong array order even if segmentOrder is correct
+      // Example: REROUTE journey returns [segment3, segment2, segment1] instead of [segment1, segment2, segment3]
+      final sortedSegments = List<JourneySegment>.from(segments)
+        ..sort((a, b) => a.segmentOrder.compareTo(b.segmentOrder));
+      
+      print('📍 Parsing ${sortedSegments.length} segments (sorted by segmentOrder):');
+      for (final seg in sortedSegments) {
+        print('   Segment ${seg.segmentOrder}: ${seg.startPointName} → ${seg.endPointName}');
+      }
+      
       // Clear waypoints
       List<LatLng> waypoints = [];
       List<String> waypointNames = [];
 
       bool hasValidRoute = false;
 
-      for (final segment in segments) {
+      for (final segment in sortedSegments) {
         // Translate point names to Vietnamese
         final startName = _translatePointName(segment.startPointName);
         final endName = _translatePointName(segment.endPointName);
@@ -249,12 +261,12 @@ class NavigationViewModel extends ChangeNotifier {
               // Add start point to waypoints if this is the first segment
               if (waypoints.isEmpty) {
                 waypoints.add(points.first);
-                waypointNames.add(segment.startPointName);
+                waypointNames.add(startName); // ✅ Use translated name
               }
 
               // Add end point to waypoints
               waypoints.add(points.last);
-              waypointNames.add(segment.endPointName);
+              waypointNames.add(endName); // ✅ Use translated name
 
               hasValidRoute = true;
             }
@@ -274,10 +286,10 @@ class NavigationViewModel extends ChangeNotifier {
               waypoints.add(
                 LatLng(segment.startLatitude!, segment.startLongitude!),
               );
-              waypointNames.add(segment.startPointName);
+              waypointNames.add(startName); // ✅ Use translated name
             }
             waypoints.add(LatLng(segment.endLatitude!, segment.endLongitude!));
-            waypointNames.add(segment.endPointName);
+            waypointNames.add(endName); // ✅ Use translated name
 
             hasValidRoute = true;
           } else {
@@ -300,10 +312,10 @@ class NavigationViewModel extends ChangeNotifier {
               waypoints.add(
                 LatLng(segment.startLatitude!, segment.startLongitude!),
               );
-              waypointNames.add(segment.startPointName);
+              waypointNames.add(startName); // ✅ Use translated name
             }
             waypoints.add(LatLng(segment.endLatitude!, segment.endLongitude!));
-            waypointNames.add(segment.endPointName);
+            waypointNames.add(endName); // ✅ Use translated name
 
             hasValidRoute = true;
           }

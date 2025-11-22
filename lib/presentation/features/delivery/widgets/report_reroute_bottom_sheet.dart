@@ -232,12 +232,10 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
         if (resolvedIssue != null && mounted) {
           Navigator.of(context).pop(); // Close waiting dialog
           
-          // Trigger refresh in navigation screen to fetch new route
-          final notificationService = getIt<NotificationService>();
-          notificationService.triggerNavigationScreenRefresh();
-          
-          // Show success dialog with instruction to check new route
-          await _showRerouteResolvedDialog();
+          // ✅ FIX: Don't show duplicate dialog here
+          // NotificationService will emit stream event and NavigationScreen will show dialog
+          // This prevents dialog stacking issue where user has to dismiss 2 dialogs
+          print('✅ Reroute resolved, NotificationService will handle dialog');
         }
       }
     } catch (e) {
@@ -256,64 +254,11 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
     }
   }
   
-  /// Show reroute resolved success dialog
+  /// ⚠️ DEPRECATED: Removed to fix dialog stacking issue
+  /// NotificationService now handles the resolved dialog
+  @Deprecated('Use NotificationService stream instead')
   Future<void> _showRerouteResolvedDialog() async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.all(24),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.route, color: Colors.green.shade600, size: 48),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '🛣️ Lộ trình mới đã sẵn sàng',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Nhân viên đã tạo lộ trình mới để tránh khu vực gặp sự cố. '
-              'Vui lòng kiểm tra và tiếp tục theo lộ trình mới.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, height: 1.5),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade600,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Xem lộ trình',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    // Dialog removed - NotificationService will show it via stream
   }
 
   String _getCurrentSegmentDisplay() {

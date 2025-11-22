@@ -83,9 +83,9 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   // Biến để theo dõi chế độ 3D
   bool _is3DMode = true;
   
-  // Camera throttling for smooth performance (optimized for 60fps device)
+  // Camera throttling for ultra-fast performance (moveCamera)
   DateTime? _lastCameraUpdate;
-  static const _cameraThrottleMs = 66; // Max ~15 FPS for smooth camera (optimal balance)
+  static const _cameraThrottleMs = 16; // 60 FPS - fastest possible with moveCamera
 
   // Pending seal replacements
   List<Issue> _pendingSealReplacements = [];
@@ -591,59 +591,98 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       print('   Order ID: $orderId');
       print('   Is on navigation screen: $isOnNavigationScreen');
       
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: const EdgeInsets.all(24),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
+      // 🚨 CRITICAL FIX: Fetch new route FIRST, then show success dialog
+      // Pattern 1: Info-only notification (like damage resolved)
+      // Flow: Fetch order → Re-render map → Auto resume → Show success dialog
+      print('🔄 Fetching new route and resuming BEFORE showing dialog...');
+      
+      try {
+        // Fetch new route and auto resume
+        await _fetchNewRouteAndAutoResume();
+        
+        // Only show dialog AFTER successfully fetched and resumed
+        if (!mounted) return;
+        
+        // 🚨 Try to pop waiting dialog if exists
+        try {
+          Navigator.of(context, rootNavigator: false).pop();
+          await Future.delayed(const Duration(milliseconds: 100));
+          print('   ✅ Dismissed waiting dialog');
+        } catch (e) {
+          print('   ℹ️ No waiting dialog to dismiss');
+        }
+        
+        // Show success dialog - already resumed!
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            contentPadding: const EdgeInsets.all(24),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.check_circle, color: Colors.green.shade600, size: 48),
                 ),
-                child: Icon(Icons.route, color: Colors.green.shade600, size: 48),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '🛣️ Lộ trình mới đã sẵn sàng',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Nhân viên đã tạo lộ trình mới để tránh khu vực gặp sự cố. Vui lòng kiểm tra và tiếp tục theo lộ trình mới.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, height: 1.5),
+                const SizedBox(height: 20),
+                const Text(
+                  'Đã cập nhật lộ trình mới',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Lộ trình mới đã được tải và hệ thống đã tự động tiếp tục.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, height: 1.5),
+                ),
+              ],
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Just dismiss
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Đóng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
               ),
             ],
           ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  // Fetch new route and resume
-                  Future.delayed(const Duration(milliseconds: 300), () async {
-                    await _fetchNewRouteAndResume();
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        );
+      } catch (e) {
+        print('❌ Error in reroute resolved flow: $e');
+        // Show error dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Lỗi'),
+              content: Text('Không thể tải lộ trình mới: $e'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Đóng'),
                 ),
-                child: const Text('Xem lộ trình', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
+              ],
             ),
-          ],
-        ),
-      ).whenComplete(() => _isRerouteResolvedDialogShowing = false);
+          );
+        }
+      } finally {
+        _isRerouteResolvedDialogShowing = false;
+      }
     });
 
     // Check if viewModel is already simulating (returning to active simulation)
@@ -1382,11 +1421,25 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     }
   }
 
-  /// Fetch new route and resume simulation after reroute
+  /// Fetch new route and AUTO resume simulation after reroute
   /// Staff has created new journey, fetch latest active journey and render on map
-  Future<void> _fetchNewRouteAndResume() async {
+  /// CRITICAL: Maintain current position and segment, don't reset to start/end
+  /// Pattern: Simple like seal replacement - fetch → restore position → auto resume
+  Future<void> _fetchNewRouteAndAutoResume() async {
     try {
       print('🔄 Fetching new rerouted journey...');
+      
+      // 🎯 CRITICAL: Save current state BEFORE fetching new route
+      final wasSimulating = _isSimulating;
+      final previousSegmentIndex = _viewModel.currentSegmentIndex;
+      final previousLocation = _viewModel.currentLocation;
+      final previousSpeed = _viewModel.currentSpeed;
+      
+      print('   📍 Current state before fetch:');
+      print('      Was simulating: $wasSimulating');
+      print('      Segment index: $previousSegmentIndex');
+      print('      Location: ${previousLocation?.latitude}, ${previousLocation?.longitude}');
+      print('      Speed: $previousSpeed km/h');
       
       // Show loading indicator
       if (mounted) {
@@ -1434,6 +1487,48 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
       }
       
       print('✅ New route rendered successfully');
+      print('   📍 New route segments: ${_viewModel.routeSegments.length}');
+      
+      // 🎯 CRITICAL: Restore previous position and segment
+      // Don't reset to start/end - maintain current location like seal replacement flow
+      if (previousLocation != null && previousSegmentIndex >= 0) {
+        // Keep current segment index if still valid
+        if (previousSegmentIndex < _viewModel.routeSegments.length) {
+          _viewModel.currentSegmentIndex = previousSegmentIndex;
+          print('   ✅ Maintained segment index: $previousSegmentIndex');
+        } else {
+          // If previous segment no longer exists (route changed significantly),
+          // stay at first segment instead of jumping to end
+          _viewModel.currentSegmentIndex = 0;
+          print('   ⚠️ Previous segment no longer exists, staying at segment 0');
+        }
+        
+        // 🚨 CRITICAL FIX: Use restoreSimulationPosition() instead of direct assignment
+        // This ensures _currentPointIndices is properly set for the new route
+        // Direct assignment causes bug where old _currentPointIndices makes simulation jump to wrong segment
+        _viewModel.restoreSimulationPosition(
+          segmentIndex: _viewModel.currentSegmentIndex,
+          latitude: previousLocation.latitude,
+          longitude: previousLocation.longitude,
+          bearing: _viewModel.currentBearing,
+        );
+        _viewModel.currentSpeed = previousSpeed;
+        
+        print('   ✅ Restored position using restoreSimulationPosition()');
+        print('   ✅ Segment: ${_viewModel.currentSegmentIndex}');
+        print('   ✅ Location: ${previousLocation.latitude}, ${previousLocation.longitude}');
+        
+        // 🚨 CRITICAL: Save restored state immediately so _startSimulation() won't overwrite
+        // Otherwise NavigationStateService has old position from previous session
+        _globalLocationManager.sendLocationUpdate(
+          previousLocation.latitude,
+          previousLocation.longitude,
+          bearing: _viewModel.currentBearing,
+          speed: previousSpeed,
+          segmentIndex: _viewModel.currentSegmentIndex,
+        );
+        print('   ✅ Saved restored state to prevent overwrite');
+      }
       
       // Update UI
       if (mounted) {
@@ -1444,21 +1539,34 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Đã cập nhật lộ trình mới'),
+            content: Text('Đã cập nhật lộ trình mới'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
         );
         
-        // Auto-resume simulation if was running
-        if (_isSimulating) {
-          print('🔄 Auto-resuming simulation with new route...');
+        // 🚀 AUTO-RESUME simulation if was running
+        if (wasSimulating) {
+          print('🔄 Auto-resuming simulation with new route from current position...');
+          print('   Previous segment: $previousSegmentIndex');
+          print('   Current segment: ${_viewModel.currentSegmentIndex}');
           
-          // Wait a bit for map to render
-          await Future.delayed(const Duration(milliseconds: 500));
+          // Wait for UI to update
+          await Future.delayed(const Duration(milliseconds: 300));
           
-          // Resume simulation
-          _checkAndResumeAfterAction();
+          // Simple pattern like seal replacement: just start simulation!
+          // Position and segment already restored above
+          if (_isPaused) {
+            print('   Simulation was paused, resuming...');
+            _resumeSimulation();
+          } else if (!_viewModel.isSimulating) {
+            print('   Simulation not running, starting with restored position...');
+            // 🚨 CRITICAL: Pass shouldRestore: true to use saved state (position we just saved above)
+            // Without this, _startSimulation() uses first point of new route!
+            _startSimulation(shouldRestore: true);
+          } else {
+            print('   Simulation already running, no action needed');
+          }
         }
       }
     } catch (e) {
@@ -4119,11 +4227,12 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
   /// - Marker counter-rotate để TĨNH (luôn hướng Bắc ↑)
   /// - Route line LUÔN THẲNG ĐỨNG (aligned với marker)
   /// - Camera offset theo hướng di chuyển
-  /// - Throttles to 15 FPS for smooth performance
+  /// - Throttles to 60 FPS for ultra-smooth performance
   Future<void> _setCameraToNavigationMode(LatLng position) async {
     if (!_isMapOperationSafe) return;
     
-    // THROTTLE: Update camera every 66ms (max ~15 FPS) for smooth UX
+    // THROTTLE: Update camera every 16ms (60 FPS) for ultra-fast response
+    // moveCamera is instant, so we can update at maximum frequency
     final now = DateTime.now();
     if (_lastCameraUpdate != null) {
       final elapsed = now.difference(_lastCameraUpdate!).inMilliseconds;
@@ -4133,8 +4242,8 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
     }
     _lastCameraUpdate = now;
     
-    // Faster animation for responsive, smooth tracking
-    final duration = const Duration(milliseconds: 150);
+    // Instant camera movement for absolute fastest response
+    // moveCamera provides immediate positioning without any animation delay
     
     // NORTH-UP ROTATING OFFSET:
     // - Map xoay theo bearing → route line thẳng đứng
@@ -4162,7 +4271,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
 
     if (_is3DMode) {
       // North-Up Rotating: Map xoay, route line thẳng đứng
-      _mapController!.animateCamera(
+      _mapController!.moveCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target: cameraTarget,
@@ -4171,12 +4280,11 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
             tilt: 55.0,
           ),
         ),
-        duration: duration,
       ).catchError((e) {
       });
     } else {
       // 2D Overview Mode
-      _mapController!.animateCamera(
+      _mapController!.moveCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target: position,
@@ -4185,7 +4293,6 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
             tilt: 0.0,
           ),
         ),
-        duration: duration,
       ).catchError((e) {
       });
     }
@@ -4354,7 +4461,7 @@ class _NavigationScreenState extends State<NavigationScreen> with WidgetsBinding
                     // Remove guard condition that was preventing callbacks when map style failed
                     Builder(
                       builder: (context) {
-                        print('🗺️ [MapWidget] Building VietmapGL widget (style loading: $_isLoadingMapStyle)');
+                        // print('🗺️ [MapWidget] Building VietmapGL widget (style loading: $_isLoadingMapStyle)');
                         return SizedBox.expand(
                           child: VietmapGL(
                             styleString: _getMapStyleString(),
