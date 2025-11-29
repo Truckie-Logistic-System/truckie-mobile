@@ -80,7 +80,7 @@ class OrderInfoSection extends StatelessWidget {
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
-                    'Loại hàng: ${order.categoryName}',
+                    'Loại hàng: ${order.categoryDescription ?? order.categoryName}',
                     style: AppTextStyles.bodyMedium,
                     overflow: TextOverflow.ellipsis,
                   ),

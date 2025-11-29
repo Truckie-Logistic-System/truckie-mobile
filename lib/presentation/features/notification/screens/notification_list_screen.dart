@@ -43,7 +43,7 @@ class _NotificationListScreenState extends State<NotificationListScreen> {
       (notification) {
         debugPrint('🔔 [NotificationListScreen] New notification received via WebSocket');
         // Silent refresh - no loading spinner, just update the list
-        viewModel.refresh();
+        viewModel.refresh(silent: true);
       },
       onError: (error) {
         debugPrint('❌ [NotificationListScreen] WebSocket error: $error');

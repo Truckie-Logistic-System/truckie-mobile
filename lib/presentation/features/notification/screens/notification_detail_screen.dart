@@ -273,10 +273,11 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                           const Divider(),
                           const SizedBox(height: 12),
 
-                          if (notification!.relatedOrderId != null)
+                          // Order code from metadata
+                          if (notification!.metadata != null && notification!.metadata!['orderCode'] != null)
                             _buildInfoRow(
                               'Mã đơn hàng',
-                              notification!.relatedOrderId!,
+                              notification!.metadata!['orderCode'].toString(),
                               Icons.shopping_bag_outlined,
                             ),
 
@@ -295,12 +296,65 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                               Icons.warning_amber_outlined,
                             ),
 
-                          if (notification!.relatedVehicleAssignmentId != null)
+                          // Tracking code from metadata
+                          if (notification!.metadata != null && notification!.metadata!['vehicleAssignmentTrackingCode'] != null)
                             _buildInfoRow(
-                              'Mã chuyến xe',
-                              notification!.relatedVehicleAssignmentId!,
+                              'Mã vận chuyển',
+                              notification!.metadata!['vehicleAssignmentTrackingCode'].toString(),
                               Icons.local_shipping_outlined,
                             ),
+
+                          if (notification!.metadata != null && notification!.metadata!['vehicleType'] != null)
+                            _buildInfoRow(
+                              'Loại xe',
+                              notification!.metadata!['vehicleType'].toString(),
+                              Icons.local_shipping_outlined,
+                            ),
+                        ],
+                      ),
+                    ),
+
+                  // Package information from metadata
+                  if (_hasPackageMetadata())
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Thông tin kiện hàng${_getCategoryDescription()}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(),
+                          const SizedBox(height: 12),
+                          ..._buildPackageMetadataRows(),
                         ],
                       ),
                     ),
@@ -346,6 +400,230 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
             notification!.relatedOrderDetailIds!.isNotEmpty) ||
         notification!.relatedIssueId != null ||
         notification!.relatedVehicleAssignmentId != null;
+  }
+
+  bool _hasPackageMetadata() {
+    final metadata = notification?.metadata;
+    if (metadata == null) return false;
+    return metadata.containsKey('packageCount') ||
+        metadata.containsKey('packages') ||
+        metadata.containsKey('pickupDate') ||
+        metadata.containsKey('vehicleType');
+  }
+
+  String _getCategoryDescription() {
+    final metadata = notification?.metadata;
+    if (metadata == null) return '';
+    final categoryDesc = metadata['categoryDescription'];
+    if (categoryDesc != null && categoryDesc.toString().isNotEmpty) {
+      return ' ($categoryDesc)';
+    }
+    return '';
+  }
+
+  List<Widget> _buildPackageMetadataRows() {
+    final metadata = notification?.metadata;
+    if (metadata == null) return [];
+
+    final List<Widget> rows = [];
+
+    // Pickup date
+    if (metadata['pickupDate'] != null) {
+      rows.add(_buildInfoRow(
+        'Ngày lấy hàng',
+        metadata['pickupDate'].toString(),
+        Icons.calendar_today_outlined,
+      ));
+    }
+
+    // Vehicle type
+    if (metadata['vehicleType'] != null) {
+      rows.add(_buildInfoRow(
+        'Loại xe',
+        metadata['vehicleType'].toString(),
+        Icons.local_shipping_outlined,
+      ));
+    }
+
+    // Package details cards
+    if (metadata['packages'] != null) {
+      final packages = metadata['packages'] as List<dynamic>;
+      rows.add(const SizedBox(height: 16));
+      
+      // Add total weight summary
+      if (metadata['totalWeight'] != null) {
+        rows.add(
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2, color: Colors.blue.shade700, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Tổng khối lượng: ${metadata['totalWeight']}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        rows.add(const SizedBox(height: 12));
+      }
+      
+      rows.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Chi tiết kiện hàng:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildPackageCards(packages),
+          ],
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  Widget _buildPackageCards(List<dynamic> packages) {
+    return Column(
+      children: packages.map((package) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.shade100,
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with tracking code
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        Icons.inventory_2_outlined,
+                        color: Colors.blue.shade700,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        package['trackingCode']?.toString() ?? 'N/A',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                
+                // Description and weight
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Description
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Mô tả',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            package['description']?.toString() ?? 'N/A',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Weight
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Khối lượng',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Text(
+                              package['weight']?.toString() ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   Widget _buildInfoRow(String label, String value, IconData icon) {

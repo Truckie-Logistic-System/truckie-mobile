@@ -222,6 +222,7 @@ class VehicleModel extends Vehicle {
     required super.model,
     required super.licensePlateNumber,
     required super.vehicleType,
+    super.vehicleTypeDescription, // Optional vehicle type description
   });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
@@ -231,6 +232,7 @@ class VehicleModel extends Vehicle {
       model: json['model'] ?? '',
       licensePlateNumber: json['licensePlateNumber'] ?? '',
       vehicleType: json['vehicleType'] ?? '',
+      vehicleTypeDescription: json['vehicleTypeDescription'], // Extract from backend response
     );
   }
 

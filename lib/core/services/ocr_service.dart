@@ -1,21 +1,21 @@
 import 'dart:io';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart' as mlkit;
 
 class OCRService {
   static final OCRService _instance = OCRService._internal();
   factory OCRService() => _instance;
   OCRService._internal();
 
-  TextRecognizer? _latinOptimizedRecognizer;  // Google ML Kit tối ưu cho Latin script
-  TextRecognizer? _defaultRecognizer;         // Google ML Kit mặc định (fallback)
+  mlkit.TextRecognizer? _latinOptimizedRecognizer;  // Google ML Kit tối ưu cho Latin script
+  mlkit.TextRecognizer? _defaultRecognizer;         // Google ML Kit mặc định (fallback)
 
   /// Khởi tạo OCR service với dual recognizer strategy
   void initialize() {
     // Khởi tạo Latin-optimized recognizer (tối ưu cho odometer)
-    _latinOptimizedRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    _latinOptimizedRecognizer = mlkit.TextRecognizer(script: mlkit.TextRecognitionScript.latin);
 
     // Khởi tạo default recognizer (fallback đảm bảo hoạt động)
-    _defaultRecognizer = TextRecognizer();
+    _defaultRecognizer = mlkit.TextRecognizer();
   }
 
   /// Trích xuất số từ ảnh odometer
@@ -53,9 +53,9 @@ class OCRService {
   Future<String?> _tryLatinOptimizedOCR(File imageFile) async {
     try {
       // Khởi tạo nếu chưa có
-      _latinOptimizedRecognizer ??= TextRecognizer(script: TextRecognitionScript.latin);
+      _latinOptimizedRecognizer ??= mlkit.TextRecognizer(script: mlkit.TextRecognitionScript.latin);
       
-      final inputImage = InputImage.fromFile(imageFile);
+      final inputImage = mlkit.InputImage.fromFile(imageFile);
       final recognizedText = await _latinOptimizedRecognizer!.processImage(inputImage);
 
       for (var block in recognizedText.blocks) {
@@ -85,9 +85,9 @@ class OCRService {
   Future<String?> _tryDefaultOCR(File imageFile) async {
     try {
       // Khởi tạo nếu chưa có
-      _defaultRecognizer ??= TextRecognizer();
+      _defaultRecognizer ??= mlkit.TextRecognizer();
       
-      final inputImage = InputImage.fromFile(imageFile);
+      final inputImage = mlkit.InputImage.fromFile(imageFile);
       final recognizedText = await _defaultRecognizer!.processImage(inputImage);
 
       for (var block in recognizedText.blocks) {
@@ -115,7 +115,7 @@ class OCRService {
   }
 
   /// Trích xuất tất cả các số từ text với context
-  List<String> _extractNumbersWithContext(RecognizedText recognizedText) {
+  List<String> _extractNumbersWithContext(mlkit.RecognizedText recognizedText) {
     Set<String> numbers = {};
     Map<String, int> numberPriority = {}; // Lưu độ ưu tiên của mỗi số
     

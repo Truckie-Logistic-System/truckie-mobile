@@ -21,6 +21,7 @@ class OrderWithDetails extends Equatable {
   final String senderPhone;
   final String senderCompanyName;
   final String categoryName;
+  final String? categoryDescription; // Category description from backend
   final List<OrderDetail> orderDetails;
   final List<VehicleAssignment> vehicleAssignments; // Moved from orderDetail level
   final OrderRejectionIssue? orderRejectionIssue; // ORDER_REJECTION issue info if exists
@@ -42,6 +43,7 @@ class OrderWithDetails extends Equatable {
     required this.senderPhone,
     required this.senderCompanyName,
     required this.categoryName,
+    this.categoryDescription, // Optional category description
     required this.orderDetails,
     this.vehicleAssignments = const [], // Default empty list
     this.orderRejectionIssue, // Optional
@@ -65,6 +67,7 @@ class OrderWithDetails extends Equatable {
     senderPhone,
     senderCompanyName,
     categoryName,
+    categoryDescription,
     orderDetails,
     vehicleAssignments,
     orderRejectionIssue,

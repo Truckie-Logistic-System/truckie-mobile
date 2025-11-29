@@ -132,6 +132,7 @@ class Vehicle extends Equatable {
   final String model;
   final String licensePlateNumber;
   final String vehicleType;
+  final String? vehicleTypeDescription; // Vehicle type description from backend
 
   const Vehicle({
     this.id,
@@ -139,6 +140,7 @@ class Vehicle extends Equatable {
     required this.model,
     required this.licensePlateNumber,
     required this.vehicleType,
+    this.vehicleTypeDescription, // Optional vehicle type description
   });
 
   @override
@@ -148,6 +150,7 @@ class Vehicle extends Equatable {
     model,
     licensePlateNumber,
     vehicleType,
+    vehicleTypeDescription,
   ];
 }
 

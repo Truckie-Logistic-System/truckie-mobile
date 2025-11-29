@@ -147,7 +147,7 @@ class OrderDetailsSection extends StatelessWidget {
               _buildInfoRow(
                 icon: Icons.car_repair,
                 label: 'Loại xe:',
-                value: vehicle.vehicleType,
+                value: vehicle.vehicleTypeDescription ?? vehicle.vehicleType,
               ),
               SizedBox(height: 8.h),
               _buildInfoRow(

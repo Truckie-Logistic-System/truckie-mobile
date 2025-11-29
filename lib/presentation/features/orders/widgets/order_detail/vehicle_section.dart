@@ -101,7 +101,7 @@ class VehicleSection extends StatelessWidget {
                     SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
-                        'Loại xe: ${vehicle.vehicleType}',
+                        'Loại xe: ${vehicle.vehicleTypeDescription ?? vehicle.vehicleType}',
                         style: AppTextStyles.bodyMedium,
                         overflow: TextOverflow.ellipsis,
                       ),

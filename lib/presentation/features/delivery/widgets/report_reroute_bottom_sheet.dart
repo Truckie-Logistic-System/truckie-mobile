@@ -90,13 +90,13 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
       if (source == null) return;
 
       // Pick image(s)
-      final List<XFile> pickedFiles = await _imagePicker.pickMultiImage(
+      final List<XFile>? pickedFiles = await _imagePicker.pickMultiImage(
         imageQuality: 85,
         maxWidth: 1920,
         maxHeight: 1080,
       );
 
-      if (pickedFiles.isNotEmpty) {
+      if (pickedFiles != null && pickedFiles.isNotEmpty) {
         setState(() {
           _selectedImages.addAll(pickedFiles.map((xFile) => File(xFile.path)));
           // Limit to 5 images max

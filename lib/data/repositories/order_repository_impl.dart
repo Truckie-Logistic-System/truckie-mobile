@@ -51,6 +51,26 @@ class OrderRepositoryImpl implements OrderRepository {
           ),
         );
       }
+    } on DioException catch (e) {
+      // Khi Dio ném lỗi 400 với message "Not found" (không có đơn hàng),
+      // coi đây là trường hợp hợp lệ và trả về danh sách rỗng.
+      final statusCode = e.response?.statusCode;
+      final message = e.response?.data is Map
+          ? (e.response!.data['message']?.toString() ?? '')
+          : (e.message ?? '');
+
+      if (statusCode == 400 && message.contains('Not found')) {
+        return const Right([]);
+      }
+
+      return Left(
+        ServerFailure(
+          message: message.isNotEmpty
+              ? message
+              : 'Lỗi kết nối đến máy chủ (${e.response?.statusCode ?? ''})',
+          statusCode: statusCode,
+        ),
+      );
     } on ServerException catch (e) {
       // Check if this is a "Not found" exception for no orders
       if (e.statusCode == 400 && e.message.contains('Not found')) {

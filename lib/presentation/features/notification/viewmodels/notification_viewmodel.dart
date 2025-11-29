@@ -52,18 +52,23 @@ class NotificationViewModel extends ChangeNotifier {
       _notifications.where((n) => n.notificationType.isHighPriority).toList();
 
   /// Initialize the viewmodel
-  Future<void> initialize() async {
-    _status = NotificationStatus.loading;
+  /// Set [showLoading] to false to skip showing loading animation on initial load
+  Future<void> initialize({bool showLoading = false}) async {
+    if (showLoading) {
+      _status = NotificationStatus.loading;
+    }
     _currentPage = 0;
     _hasMore = true;
-    notifyListeners();
+    if (showLoading) {
+      notifyListeners();
+    }
 
-    await _loadNotifications(refresh: true);
+    await _loadNotifications(refresh: true, silent: !showLoading);
     await _loadNotificationStats();
   }
 
   /// Load notifications with pagination
-  Future<void> _loadNotifications({bool refresh = false}) async {
+  Future<void> _loadNotifications({bool refresh = false, bool silent = false}) async {
     if (refresh) {
       _currentPage = 0;
       _notifications.clear();
@@ -84,7 +89,9 @@ class NotificationViewModel extends ChangeNotifier {
     result.fold(
       (failure) {
         _errorMessage = failure.message;
-        _status = NotificationStatus.error;
+        if (!silent) {
+          _status = NotificationStatus.error;
+        }
         notifyListeners();
       },
       (newNotifications) {
@@ -96,6 +103,7 @@ class NotificationViewModel extends ChangeNotifier {
 
         _hasMore = newNotifications.length == _pageSize;
         _currentPage++;
+        // Always update status to loaded, silent only controls skipping loading state
         _status = NotificationStatus.loaded;
         _errorMessage = null;
         notifyListeners();
@@ -133,8 +141,13 @@ class NotificationViewModel extends ChangeNotifier {
   }
 
   /// Refresh notifications
-  Future<void> refresh() async {
-    await _loadNotifications(refresh: true);
+  Future<void> refresh({bool silent = false}) async {
+    if (!silent) {
+      _status = NotificationStatus.loading;
+      notifyListeners();
+    }
+    
+    await _loadNotifications(refresh: true, silent: silent);
     await _loadNotificationStats();
   }
 

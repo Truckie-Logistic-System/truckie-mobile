@@ -21,6 +21,7 @@ class OrderWithDetailsModel extends OrderWithDetails {
     required super.senderPhone,
     required super.senderCompanyName,
     required super.categoryName,
+    super.categoryDescription, // Optional category description
     required List<OrderDetailModel> super.orderDetails,
     super.vehicleAssignments = const [],
     super.orderRejectionIssue,
@@ -67,6 +68,7 @@ class OrderWithDetailsModel extends OrderWithDetails {
       senderPhone: json['senderPhone'] ?? '',
       senderCompanyName: json['senderCompanyName'] ?? '',
       categoryName: json['categoryName'] ?? '',
+      categoryDescription: json['categoryDescription'] ?? json['category']?['description'], // Handle both flat and nested structures
       orderDetails:
           (json['orderDetails'] as List<dynamic>?)
               ?.map((e) => OrderDetailModel.fromJson(e))

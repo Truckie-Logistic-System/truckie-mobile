@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' as intl;
 
 import '../theme/app_colors.dart';
 
@@ -40,7 +40,7 @@ class _SpinnerDatePickerState extends State<SpinnerDatePicker> {
     // Tạo danh sách tháng
     _months = List.generate(12, (index) {
       final month = index + 1;
-      return DateFormat('MMMM').format(DateTime(2022, month));
+      return intl.DateFormat('MMMM').format(DateTime(2022, month));
     });
 
     // Tạo danh sách năm

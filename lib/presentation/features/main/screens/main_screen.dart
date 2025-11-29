@@ -9,6 +9,7 @@ import '../../home/screens/home_screen.dart';
 import '../../orders/screens/orders_screen.dart';
 import '../../notification/viewmodels/notification_viewmodel.dart';
 import '../../notification/widgets/notification_badge.dart';
+import '../../notification/widgets/animated_bell_icon.dart';
 import '../../notification/screens/notification_list_screen.dart';
 import '../../../theme/app_colors.dart';
 import '../../../../app/app_routes.dart';
@@ -204,11 +205,8 @@ class _MainScreenState extends State<MainScreen> {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Icon(
-                      Icons.notifications,
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
+                    AnimatedBellIcon(
+                      isSelected: isSelected,
                     ),
                     if (unreadCount > 0)
                       Positioned(
