@@ -261,7 +261,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
                   height: 80,
                   width: 20,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.only(
                       topRight: Radius.circular(20),
                       bottomRight: Radius.circular(20),
@@ -283,7 +283,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
                   height: 80,
                   width: 20,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(20),
                       bottomLeft: Radius.circular(20),
@@ -318,7 +318,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
             // Loading indicator
             if (!_isMapReady)
               Container(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 child: const Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
@@ -327,7 +327,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
             // Error message
             if (_hasError)
               Container(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -795,7 +795,7 @@ class _RouteDetailsScreenState extends State<RouteDetailsScreen> {
                         border: Border.all(color: Colors.white, width: 3),
                         boxShadow: [
                           BoxShadow(
-                            color: issueColor.withOpacity(0.5),
+                            color: issueColor.withValues(alpha: 0.5),
                             blurRadius: 8,
                             spreadRadius: 2,
                           ),

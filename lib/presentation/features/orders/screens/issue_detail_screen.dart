@@ -71,7 +71,7 @@ class IssueDetailScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: _getIssueCategoryColor(issue.issueCategory)
-                        .withOpacity(0.1),
+                        .withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(

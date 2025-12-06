@@ -319,7 +319,7 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: AppColors.success.withOpacity(0.3),
+            color: AppColors.success.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -388,7 +388,7 @@ class _DeliveryConfirmationSectionState extends State<DeliveryConfirmationSectio
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

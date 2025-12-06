@@ -35,7 +35,7 @@ class _StaticVehicleMarkerPainter extends CustomPainter {
 
     // 1. Draw shadow for depth
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3)
+      ..color = Colors.black.withValues(alpha: 0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     canvas.drawCircle(
       Offset(center.dx + 1, center.dy + 2),

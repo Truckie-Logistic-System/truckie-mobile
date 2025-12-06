@@ -57,7 +57,7 @@ class BottomPanelWidget extends StatelessWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Row(
@@ -113,7 +113,7 @@ class BottomPanelWidget extends StatelessWidget {
           margin: const EdgeInsets.only(left: 4),
           width: 2,
           height: 30,
-          color: Colors.grey.withOpacity(0.5),
+          color: Colors.grey.withValues(alpha: 0.5),
         ),
         Row(
           children: [

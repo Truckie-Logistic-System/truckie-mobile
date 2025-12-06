@@ -13,6 +13,9 @@ class ApiConstants {
   /// WebSocket endpoint for vehicle tracking notifications
   static const String wsVehicleTrackingEndpoint = '/vehicle-tracking';
 
+  /// WebSocket endpoint for chat messaging (uses same as vehicle tracking for mobile JWT support)
+  static const String wsChatEndpoint = '/vehicle-tracking';
+
   // ============================================================================
   // AUTHENTICATION ENDPOINTS
   // ============================================================================

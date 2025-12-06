@@ -3,10 +3,21 @@ import 'package:flutter/material.dart';
 import '../../../../../core/utils/responsive_extensions.dart';
 import '../../../../../presentation/theme/app_colors.dart';
 import '../../../../../presentation/theme/app_text_styles.dart';
+import '../../../../../domain/entities/order.dart';
+import '../../../../../app/app_routes.dart';
 
 /// Widget hiển thị các đơn hàng gần đây trên màn hình home
 class RecentOrdersCard extends StatelessWidget {
-  const RecentOrdersCard({super.key});
+  final List<Order> orders;
+  final bool isLoading;
+  final VoidCallback? onViewAll;
+
+  const RecentOrdersCard({
+    super.key,
+    required this.orders,
+    this.isLoading = false,
+    this.onViewAll,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +35,19 @@ class RecentOrdersCard extends StatelessWidget {
                 Text('Đơn hàng gần đây', style: AppTextStyles.titleMedium),
                 TextButton(
                   onPressed: () {
-                    // Navigate to orders screen using bottom navigation
+                    // Ưu tiên callback từ bên ngoài (HomeScreen) để điều hướng theo cấu trúc tab
+                    if (onViewAll != null) {
+                      onViewAll!();
+                    } else {
+                      // Fallback: điều hướng tới MainScreen với tab Đơn hàng, giữ nguyên bottom navigation
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.main,
+                        arguments: const {
+                          'initialTab': 1, // 0 = Home, 1 = Orders
+                        },
+                      );
+                    }
                   },
                   child: Text(
                     'Xem tất cả',
@@ -36,19 +59,12 @@ class RecentOrdersCard extends StatelessWidget {
               ],
             ),
             SizedBox(height: 8.h),
-            _buildOrderItem(
-              orderId: 'DH001',
-              status: 'Hoàn thành',
-              address: '123 Nguyễn Văn Linh, Quận 7, TP.HCM',
-              time: '10:30',
-            ),
-            Divider(height: 16.h),
-            _buildOrderItem(
-              orderId: 'DH002',
-              status: 'Hoàn thành',
-              address: '456 Lê Văn Lương, Quận 7, TP.HCM',
-              time: '11:45',
-            ),
+            if (isLoading)
+              _buildLoadingState()
+            else if (orders.isEmpty)
+              _buildEmptyState()
+            else
+              ...orders.map((order) => _buildOrderItem(order: order, context: context)),
           ],
         ),
       ),
@@ -56,87 +72,250 @@ class RecentOrdersCard extends StatelessWidget {
   }
 
   /// Widget hiển thị một mục đơn hàng
-  Widget _buildOrderItem({
-    required String orderId,
-    required String status,
-    required String address,
-    required String time,
-  }) {
-    Color statusColor;
-    switch (status) {
-      case 'Hoàn thành':
-        statusColor = AppColors.success;
-        break;
-      case 'Đang giao':
-        statusColor = AppColors.inProgress;
-        break;
-      case 'Chờ lấy hàng':
-        statusColor = AppColors.warning;
-        break;
-      case 'Đã hủy':
-        statusColor = AppColors.error;
-        break;
-      default:
-        statusColor = AppColors.textSecondary;
-    }
+  Widget _buildOrderItem({required Order order, required BuildContext context}) {
+    final status = _getOrderStatusText(order.status);
+    final statusColor = _getOrderStatusColor(order.status);
+    final time = _formatTime(order.createdAt);
+    final address = _getOrderAddress(order);
 
-    return Row(
+    return Column(
       children: [
-        Container(
-          padding: EdgeInsets.all(8.r),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.local_shipping, color: statusColor, size: 24.r),
-        ),
-        SizedBox(width: 16.w),
-        Expanded(
-          child: Column(
+        InkWell(
+          onTap: () {
+            // Navigate to order detail screen
+            Navigator.pushNamed(
+              context,
+              AppRoutes.orderDetail,
+              arguments: order.id,
+            );
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Đơn hàng #$orderId', style: AppTextStyles.titleSmall),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 8.w,
-                      vertical: 4.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      status,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
+              Container(
+                padding: EdgeInsets.all(8.r),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.local_shipping, color: statusColor, size: 24.r),
               ),
-              SizedBox(height: 4.h),
-              Text(address, style: AppTextStyles.bodyMedium),
-              SizedBox(height: 4.h),
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 14.r,
-                    color: AppColors.textSecondary,
-                  ),
-                  SizedBox(width: 4.w),
-                  Text(time, style: AppTextStyles.bodySmall),
-                ],
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            'Đơn hàng #${order.orderCode}',
+                            style: AppTextStyles.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Flexible(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6.w,
+                              vertical: 3.h,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      address,
+                      style: AppTextStyles.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 12.r,
+                          color: AppColors.textSecondary,
+                        ),
+                        SizedBox(width: 4.w),
+                        Expanded(
+                          child: Text(
+                            time,
+                            style: AppTextStyles.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+        if (orders.last != order) SizedBox(height: 12.h),
+        if (orders.last != order) Divider(height: 1.h),
+        if (orders.last != order) SizedBox(height: 12.h),
       ],
     );
+  }
+
+  Widget _buildLoadingState() {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40.r,
+                  height: 40.r,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 120.w,
+                        height: 16.h,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Container(
+                        width: double.infinity,
+                        height: 14.h,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Container(
+                        width: 60.w,
+                        height: 12.h,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (index < 2) SizedBox(height: 12.h),
+            if (index < 2) Divider(height: 1.h),
+            if (index < 2) SizedBox(height: 12.h),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 24.h),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.local_shipping_outlined,
+              size: 48.r,
+              color: AppColors.textSecondary.withValues(alpha: 0.5),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'Chưa có đơn hàng gần đây',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getOrderStatusText(String? status) {
+    switch (status?.toUpperCase()) {
+      case 'COMPLETED':
+      case 'SUCCESSFUL':
+        return 'Hoàn thành';
+      case 'DELIVERING':
+      case 'ONGOING_DELIVERED':
+        return 'Đang giao';
+      case 'PICKING_UP':
+        return 'Đang lấy hàng';
+      case 'CANCELLED':
+        return 'Đã hủy';
+      case 'ASSIGNED_TO_DRIVER':
+        return 'Đã phân công';
+      default:
+        return status ?? 'Không xác định';
+    }
+  }
+
+  Color _getOrderStatusColor(String? status) {
+    switch (status?.toUpperCase()) {
+      case 'COMPLETED':
+      case 'SUCCESSFUL':
+        return AppColors.success;
+      case 'DELIVERING':
+      case 'ONGOING_DELIVERED':
+        return AppColors.inProgress;
+      case 'PICKING_UP':
+        return AppColors.warning;
+      case 'CANCELLED':
+        return AppColors.error;
+      case 'ASSIGNED_TO_DRIVER':
+        return AppColors.primary;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _getOrderAddress(Order order) {
+    // For now, use receiver info as address since Order entity doesn't have address field
+    // This can be enhanced when address is added to the entity
+    return '${order.receiverName} - ${order.receiverPhone}';
   }
 }

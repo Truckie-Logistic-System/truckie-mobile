@@ -43,7 +43,7 @@ class PackageSelectionCard extends StatelessWidget {
         boxShadow: isSelected
             ? [
                 BoxShadow(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

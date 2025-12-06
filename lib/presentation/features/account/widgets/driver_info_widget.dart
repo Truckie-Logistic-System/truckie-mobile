@@ -112,13 +112,13 @@ class DriverInfoWidget extends StatelessWidget {
               padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 16.w),
               decoration: BoxDecoration(
                 color: driver.status.toLowerCase() == "active"
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.orange.withOpacity(0.1),
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8.r),
                 border: Border.all(
                   color: driver.status.toLowerCase() == "active"
-                      ? Colors.green.withOpacity(0.3)
-                      : Colors.orange.withOpacity(0.3),
+                      ? Colors.green.withValues(alpha: 0.3)
+                      : Colors.orange.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
@@ -165,7 +165,7 @@ class DriverInfoWidget extends StatelessWidget {
         Container(
           padding: EdgeInsets.all(12.r),
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.05),
+            color: Colors.grey.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(8.r),
           ),
           child: Column(children: children),

@@ -17,6 +17,7 @@ import '../../../../app/app_routes.dart';
 import '../../../../app/di/service_locator.dart';
 import '../../../../core/services/token_storage_service.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/chat_notification_service.dart';
 import '../../../common_widgets/base_viewmodel.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading, error }
@@ -216,7 +217,8 @@ class AuthViewModel extends BaseViewModel {
             await Future.delayed(const Duration(milliseconds: 500));
             await notificationService.connect(_driver!.id);
           }
-        } catch (e) {}
+        } catch (e) { // Ignore: Error handling not implemented
+        }
 
         return true;
       },
@@ -326,7 +328,7 @@ class AuthViewModel extends BaseViewModel {
             final tokenStorage = getIt<TokenStorageService>();
             await tokenStorage.saveAccessToken(_user!.authToken);
             await tokenStorage.saveRefreshToken(_user!.refreshToken ?? '');
-          } catch (e) {}
+          } catch (e) { // Ignore: Error handling not implemented
 
           // Lưu thông tin người dùng vào SharedPreferences
           try {
@@ -347,13 +349,15 @@ class AuthViewModel extends BaseViewModel {
             );
             final userJson = json.encode(userModel.toJson());
             await prefs.setString('user_info', userJson);
-          } catch (e) {}
+          } catch (e) { // Ignore: Error handling not implemented
+          }
         }
 
         // Tải lại thông tin tài xế
         await refreshDriverInfo();
 
         success = true;
+        }
       },
     );
 
@@ -586,7 +590,8 @@ class AuthViewModel extends BaseViewModel {
           await logout();
         }
       });
-    } catch (e) {}
+    } catch (e) { // Ignore: Error handling not implemented
+    }
   }
 
   /// Connect to notification WebSocket service
@@ -614,6 +619,20 @@ class AuthViewModel extends BaseViewModel {
       await notificationService.connect(_driver!.id);
       // NotificationService now handles ALL notifications including return goods
       // No need for separate WebSocketService
-    } catch (e) {}
+      
+      // 🆕 CRITICAL: Initialize ChatNotificationService globally
+      // This ensures chat notifications and badge updates work even when not on chat screen
+      try {
+        final chatNotificationService = getIt<ChatNotificationService>();
+        await chatNotificationService.initialize(
+          _driver!.id,
+          vehicleAssignmentId: null, // Will be updated when entering specific trip
+        );
+        debugPrint('✅ ChatNotificationService initialized globally');
+      } catch (e) {
+        debugPrint('⚠️ Failed to initialize ChatNotificationService: $e');
+      }
+    } catch (e) { // Ignore: Error handling not implemented
+    }
   }
 }

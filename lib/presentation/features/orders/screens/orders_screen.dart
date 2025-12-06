@@ -352,7 +352,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     return FilterChip(
       selected: isSelected,
       label: Text(label),
-      selectedColor: AppColors.primary.withOpacity(0.2),
+      selectedColor: AppColors.primary.withValues(alpha: 0.2),
       checkmarkColor: AppColors.primary,
       onSelected: onSelected,
     );
@@ -433,7 +433,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                       vertical: 4.h,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.2),
+                      color: statusColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16.r),
                     ),
                     child: Text(

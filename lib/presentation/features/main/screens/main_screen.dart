@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 import '../../account/screens/account_screen.dart';
@@ -8,12 +7,11 @@ import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../home/screens/home_screen.dart';
 import '../../orders/screens/orders_screen.dart';
 import '../../notification/viewmodels/notification_viewmodel.dart';
-import '../../notification/widgets/notification_badge.dart';
-import '../../notification/widgets/animated_bell_icon.dart';
 import '../../notification/screens/notification_list_screen.dart';
+import '../../chat/chat_screen.dart';
 import '../../../theme/app_colors.dart';
-import '../../../../app/app_routes.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/chat_notification_service.dart';
 
 class MainScreen extends StatefulWidget {
   final int initialTab;
@@ -34,7 +32,7 @@ class _MainScreenState extends State<MainScreen> {
     // Initialize selected index from widget parameter
     _selectedIndex = widget.initialTab;
 
-    // Initialize NotificationViewModel when main screen loads
+    // Initialize NotificationViewModel and ChatNotificationService when main screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
       if (authViewModel.driver != null) {
@@ -42,7 +40,15 @@ class _MainScreenState extends State<MainScreen> {
           context,
           listen: false,
         );
-        notificationViewModel.initialize();
+        notificationViewModel.initialize(showLoading: false);
+        
+        // Initialize ChatNotificationService with driver ID
+        final chatNotificationService = Provider.of<ChatNotificationService>(
+          context,
+          listen: false,
+        );
+        final driverId = authViewModel.driver!.id;
+        chatNotificationService.initialize(driverId);
         
         // Subscribe to WebSocket for real-time badge updates
         _subscribeToWebSocket(notificationViewModel);
@@ -144,115 +150,31 @@ class _MainScreenState extends State<MainScreen> {
         bottom: false,
         child: _getCurrentScreen(),
       ),
-      bottomNavigationBar: Container(
-        color: Colors.white,
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNavItem(0, Icons.home, 'Trang chủ'),
-              _buildNavItem(1, Icons.list_alt, 'Đơn hàng'),
-              _buildNotificationNavItem(),
-              _buildNavItem(3, Icons.person, 'Tài khoản'),
-            ],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF1565C0),
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Trang chủ',
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _selectedIndex == index;
-    return InkWell(
-      onTap: () => _onItemTapped(index),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationNavItem() {
-    final isSelected = _selectedIndex == 2;
-    return Consumer<NotificationViewModel>(
-      builder: (context, notificationViewModel, child) {
-        final unreadCount = notificationViewModel.unreadCount;
-
-        return InkWell(
-          onTap: () => _onItemTapped(2),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    AnimatedBellIcon(
-                      isSelected: isSelected,
-                    ),
-                    if (unreadCount > 0)
-                      Positioned(
-                        right: -8,
-                        top: -4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          child: Center(
-                            child: Text(
-                              unreadCount > 99 ? '99+' : unreadCount.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Thông báo',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Đơn hàng',
           ),
-        );
-      },
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications),
+            label: 'Thông báo',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Tài khoản',
+          ),
+        ],
+      ),
     );
   }
 }

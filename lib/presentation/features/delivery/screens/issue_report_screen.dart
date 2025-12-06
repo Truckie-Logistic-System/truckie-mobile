@@ -200,7 +200,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
@@ -290,7 +290,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -3),
           ),
@@ -846,10 +846,10 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: color.withOpacity(0.4),
+                  color: color.withValues(alpha: 0.4),
                   width: 1,
                 ),
               ),

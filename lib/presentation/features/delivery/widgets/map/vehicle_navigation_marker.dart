@@ -40,7 +40,7 @@ class _VehicleMarkerPainter extends CustomPainter {
 
     // 1. Draw shadow for depth
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3)
+      ..color = Colors.black.withValues(alpha: 0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     canvas.drawCircle(
       Offset(center.dx + 1, center.dy + 2), // Slight offset for shadow
@@ -84,7 +84,7 @@ class _VehicleMarkerPainter extends CustomPainter {
 
     // 5. Draw subtle highlight for 3D effect
     final highlightPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withValues(alpha: 0.3)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(
       Offset(center.dx - radius * 0.3, center.dy - radius * 0.3),

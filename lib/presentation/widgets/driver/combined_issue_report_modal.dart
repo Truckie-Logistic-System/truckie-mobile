@@ -423,7 +423,7 @@ class _CombinedIssueReportModalState extends State<CombinedIssueReportModal> {
             : Colors.white,
         boxShadow: isSelected ? [
           BoxShadow(
-            color: Colors.red.withOpacity(0.15),
+            color: Colors.red.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -825,7 +825,7 @@ class _CombinedIssueReportModalState extends State<CombinedIssueReportModal> {
             : Colors.white,
         boxShadow: isSelected ? [
           BoxShadow(
-            color: Colors.orange.withOpacity(0.15),
+            color: Colors.orange.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

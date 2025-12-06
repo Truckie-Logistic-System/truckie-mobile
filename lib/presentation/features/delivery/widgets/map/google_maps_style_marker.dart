@@ -33,14 +33,14 @@ class GoogleMapsStyleMarker extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
+                      color: Colors.black.withValues(alpha: 0.25),
                       blurRadius: 12,
                       spreadRadius: 3,
                       offset: const Offset(0, 3),
                     ),
                     // Second shadow for depth
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 6,
                       spreadRadius: 1,
                       offset: const Offset(0, 1),
@@ -91,7 +91,7 @@ class GoogleMapsStyleMarker extends StatelessWidget {
                   shadows: [
                     // Shadow for arrow to make it pop
                     Shadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 2,
                       offset: const Offset(0, 1),
                     ),
@@ -105,7 +105,7 @@ class GoogleMapsStyleMarker extends StatelessWidget {
                 height: size * 0.12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.white.withValues(alpha: 0.4),
                 ),
               ),
             ],

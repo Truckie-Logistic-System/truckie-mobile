@@ -310,7 +310,7 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(
@@ -353,7 +353,7 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
                     decoration: BoxDecoration(
                       border: Border.all(color: AppColors.primary, width: 1),
                       borderRadius: BorderRadius.circular(8),
-                      color: AppColors.primary.withOpacity(0.05),
+                      color: AppColors.primary.withValues(alpha: 0.05),
                     ),
                     child: Row(
                       children: [

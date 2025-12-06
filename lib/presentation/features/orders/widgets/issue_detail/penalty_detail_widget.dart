@@ -23,9 +23,9 @@ class PenaltyDetailWidget extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.purple.withOpacity(0.1),
+            color: Colors.purple.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+            border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -76,7 +76,7 @@ class PenaltyDetailWidget extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.purple.withOpacity(0.1),
+                        color: Colors.purple.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -102,9 +102,9 @@ class PenaltyDetailWidget extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.05),
+                    color: Colors.purple.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.purple.withOpacity(0.2)),
+                    border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
                   ),
                   child: Text(
                     violationType,
@@ -173,7 +173,7 @@ class PenaltyDetailWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
+                    color: Colors.purple.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -303,7 +303,7 @@ class PenaltyDetailWidget extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
+                              color: Colors.black.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(

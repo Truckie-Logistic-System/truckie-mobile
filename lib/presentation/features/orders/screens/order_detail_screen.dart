@@ -8,6 +8,7 @@ import '../../../../app/app_routes.dart';
 import '../../../../core/services/global_location_manager.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/navigation_state_service.dart';
+import '../../../../core/services/chat_notification_service.dart';
 import '../../../../app/di/service_locator.dart';
 import '../../../../core/services/system_ui_service.dart';
 import '../../../utils/driver_role_checker.dart';
@@ -26,6 +27,7 @@ import '../widgets/order_detail/delivery_confirmation_section.dart';
 import '../widgets/order_detail/final_odometer_section.dart';
 import '../widgets/order_detail/issue_location_widget.dart';
 import '../../../widgets/driver/return_delivery_confirmation_button.dart';
+import '../../chat/chat_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -992,6 +994,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  /// Open chat screen for support
+  void _openChatScreen(OrderWithDetails orderWithDetails) {
+    // Mark messages as read when opening chat
+    final chatService = Provider.of<ChatNotificationService>(context, listen: false);
+    chatService.markAsRead();
+    
+    // Get vehicle assignment ID if available
+    String? vehicleAssignmentId;
+    if (orderWithDetails.vehicleAssignments.isNotEmpty) {
+      vehicleAssignmentId = orderWithDetails.vehicleAssignments.first.id;
+    }
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          trackingCode: orderWithDetails.orderCode,
+          vehicleAssignmentId: vehicleAssignmentId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -1206,7 +1231,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Navigation Button with transparent background (outside white container)
+                // Chat and Navigation Buttons with transparent background (outside white container)
                 if (shouldShowNavigationButton) ...[
                   Container(
                     width: double.infinity,
@@ -1218,66 +1243,128 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ? 8
                           : 12 + MediaQuery.of(context).padding.bottom,
                     ),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Builder(
-                        builder: (context) {
-                          final isConnected = _globalLocationManager
-                              .isTrackingOrder(orderWithDetails.id);
-                          return FloatingActionButton.extended(
-                            onPressed: () {
-                              if (isConnected) {
-                                bool hasNavigationScreen = false;
-                                Navigator.of(context).popUntil((route) {
-                                  if (route.settings.name ==
-                                      AppRoutes.navigation) {
-                                    hasNavigationScreen = true;
-                                    return true;
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Chat Button (left side)
+                        Consumer<ChatNotificationService>(
+                          builder: (context, chatService, child) {
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                FloatingActionButton.extended(
+                                  onPressed: () => _openChatScreen(orderWithDetails),
+                                  heroTag: 'chatButton',
+                                  backgroundColor: const Color(0xFF1565C0),
+                                  elevation: 4,
+                                  icon: const Icon(
+                                    Icons.chat,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  label: const Text(
+                                    'Chat',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                // Unread badge
+                                if (chatService.hasUnread)
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white, width: 2),
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 20,
+                                        minHeight: 20,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          chatService.unreadCount > 99 
+                                              ? '99+' 
+                                              : chatService.unreadCount.toString(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        // Navigation Button (right side)
+                        Builder(
+                          builder: (context) {
+                            final isConnected = _globalLocationManager
+                                .isTrackingOrder(orderWithDetails.id);
+                            return FloatingActionButton.extended(
+                              onPressed: () {
+                                if (isConnected) {
+                                  bool hasNavigationScreen = false;
+                                  Navigator.of(context).popUntil((route) {
+                                    if (route.settings.name ==
+                                        AppRoutes.navigation) {
+                                      hasNavigationScreen = true;
+                                      return true;
+                                    }
+                                    if (route.isFirst) return true;
+                                    return false;
+                                  });
+                                  if (!hasNavigationScreen) {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.navigation,
+                                      arguments: {
+                                        'orderId': orderWithDetails.id,
+                                        'isSimulationMode': true,
+                                      },
+                                    );
                                   }
-                                  if (route.isFirst) return true;
-                                  return false;
-                                });
-                                if (!hasNavigationScreen) {
+                                } else {
                                   Navigator.pushNamed(
                                     context,
-                                    AppRoutes.navigation,
-                                    arguments: {
-                                      'orderId': orderWithDetails.id,
-                                      'isSimulationMode': true,
-                                    },
+                                    AppRoutes.routeDetails,
+                                    arguments: viewModel,
                                   );
                                 }
-                              } else {
-                                Navigator.pushNamed(
-                                  context,
-                                  AppRoutes.routeDetails,
-                                  arguments: viewModel,
-                                );
-                              }
-                            },
-                            heroTag: 'routeDetailsButton',
-                            backgroundColor: isConnected
-                                ? AppColors.success
-                                : AppColors.primary,
-                            elevation: 4,
-                            icon: Icon(
-                              isConnected
-                                  ? Icons.navigation
-                                  : Icons.map_outlined,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            label: Text(
-                              isConnected ? 'Dẫn đường' : 'Lộ trình',
-                              style: const TextStyle(
+                              },
+                              heroTag: 'routeDetailsButton',
+                              backgroundColor: isConnected
+                                  ? AppColors.success
+                                  : AppColors.primary,
+                              elevation: 4,
+                              icon: Icon(
+                                isConnected
+                                    ? Icons.navigation
+                                    : Icons.map_outlined,
                                 color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                                size: 20,
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                              label: Text(
+                                isConnected ? 'Dẫn đường' : 'Lộ trình',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ],

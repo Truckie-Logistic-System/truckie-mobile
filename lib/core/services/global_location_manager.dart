@@ -607,7 +607,7 @@ class GlobalLocationManager {
     try {
       const locationSettings = LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // Minimum 5 meters movement
+        distanceFilter: 0, // Allow continuous GPS updates for stationary off-route detection
       );
 
       _positionStream = Geolocator.getPositionStream(

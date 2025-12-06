@@ -20,9 +20,9 @@ class DamageDetailWidget extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.deepOrange.withOpacity(0.1),
+            color: Colors.deepOrange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.deepOrange.withOpacity(0.3)),
+            border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -101,7 +101,7 @@ class DamageDetailWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -133,9 +133,9 @@ class DamageDetailWidget extends StatelessWidget {
                 margin: EdgeInsets.only(bottom: index < packageList.length - 1 ? 16 : 0),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.05),
+                  color: Colors.orange.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +229,7 @@ class DamageDetailWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -359,7 +359,7 @@ class DamageDetailWidget extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
+                              color: Colors.black.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(

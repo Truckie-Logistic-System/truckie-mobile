@@ -56,7 +56,8 @@ class _SealAssignmentNotificationDialogState
       if (pendingIssues.isNotEmpty) {
         getIt<NotificationService>().triggerNavigationScreenRefresh();
       }
-    } catch (e) {}
+    } catch (e) { // Ignore: Error handling not implemented
+    }
   }
 
   @override
@@ -73,7 +74,7 @@ class _SealAssignmentNotificationDialogState
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -108,7 +109,7 @@ class _SealAssignmentNotificationDialogState
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -151,7 +152,7 @@ class _SealAssignmentNotificationDialogState
                       'Yêu cầu thay seal',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -300,7 +301,7 @@ class _SealAssignmentNotificationDialogState
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.blue.shade300.withOpacity(0.5),
+                            color: Colors.blue.shade300.withValues(alpha: 0.5),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -489,10 +490,10 @@ class _SealAssignmentNotificationDialogState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.15),
+            color: color.withValues(alpha: 0.15),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -503,7 +504,7 @@ class _SealAssignmentNotificationDialogState
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 24),

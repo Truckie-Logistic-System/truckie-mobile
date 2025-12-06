@@ -25,7 +25,7 @@ class CurrentDeliveryCard extends StatelessWidget {
                 Container(
                   padding: EdgeInsets.all(8.r),
                   decoration: BoxDecoration(
-                    color: AppColors.inProgress.withOpacity(0.2),
+                    color: AppColors.inProgress.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(

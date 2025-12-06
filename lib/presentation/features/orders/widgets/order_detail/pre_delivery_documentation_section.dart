@@ -381,7 +381,7 @@ class _PreDeliveryDocumentationSectionState
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected 
-                          ? AppColors.primary.withOpacity(0.1) 
+                          ? AppColors.primary.withValues(alpha: 0.1) 
                           : Colors.transparent,
                       border: !isLast 
                           ? Border(bottom: BorderSide(color: Colors.grey.shade200))
@@ -411,10 +411,10 @@ class _PreDeliveryDocumentationSectionState
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: _getSealStatusColor(seal.status).withOpacity(0.15),
+                            color: _getSealStatusColor(seal.status).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _getSealStatusColor(seal.status).withOpacity(0.3),
+                              color: _getSealStatusColor(seal.status).withValues(alpha: 0.3),
                             ),
                           ),
                           child: Text(

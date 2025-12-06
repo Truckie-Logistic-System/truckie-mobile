@@ -31,7 +31,9 @@ import '../widgets/fuel_invoice_upload_sheet.dart';
 import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/chat_notification_service.dart';
 import '../../../../data/datasources/vehicle_fuel_consumption_data_source.dart';
+import '../../chat/chat_screen.dart';
 import 'dart:io';
 
 class NavigationScreen extends StatefulWidget {
@@ -72,12 +74,17 @@ class _NavigationScreenState extends State<NavigationScreen>
   bool _isFollowingUser = true;
   bool _isConnectingWebSocket = false;
   bool _isSimulating = false;
+  bool _isOffRouteSimulated = false;
   bool _isTripComplete = false;
   bool _isDisposing = false; // Track disposal state to prevent map operations
 
   // Simulation controls (only used in simulation mode)
   double _simulationSpeed = 1.0;
   bool _isPaused = false;
+  
+  // Off-route simulation (for testing off-route detection)
+  // Offset perpendicular to route direction (in meters) - guaranteed to be off-route
+  static const double _offRouteDistanceMeters = 200.0; // 200m perpendicular offset (> 100m threshold)
 
   int _cameraUpdateCounter = 0;
   final int _cameraUpdateFrequency = 1; // Update camera every frame
@@ -89,6 +96,9 @@ class _NavigationScreenState extends State<NavigationScreen>
   DateTime? _lastCameraUpdate;
   static const _cameraThrottleMs =
       16; // 60 FPS - fastest possible with moveCamera
+  
+  // Camera lock to prevent jumping during off-route testing
+  bool _isCameraLocked = false;
 
   // Pending seal replacements
   List<Issue> _pendingSealReplacements = [];
@@ -142,6 +152,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   // Custom marker for current location
   Symbol? _currentLocationMarker;
+  
+  // Circle to indicate off-route status
+  Circle? _offRouteCircle;
 
   // Waypoint markers list
   List<Marker> _waypointMarkers = [];
@@ -1442,18 +1455,21 @@ class _NavigationScreenState extends State<NavigationScreen>
           // CRITICAL: Update viewModel's current location with simulated location
           _viewModel.currentLocation = location;
 
-          // Update custom location marker
+          // Update custom location marker (offset is applied inside the function)
           _updateLocationMarker(location, bearing);
 
-          // Update camera to follow vehicle
+          // Update camera to follow vehicle (offset is applied inside the function)
           if (_isFollowingUser) {
+            print('🎥 [CALL_SITE: simulation_callback] Calling _setCameraToNavigationMode');
             _setCameraToNavigationMode(location);
           }
 
           // Send location update via GlobalLocationManager with speed and segment
+          // Apply perpendicular off-route offset for API when simulation is active
+          final sendLocation = _calculateOffRoutePosition(location, bearing);
           _globalLocationManager.sendLocationUpdate(
-            location.latitude,
-            location.longitude,
+            sendLocation.latitude,
+            sendLocation.longitude,
             bearing: bearing,
             speed: _viewModel.currentSpeed,
             segmentIndex: _viewModel.currentSegmentIndex,
@@ -1753,10 +1769,11 @@ class _NavigationScreenState extends State<NavigationScreen>
       if (widget.isSimulationMode && _viewModel.isSimulating) {
         // Update camera to current position
         if (_viewModel.currentLocation != null && _mapController != null) {
+          // Offset is applied inside _setCameraToNavigationMode
           _setCameraToNavigationMode(_viewModel.currentLocation!);
         }
 
-        // Update marker
+        // Update marker (offset is applied inside _updateLocationMarker)
         if (_viewModel.currentLocation != null) {
           _updateLocationMarker(
             _viewModel.currentLocation!,
@@ -2974,6 +2991,13 @@ class _NavigationScreenState extends State<NavigationScreen>
       final latPadding = (maxLat - minLat) * 0.1; // 10% padding
       final lngPadding = (maxLng - minLng) * 0.1;
 
+      // Skip camera update if locked (during off-route testing)
+      if (_isCameraLocked) {
+        print('🎥 [fitRouteToScreen] SKIPPED - Camera locked for off-route testing');
+        return;
+      }
+      
+      print('🎥 [fitRouteToScreen] Animate camera to fit route bounds (off-route: $_isOffRouteSimulated)');
       _mapController!.animateCamera(
         CameraUpdate.newLatLngBounds(
           LatLngBounds(
@@ -3016,18 +3040,28 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _updateCameraPosition(LatLng location, double? bearing) {
+    // 🔒 BLOCK camera updates during off-route simulation to prevent jumping
+    if (_isOffRouteSimulated) {
+      print('🎥 [_updateCameraPosition] SKIPPED - Off-route simulation active');
+      return;
+    }
+    
     if (!_isMapOperationSafe || !_isFollowingUser) return;
 
     _cameraUpdateCounter++;
+
+    // Apply perpendicular off-route offset when simulation is active
+    final actualLocation = _calculateOffRoutePosition(location, bearing);
 
     // Update camera position to follow user's location
     // Use moveCamera instead of animateCamera to avoid "chasing" effect
     // Camera moves instantly with marker, creating smooth tracking
     if (_cameraUpdateCounter % _cameraUpdateFrequency == 0) {
+      print('🎥 [_updateCameraPosition] Moving camera to: ${actualLocation.latitude}, ${actualLocation.longitude} (off-route: $_isOffRouteSimulated)');
       _mapController!.moveCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: location,
+            target: actualLocation,
             zoom: 16.0,
             bearing: bearing ?? 0.0,
             tilt: 45.0, // Góc nghiêng 3D
@@ -3035,6 +3069,33 @@ class _NavigationScreenState extends State<NavigationScreen>
         ),
       );
     }
+  }
+
+  /// Calculate off-route position by offsetting perpendicular to the bearing direction
+  /// This ensures the offset is always perpendicular to the route, guaranteeing off-route detection
+  LatLng _calculateOffRoutePosition(LatLng position, double? bearing) {
+    if (!_isOffRouteSimulated) return position;
+    
+    // Use current bearing or default to 0 (north)
+    final double bearingDegrees = bearing ?? _viewModel.currentBearing ?? 0.0;
+    
+    // Offset perpendicular to bearing (90 degrees to the LEFT)
+    // This ensures we're always off the route line on the left side
+    final double perpendicularBearing = (bearingDegrees - 90 + 360) % 360;
+    final double bearingRad = perpendicularBearing * pi / 180.0;
+    
+    // Convert meters to degrees (approximate: 1 degree ≈ 111,000 meters at equator)
+    // Adjust for latitude to get more accurate offset
+    final double metersPerDegreeLat = 111000.0;
+    final double metersPerDegreeLng = 111000.0 * cos(position.latitude * pi / 180.0);
+    
+    final double latOffset = (_offRouteDistanceMeters * cos(bearingRad)) / metersPerDegreeLat;
+    final double lngOffset = (_offRouteDistanceMeters * sin(bearingRad)) / metersPerDegreeLng;
+    
+    return LatLng(
+      position.latitude + latOffset,
+      position.longitude + lngOffset,
+    );
   }
 
   /// Clear map elements with delay to avoid VietmapGL style loading issues
@@ -3049,6 +3110,8 @@ class _NavigationScreenState extends State<NavigationScreen>
 
       try {
         await _mapController!.clearCircles();
+        // Reset off-route circle reference
+        _offRouteCircle = null;
       } catch (e) {}
     });
   }
@@ -3057,23 +3120,40 @@ class _NavigationScreenState extends State<NavigationScreen>
     if (_mapController == null) return;
 
     try {
+      // Change marker icon when off-route simulation is active
+      final markerIcon = _isOffRouteSimulated ? '⚠️' : '🚛';
+      final markerSize = _isOffRouteSimulated ? 36.0 : 32.0;
+      
+      // Apply perpendicular off-route offset when simulation is active
+      // This ensures marker is always off the route by a fixed distance
+      final markerLocation = _calculateOffRoutePosition(location, bearing);
+      
       // Update existing marker instead of remove/add to avoid buffer issues
       if (_currentLocationMarker != null) {
         await _mapController!.updateSymbol(
           _currentLocationMarker!,
-          SymbolOptions(geometry: location, textRotate: bearing ?? 0.0),
+          SymbolOptions(
+            geometry: markerLocation, 
+            textRotate: bearing ?? 0.0,
+            textField: markerIcon,
+            textSize: markerSize,
+          ),
         );
       } else {
         // Create marker for the first time
         _currentLocationMarker = await _mapController!.addSymbol(
           SymbolOptions(
-            geometry: location,
-            textField: '🚛', // Truck emoji
-            textSize: 32.0,
+            geometry: markerLocation,
+            textField: markerIcon,
+            textSize: markerSize,
             textRotate: bearing ?? 0.0,
           ),
         );
       }
+      
+      // Update off-route circle with same offset location
+      await _updateOffRouteCircle(markerLocation);
+      
     } catch (e) {
       // If update fails, try to recreate
       try {
@@ -3081,15 +3161,60 @@ class _NavigationScreenState extends State<NavigationScreen>
           await _mapController!.removeSymbol(_currentLocationMarker!);
           _currentLocationMarker = null;
         }
+        final markerIcon = _isOffRouteSimulated ? '⚠️' : '🚛';
+        final markerSize = _isOffRouteSimulated ? 36.0 : 32.0;
+        
+        // Apply perpendicular off-route offset when simulation is active
+        final markerLocation = _calculateOffRoutePosition(location, bearing);
+            
         _currentLocationMarker = await _mapController!.addSymbol(
           SymbolOptions(
-            geometry: location,
-            textField: '🚛',
-            textSize: 32.0,
+            geometry: markerLocation,
+            textField: markerIcon,
+            textSize: markerSize,
             textRotate: bearing ?? 0.0,
           ),
         );
+        
+        // Update off-route circle
+        await _updateOffRouteCircle(markerLocation);
       } catch (e2) {}
+    }
+  }
+  
+  Future<void> _updateOffRouteCircle(LatLng location) async {
+    if (_mapController == null) return;
+    
+    try {
+      // Remove existing circle
+      if (_offRouteCircle != null) {
+        await _mapController!.removeCircle(_offRouteCircle!);
+        _offRouteCircle = null;
+      }
+      
+      // Add circle if off-route is simulated
+      if (_isOffRouteSimulated) {
+        _offRouteCircle = await _mapController!.addCircle(
+          CircleOptions(
+            geometry: location,
+            circleRadius: 30.0, // 30 meters radius
+            circleColor: Colors.red,
+            circleOpacity: 0.3,
+            circleStrokeColor: Colors.red,
+            circleStrokeWidth: 2.0,
+            circleStrokeOpacity: 0.8,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating off-route circle: $e');
+    }
+  }
+
+  void _updateLocationMarkerForOffRoute() {
+    // Force update the location marker when off-route toggle changes
+    if (_viewModel.currentLocation != null && _mapController != null) {
+      _updateLocationMarker(_viewModel.currentLocation!, _viewModel.currentBearing);
     }
   }
 
@@ -3475,20 +3600,25 @@ class _NavigationScreenState extends State<NavigationScreen>
 
         // CRITICAL: Update viewModel's current location with simulated location
         // This ensures report incident uses simulated location, not GPS
+        // print('🎥 [ASSIGNMENT: simulation_callback] Location update: ${location.latitude}, ${location.longitude}');
         _viewModel.currentLocation = location;
 
-        // Update custom location marker
+        // Update custom location marker (offset is applied inside the function)
         _updateLocationMarker(location, bearing);
 
-        // Update camera to follow vehicle
+        // Update camera to follow vehicle (offset is applied inside the function)
         if (_isFollowingUser) {
           _setCameraToNavigationMode(location);
         }
 
         // Send location update via GlobalLocationManager with speed and segment
+        // Apply perpendicular off-route offset for API when simulation is active
+        final sendLocation = _calculateOffRoutePosition(location, bearing);
+        // print('🎥 [ASSIGNMENT: simulation_callback] Sending WebSocket location: ${sendLocation.latitude}, ${sendLocation.longitude}');
+        
         _globalLocationManager.sendLocationUpdate(
-          location.latitude,
-          location.longitude,
+          sendLocation.latitude,
+          sendLocation.longitude,
           bearing: bearing,
           speed: _viewModel.currentSpeed, // Add current speed
           segmentIndex: _viewModel
@@ -3812,6 +3942,37 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (_isPaused && _isSimulating) {
           _resumeSimulation();
         }
+      }
+    });
+  }
+
+  /// Open chat screen for support
+  void _openChatScreen() {
+    // Mark messages as read when opening chat
+    final chatService = Provider.of<ChatNotificationService>(context, listen: false);
+    chatService.markAsRead();
+    
+    // Pause simulation if it's running
+    if (_isSimulating && !_isPaused) {
+      _pauseSimulation();
+    }
+    
+    // Get order code and vehicle assignment ID from viewModel
+    final orderCode = _viewModel.orderWithDetails?.orderCode;
+    final vehicleAssignmentId = _viewModel.vehicleAssignmentId;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          trackingCode: orderCode,
+          vehicleAssignmentId: vehicleAssignmentId,
+        ),
+      ),
+    ).then((_) {
+      // Auto-resume simulation when returning from chat screen
+      if (mounted) {
+        _autoResumeSimulation();
       }
     });
   }
@@ -4323,30 +4484,73 @@ class _NavigationScreenState extends State<NavigationScreen>
     }
     _lastCameraUpdate = now;
 
+    // Apply perpendicular off-route offset to camera position when simulation is active
+    // This ensures camera follows the offset marker position, not the original route
+    // print('🎥 [_setCameraToNavigationMode] INPUT position: ${position.latitude}, ${position.longitude} (off-route: $_isOffRouteSimulated)');
+    
+    // 🔒 GUARD: Detect if input position is already offset to prevent double-offset
+    LatLng actualPosition;
+    if (_isOffRouteSimulated && _viewModel.currentLocation != null) {
+      // Calculate distance between input and current raw location
+      final distance = _calculateDistance(position, _viewModel.currentLocation!);
+      if (distance > 150) { // If input is >150m away from raw location, it's already offset
+        // print('🎥 [_setCameraToNavigationMode] DETECTED pre-offset position (distance: ${distance.toStringAsFixed(1)}m), using directly');
+        actualPosition = position;
+      } else {
+        // print('🎥 [_setCameraToNavigationMode] Applying offset (distance: ${distance.toStringAsFixed(1)}m from raw)');
+        actualPosition = _calculateOffRoutePosition(position, _viewModel.currentBearing);
+      }
+    } else {
+      actualPosition = _calculateOffRoutePosition(position, _viewModel.currentBearing);
+    }
+    
+    // print('🎥 [_setCameraToNavigationMode] FINAL position: ${actualPosition.latitude}, ${actualPosition.longitude} (off-route: $_isOffRouteSimulated)');
+
     // Instant camera movement for absolute fastest response
     // moveCamera provides immediate positioning without any animation delay
+    // 🔒 OFF-ROUTE SIMULATION MODE
+    // Để tránh mọi hiện tượng camera "nhảy" sang vị trí lạ rồi quay lại,
+    // khi đang bật giả lập off-route ta dùng cách focus camera ĐƠN GIẢN, ỔN ĐỊNH:
+    // - Không dùng 3D forward offset
+    // - Không xoay theo bearing, không tilt
+    // - Chỉ bám đúng vị trí off-route (actualPosition)
+    if (_isOffRouteSimulated) {
+      try {
+        await _mapController!.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              // Zoom cố định, 2D, không xoay
+              target: actualPosition,
+              zoom: 17.5,
+              bearing: 0.0,
+              tilt: 0.0,
+            ),
+          ),
+        );
+      } catch (_) {}
+      return;
+    }
 
-    // NORTH-UP ROTATING OFFSET:
+    // NORTH-UP ROTATING OFFSET (chỉ áp dụng khi KHÔNG test off-route):
     // - Map xoay theo bearing → route line thẳng đứng
     // - Camera offset về phía TRƯỚC (theo bearing)
     // - Marker ở bottom 1/3, counter-rotate để tĩnh
-    LatLng cameraTarget = position;
+    LatLng cameraTarget = actualPosition;
 
     if (_is3DMode && _viewModel.currentBearing != null) {
       // Offset về phía TRƯỚC theo hướng bearing
-      // → Marker xuất hiện ở bottom 1/3
       const double offsetMeters = 60;
 
       // Convert bearing to radians
       final double bearingRad = (_viewModel.currentBearing! * 3.14159) / 180.0;
 
-      // Calculate offset in bearing direction
+      // Calculate offset in bearing direction - use actualPosition for on-route support
       final double latOffset = offsetMeters * 0.000009 * cos(bearingRad);
       final double lngOffset = offsetMeters * 0.000009 * sin(bearingRad);
 
       cameraTarget = LatLng(
-        position.latitude + latOffset,
-        position.longitude + lngOffset,
+        actualPosition.latitude + latOffset,
+        actualPosition.longitude + lngOffset,
       );
     }
 
@@ -4366,12 +4570,12 @@ class _NavigationScreenState extends State<NavigationScreen>
           )
           .catchError((e) {});
     } else {
-      // 2D Overview Mode
+      // 2D Overview Mode - use actualPosition for off-route support
       _mapController!
           .moveCamera(
             CameraUpdate.newCameraPosition(
               CameraPosition(
-                target: position,
+                target: actualPosition,
                 zoom: 15.0,
                 bearing: 0.0,
                 tilt: 0.0,
@@ -4490,6 +4694,7 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
 
+            
             // 🆕 Pending Seal Replacement Banner
             if (_pendingSealReplacements.isNotEmpty)
               PendingSealReplacementBanner(
@@ -4621,7 +4826,10 @@ class _NavigationScreenState extends State<NavigationScreen>
                                     size: 44, // NO internal rotation ✅
                                   ),
                                 ),
-                                latLng: _viewModel.currentLocation!,
+                                latLng: _calculateOffRoutePosition(
+                                    _viewModel.currentLocation!, 
+                                    _viewModel.currentBearing
+                                  ),
                               ),
                             ],
                           );
@@ -4704,42 +4912,18 @@ class _NavigationScreenState extends State<NavigationScreen>
                       right: 16,
                       child: Column(
                         children: [
-                          // Toggle 3D mode button
-                          FloatingActionButton(
-                            onPressed: _toggle3DMode,
-                            backgroundColor: Colors.white,
-                            mini: true,
-                            heroTag: '3d',
-                            child: Icon(
-                              _is3DMode ? Icons.view_in_ar : Icons.map,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          // Toggle follow user button
-                          FloatingActionButton(
-                            onPressed: () {
-                              setState(() {
-                                _isFollowingUser = !_isFollowingUser;
-                                if (_isFollowingUser &&
-                                    _viewModel.currentLocation != null) {
-                                  _setCameraToNavigationMode(
-                                    _viewModel.currentLocation!,
-                                  );
-                                }
-                              });
-                            },
-                            backgroundColor: Colors.white,
-                            mini: true,
-                            heroTag: 'follow',
-                            child: Icon(
-                              _isFollowingUser
-                                  ? Icons.gps_fixed
-                                  : Icons.gps_not_fixed,
-                              color: _isFollowingUser
-                                  ? AppColors.success
-                                  : Colors.grey,
+                          // Upload fuel invoice button
+                          Tooltip(
+                            message: 'Upload hóa đơn xăng',
+                            child: FloatingActionButton(
+                              onPressed: _showFuelInvoiceUploadSheet,
+                              backgroundColor: Colors.green,
+                              mini: true,
+                              heroTag: 'fuel',
+                              child: const Icon(
+                                Icons.local_gas_station,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -4757,18 +4941,102 @@ class _NavigationScreenState extends State<NavigationScreen>
                           ),
                           const SizedBox(height: 8),
 
-                          // Upload fuel invoice button
-                          Tooltip(
-                            message: 'Upload hóa đơn xăng',
-                            child: FloatingActionButton(
-                              onPressed: _showFuelInvoiceUploadSheet,
-                              backgroundColor: Colors.green,
-                              mini: true,
-                              heroTag: 'fuel',
-                              child: const Icon(
-                                Icons.local_gas_station,
-                                color: Colors.white,
-                              ),
+                          // Chat support button
+                          Consumer<ChatNotificationService>(
+                            builder: (context, chatService, child) {
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  FloatingActionButton(
+                                    onPressed: _openChatScreen,
+                                    backgroundColor: const Color(0xFF1565C0),
+                                    mini: true,
+                                    heroTag: 'chat',
+                                    child: const Icon(
+                                      Icons.chat,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  // Unread badge
+                                  if (chatService.hasUnread)
+                                    Positioned(
+                                      right: -4,
+                                      top: -4,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 1.5),
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            chatService.unreadCount > 9 
+                                                ? '9+' 
+                                                : chatService.unreadCount.toString(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Off-route simulation toggle (for testing off-route detection)
+                          FloatingActionButton(
+                            onPressed: () {
+                              setState(() {
+                                _isOffRouteSimulated = !_isOffRouteSimulated;
+                                // Lock camera when off-route testing to prevent jumping
+                                _isCameraLocked = _isOffRouteSimulated;
+                              });
+                              
+                              // Update marker immediately when toggle changes
+                              _updateLocationMarkerForOffRoute();
+                              
+                              print('🎥 [OffRouteToggle] Camera lock: $_isCameraLocked (off-route: $_isOffRouteSimulated)');
+                              
+                              if (_isOffRouteSimulated) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Đã BẬT giả lập lệch tuyến. Vị trí sẽ bị offset 200m vuông góc BÊN TRÁI route.',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Đã TẮT giả lập lệch tuyến. Vị trí trở về bình thường.',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            backgroundColor: _isOffRouteSimulated ? Colors.orange : Colors.grey,
+                            mini: true,
+                            heroTag: 'offroute',
+                            child: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.white,
                             ),
                           ),
                         ],
@@ -4824,6 +5092,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                         ),
                       ],
                     ),
+                                        const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(

@@ -32,7 +32,7 @@ class PendingSealReplacementBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withOpacity(0.3),
+            color: Colors.orange.withValues(alpha: 0.3),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -51,7 +51,7 @@ class PendingSealReplacementBanner extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Icon(
@@ -79,7 +79,7 @@ class PendingSealReplacementBanner extends StatelessWidget {
                       Text(
                         'Seal cũ: ${issue.oldSeal?.sealCode ?? "N/A"}',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 12,
                         ),
                       ),
@@ -95,7 +95,7 @@ class PendingSealReplacementBanner extends StatelessWidget {
                       Text(
                         'Nhấn để xác nhận gắn seal',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 11,
                           fontStyle: FontStyle.italic,
                         ),
@@ -107,7 +107,7 @@ class PendingSealReplacementBanner extends StatelessWidget {
                 // Arrow icon
                 Icon(
                   Icons.arrow_forward_ios,
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   size: 16,
                 ),
               ],

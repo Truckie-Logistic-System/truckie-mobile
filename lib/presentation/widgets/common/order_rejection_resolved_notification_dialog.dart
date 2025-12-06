@@ -57,7 +57,7 @@ class OrderRejectionResolvedNotificationDialog extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -84,7 +84,7 @@ class OrderRejectionResolvedNotificationDialog extends StatelessWidget {
                           isPaid ? 'Đã xử lý trả hàng' : 'Thông báo trả hàng',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                           ),
                         ),
                       ],

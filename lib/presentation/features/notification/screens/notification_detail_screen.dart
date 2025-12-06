@@ -112,7 +112,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                         end: Alignment.bottomCenter,
                         colors: [
                           AppColors.primary,
-                          AppColors.primary.withOpacity(0.8),
+                          AppColors.primary.withValues(alpha: 0.8),
                         ],
                       ),
                     ),
@@ -127,10 +127,10 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -188,7 +188,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -242,7 +242,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
@@ -324,7 +324,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),

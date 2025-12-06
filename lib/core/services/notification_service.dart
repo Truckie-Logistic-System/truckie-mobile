@@ -324,9 +324,11 @@ class NotificationService {
     final topic = '/topic/driver/$driverId/notifications';
     print('   Subscribing to topic: $topic');
     
-    
-    
-    
+    // Check if stomp client is available and connected before subscribing
+    if (_stompClient == null || !_stompClient!.connected) {
+      print('⚠️ WebSocket client not available or not connected, skipping subscription');
+      return;
+    }
 
     _currentSubscription = _stompClient!.subscribe(
       destination: topic,

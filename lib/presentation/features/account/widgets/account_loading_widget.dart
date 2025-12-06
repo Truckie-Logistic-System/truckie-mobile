@@ -32,8 +32,8 @@ class AccountLoadingWidget extends StatelessWidget {
                     children: [
                       // Avatar skeleton
                       Shimmer.fromColors(
-                        baseColor: AppColors.primary.withOpacity(0.7),
-                        highlightColor: AppColors.primary.withOpacity(0.9),
+                        baseColor: AppColors.primary.withValues(alpha: 0.7),
+                        highlightColor: AppColors.primary.withValues(alpha: 0.9),
                         child: Container(
                           width: 72.r,
                           height: 72.r,
@@ -50,8 +50,8 @@ class AccountLoadingWidget extends StatelessWidget {
                           children: [
                             // Name skeleton
                             Shimmer.fromColors(
-                              baseColor: AppColors.primary.withOpacity(0.7),
-                              highlightColor: AppColors.primary.withOpacity(
+                              baseColor: AppColors.primary.withValues(alpha: 0.7),
+                              highlightColor: AppColors.primary.withValues(alpha: 
                                 0.9,
                               ),
                               child: Container(
@@ -66,8 +66,8 @@ class AccountLoadingWidget extends StatelessWidget {
                             SizedBox(height: 8.h),
                             // Role skeleton
                             Shimmer.fromColors(
-                              baseColor: AppColors.primary.withOpacity(0.7),
-                              highlightColor: AppColors.primary.withOpacity(
+                              baseColor: AppColors.primary.withValues(alpha: 0.7),
+                              highlightColor: AppColors.primary.withValues(alpha: 
                                 0.9,
                               ),
                               child: Container(
@@ -86,8 +86,8 @@ class AccountLoadingWidget extends StatelessWidget {
                   ),
                   SizedBox(height: 16.h),
                   Shimmer.fromColors(
-                    baseColor: AppColors.primary.withOpacity(0.7),
-                    highlightColor: AppColors.primary.withOpacity(0.9),
+                    baseColor: AppColors.primary.withValues(alpha: 0.7),
+                    highlightColor: AppColors.primary.withValues(alpha: 0.9),
                     child: Container(
                       height: 40.h,
                       width: double.infinity,

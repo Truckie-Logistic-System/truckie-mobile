@@ -55,13 +55,13 @@ class UserHeaderWidget extends StatelessWidget {
                           Icon(
                             Icons.local_shipping,
                             size: 16.r,
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                           ),
                           SizedBox(width: 4.w),
                           Text(
                             user.role.roleName,
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                         ],
@@ -75,7 +75,7 @@ class UserHeaderWidget extends StatelessWidget {
             Container(
               padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8.r),
               ),
               child: Row(

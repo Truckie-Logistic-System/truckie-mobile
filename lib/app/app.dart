@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../app/di/service_locator.dart';
 import '../core/utils/responsive_size_utils.dart';
+import '../core/services/chat_notification_service.dart';
 import '../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../presentation/features/notification/viewmodels/notification_viewmodel.dart';
 import '../presentation/theme/app_theme.dart';
@@ -42,6 +43,9 @@ class TruckieApp extends StatelessWidget {
               rethrow;
             }
           },
+        ),
+        ChangeNotifierProvider<ChatNotificationService>(
+          create: (_) => getIt<ChatNotificationService>(),
         ),
       ],
       child: Consumer<AuthViewModel>(

@@ -46,7 +46,8 @@ class OrderListViewModel extends BaseViewModel {
       },
       (orders) {
         _state = OrderListState.loaded;
-        _orders = orders;
+        // Sort orders by createdAt descending to show most recent first
+        _orders = List<Order>.from(orders)..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         
         // Debug: Log all order statuses including CANCELLED
         for (var order in orders) {

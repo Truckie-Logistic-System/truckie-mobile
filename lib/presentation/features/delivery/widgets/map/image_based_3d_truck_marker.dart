@@ -86,8 +86,8 @@ class ImageBased3DTruckMarker extends StatelessWidget {
                     borderRadius: BorderRadius.circular(size * 0.06),
                     gradient: RadialGradient(
                       colors: [
-                        Colors.black.withOpacity(0.25),
-                        Colors.black.withOpacity(0.05),
+                        Colors.black.withValues(alpha: 0.25),
+                        Colors.black.withValues(alpha: 0.05),
                       ],
                     ),
                   ),
@@ -129,7 +129,7 @@ class ImageBased3DTruckMarker extends StatelessWidget {
               //   child: Container(
               //     padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               //     decoration: BoxDecoration(
-              //       color: Colors.black.withOpacity(0.6),
+              //       color: Colors.black.withValues(alpha: 0.6),
               //       borderRadius: BorderRadius.circular(4),
               //     ),
               //     child: Text(

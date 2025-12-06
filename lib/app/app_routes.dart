@@ -21,6 +21,7 @@ import '../presentation/features/orders/screens/route_details_screen.dart';
 import '../presentation/features/orders/viewmodels/order_detail_viewmodel.dart';
 import '../presentation/features/splash/screens/splash_screen.dart';
 import '../presentation/features/notification/screens/notification_list_screen.dart';
+import '../presentation/features/chat/chat_screen.dart';
 
 class AppRoutes {
   // Route names
@@ -43,6 +44,7 @@ class AppRoutes {
   static const String navigation = '/navigation';
   static const String issueDetail = '/issue-detail';
   static const String notifications = '/notifications';
+  static const String chat = '/chat';
 
   // Route generator
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -165,6 +167,21 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ResponsiveWrapper(
             child: const NotificationListScreen(),
+          ),
+        );
+
+      case chat:
+        // Accept optional trackingCode and vehicleAssignmentId arguments
+        final args = settings.arguments as Map<String, dynamic>?;
+        final trackingCode = args?['trackingCode'] as String?;
+        final vehicleAssignmentId = args?['vehicleAssignmentId'] as String?;
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => ResponsiveWrapper(
+            child: ChatScreen(
+              trackingCode: trackingCode,
+              vehicleAssignmentId: vehicleAssignmentId,
+            ),
           ),
         );
 

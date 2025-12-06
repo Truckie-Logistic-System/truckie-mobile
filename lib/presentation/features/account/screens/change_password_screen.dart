@@ -186,7 +186,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        disabledBackgroundColor: AppColors.primary.withOpacity(0.5),
+        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
       ),
       child: _isLoading
           ? const SizedBox(
