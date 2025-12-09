@@ -11,6 +11,7 @@ import '../../data/models/chat_model.dart';
 import '../constants/api_constants.dart';
 import 'token_storage_service.dart';
 import '../../app/di/service_locator.dart';
+import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// Service to manage chat notifications and unread count
 class ChatNotificationService extends ChangeNotifier {
@@ -26,6 +27,13 @@ class ChatNotificationService extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   bool _notificationsInitialized = false;
+  
+  // Token refresh handling
+  AuthViewModel? _authViewModel;
+  int _retryCount = 0;
+  static const int _maxRetries = 5;
+  bool _isRefreshingToken = false;
+  String? _currentDriverId;
   
   // Message deduplication to prevent double counting
   final Set<String> _processedMessageIds = {};
@@ -112,7 +120,15 @@ class ChatNotificationService extends ChangeNotifier {
   /// Initialize and start listening for chat messages
   Future<void> initialize(String driverId, {String? vehicleAssignmentId}) async {
     _isLoading = true;
+    _currentDriverId = driverId;
     notifyListeners();
+    
+    // Initialize AuthViewModel reference for token refresh
+    try {
+      _authViewModel = getIt<AuthViewModel>();
+    } catch (e) {
+      debugPrint('⚠️ Could not get AuthViewModel: $e');
+    }
     
     try {
       // Always fetch conversation to get latest unread count
@@ -180,8 +196,19 @@ class ChatNotificationService extends ChangeNotifier {
           stompConnectHeaders: {'Authorization': 'Bearer $token'},
           onConnect: _onWebSocketConnected,
           onDisconnect: _onWebSocketDisconnected,
-          onWebSocketError: (error) => debugPrint('❌ Chat WS error: $error'),
-          onStompError: (frame) => debugPrint('❌ Chat STOMP error: ${frame.body}'),
+          onWebSocketError: (error) {
+            debugPrint('❌ Chat WS error: $error');
+            _handleWebSocketError(error);
+          },
+          onStompError: (frame) {
+            debugPrint('❌ Chat STOMP error: ${frame.body}');
+            _handleStompError(frame);
+          },
+          // CRITICAL: Disable auto-reconnect to prevent reconnection with stale tokens
+          // We handle reconnection manually via _retryConnection() with fresh tokens
+          reconnectDelay: const Duration(seconds: 0),
+          heartbeatIncoming: const Duration(seconds: 10),
+          heartbeatOutgoing: const Duration(seconds: 10),
           // onDebugMessage: (msg) => debugPrint('🔍 Chat STOMP debug: $msg'),
         ),
       );
@@ -249,8 +276,28 @@ class ChatNotificationService extends ChangeNotifier {
   }
   
   void _onWebSocketDisconnected(StompFrame frame) {
-    debugPrint('Chat notification WebSocket disconnected');
+    debugPrint('🔌 Chat notification WebSocket disconnected');
+    debugPrint('   Frame command: ${frame.command}');
+    debugPrint('   Frame headers: ${frame.headers}');
+    debugPrint('   Frame body: ${frame.body}');
     _isConnected = false;
+    
+    // CRITICAL: Check if disconnect was due to auth error
+    // If so, trigger token refresh and reconnect
+    final bodyStr = frame.body?.toString().toLowerCase() ?? '';
+    final headersStr = frame.headers.toString().toLowerCase();
+    
+    if (bodyStr.contains('401') || 
+        bodyStr.contains('unauthorized') ||
+        headersStr.contains('401') ||
+        headersStr.contains('unauthorized')) {
+      debugPrint('🔐 Chat WS disconnected due to auth error, attempting token refresh...');
+      _handleAuthError();
+    } else if (_conversationId != null) {
+      // Normal disconnect, retry connection
+      debugPrint('⚠️ Chat WS disconnected normally, scheduling reconnection...');
+      _retryConnection();
+    }
   }
   
   void _onMessageReceived(StompFrame frame) {
@@ -463,6 +510,143 @@ class ChatNotificationService extends ChangeNotifier {
     _stompClient?.deactivate();
     _stompClient = null;
     _isConnected = false;
+    _retryCount = 0;
+  }
+  
+  /// Handle WebSocket error with token refresh logic
+  Future<void> _handleWebSocketError(dynamic error) async {
+    debugPrint('🔧 [ChatNotificationService] Handling Chat WS error: $error');
+    debugPrint('🔍 Error type: ${error.runtimeType}');
+    
+    // Check if error is related to authentication (401)
+    final errorStr = error.toString().toLowerCase();
+    debugPrint('🔍 Error string (lowercase): $errorStr');
+    
+    final is401Error = errorStr.contains('401') || 
+        errorStr.contains('unauthorized') ||
+        errorStr.contains('not upgraded');
+    
+    debugPrint('🔍 Is 401 error: $is401Error');
+    
+    if (is401Error) {
+      debugPrint('🔐 Chat WS: Authentication error detected, attempting token refresh...');
+      await _handleAuthError();
+    } else {
+      debugPrint('⚠️ Chat WS: Non-auth error, retrying connection...');
+      // For other errors, just retry connection with exponential backoff
+      _retryConnection();
+    }
+  }
+  
+  /// Handle STOMP error with token refresh logic
+  Future<void> _handleStompError(StompFrame frame) async {
+    debugPrint('🔧 Handling Chat STOMP error: ${frame.body}');
+    
+    // Check if error is related to authentication
+    final bodyStr = frame.body?.toString().toLowerCase() ?? '';
+    if (bodyStr.contains('401') || bodyStr.contains('unauthorized')) {
+      debugPrint('🔐 Chat STOMP: Authentication error detected, attempting token refresh...');
+      await _handleAuthError();
+    } else {
+      // For other errors, just retry connection
+      _retryConnection();
+    }
+  }
+  
+  /// Handle authentication errors by refreshing token
+  Future<void> _handleAuthError() async {
+    if (_isRefreshingToken) {
+      debugPrint('⏳ Token refresh already in progress, skipping...');
+      return;
+    }
+    
+    if (_retryCount >= _maxRetries) {
+      debugPrint('❌ Max retry attempts reached for Chat WS token refresh');
+      return;
+    }
+    
+    _isRefreshingToken = true;
+    debugPrint('🔄 Attempting to refresh token for Chat WS (attempt ${_retryCount + 1}/$_maxRetries)...');
+    
+    try {
+      // Attempt to force refresh token
+      final refreshSuccess = await _authViewModel?.forceRefreshToken();
+      
+      if (refreshSuccess == true) {
+        debugPrint('✅ Token refreshed successfully, reconnecting Chat WS...');
+        _retryCount++;
+        _isRefreshingToken = false;
+        
+        // Wait a bit before reconnecting
+        await Future.delayed(Duration(seconds: 2));
+        
+        // Reconnect with new token
+        await _connectWebSocket();
+      } else {
+        debugPrint('❌ Token refresh failed for Chat WS');
+        _retryCount++;
+        _isRefreshingToken = false;
+        
+        // If refresh failed, try again after longer delay
+        if (_retryCount < _maxRetries) {
+          await Future.delayed(Duration(seconds: 5 * _retryCount));
+          await _handleAuthError();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error during token refresh for Chat WS: $e');
+      _retryCount++;
+      _isRefreshingToken = false;
+      
+      // Try again after longer delay
+      if (_retryCount < _maxRetries) {
+        await Future.delayed(Duration(seconds: 5 * _retryCount));
+        await _handleAuthError();
+      }
+    }
+  }
+  
+  /// Retry connection with exponential backoff
+  void _retryConnection() {
+    if (_retryCount >= _maxRetries) {
+      debugPrint('❌ Max retry attempts reached for Chat WS connection');
+      
+      // Reset counter after longer delay for next round
+      Future.delayed(const Duration(seconds: 60), () {
+        _retryCount = 0;
+      });
+      return;
+    }
+    
+    _retryCount++;
+    final delaySeconds = (_retryCount * 3).clamp(3, 15);
+    
+    debugPrint('🔄 Scheduling Chat WS reconnection in ${delaySeconds}s (attempt $_retryCount/$_maxRetries)...');
+    
+    Future.delayed(Duration(seconds: delaySeconds), () async {
+      if (_conversationId != null) {
+        await _connectWebSocket();
+      }
+    });
+  }
+  
+  /// Force reconnect with fresh token (useful after manual token refresh)
+  Future<void> forceReconnect() async {
+    debugPrint('🔄 Force reconnecting Chat WS for driver: $_currentDriverId...');
+    _retryCount = 0;
+    _isRefreshingToken = false;
+    
+    // Disconnect existing connection
+    disconnect();
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Reconnect if we have a conversation
+    if (_conversationId != null) {
+      await _connectWebSocket();
+    } else if (_currentDriverId != null) {
+      // Re-initialize with stored driver ID
+      await initialize(_currentDriverId!);
+    }
   }
   
   @override

@@ -74,6 +74,9 @@ abstract class IssueRepository {
     double? locationLongitude,
   });
 
+  /// Get predefined traffic violation reasons for penalty reporting
+  Future<List<String>> getTrafficViolationReasons();
+
   // ===== ORDER_REJECTION flow methods =====
 
   /// Report order rejection by recipient (Driver)

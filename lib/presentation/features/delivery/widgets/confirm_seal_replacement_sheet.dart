@@ -58,6 +58,7 @@ class _ConfirmSealReplacementSheetState
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    print('📷 [ConfirmSealReplacementSheet] Picking image from source: ${source.name}');
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
@@ -67,11 +68,21 @@ class _ConfirmSealReplacementSheetState
       );
 
       if (photo != null) {
+        print('✅ [ConfirmSealReplacementSheet] Image picked successfully: ${photo.name}');
         setState(() {
           _sealImage = File(photo.path);
         });
+        print('✅ [ConfirmSealReplacementSheet] _sealImage set successfully');
+      } else {
+        print('❌ [ConfirmSealReplacementSheet] No image selected/picked');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không có ảnh nào được chọn')),
+          );
+        }
       }
     } catch (e) {
+      print('❌ [ConfirmSealReplacementSheet] Error picking image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Lỗi chọn ảnh: $e')),
@@ -81,24 +92,33 @@ class _ConfirmSealReplacementSheetState
   }
 
   Future<void> _confirmSealReplacement() async {
+    print('🔘 [ConfirmSealReplacementSheet] Confirm button clicked');
+    print('📷 [ConfirmSealReplacementSheet] _sealImage status: ${_sealImage != null ? "HAS IMAGE" : "NULL"}');
+    
     if (_sealImage == null) {
+      print('❌ [ConfirmSealReplacementSheet] No seal image - showing snackbar');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng chụp ảnh seal mới')),
       );
       return;
     }
 
+    print('✅ [ConfirmSealReplacementSheet] Image exists, starting upload process');
     setState(() {
       _isUploading = true;
     });
 
     try {
+      print('🔄 [ConfirmSealReplacementSheet] Converting image to base64...');
       // Convert image to base64
       final bytes = await _sealImage!.readAsBytes();
       final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      print('✅ [ConfirmSealReplacementSheet] Base64 conversion completed, size: ${bytes.length} bytes');
 
+      print('📞 [ConfirmSealReplacementSheet] Calling widget.onConfirm callback...');
       // Call the onConfirm callback - let the caller handle everything
       await widget.onConfirm(base64Image);
+      print('✅ [ConfirmSealReplacementSheet] widget.onConfirm completed successfully');
 
       // Close the bottom sheet after successful confirmation
       // Use pop with result to signal success

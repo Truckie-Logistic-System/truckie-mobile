@@ -22,6 +22,7 @@ import '../presentation/features/orders/viewmodels/order_detail_viewmodel.dart';
 import '../presentation/features/splash/screens/splash_screen.dart';
 import '../presentation/features/notification/screens/notification_list_screen.dart';
 import '../presentation/features/chat/chat_screen.dart';
+import '../presentation/features/onboarding/screens/driver_onboarding_screen.dart';
 
 class AppRoutes {
   // Route names
@@ -29,6 +30,7 @@ class AppRoutes {
   static const String root = '/';
   static const String splash = '/splash';
   static const String login = '/login';
+  static const String driverOnboarding = '/driver-onboarding';
   static const String main = '/main';
   static const String home = '/home';
   static const String orders = '/orders';
@@ -87,6 +89,16 @@ class AppRoutes {
       case login:
         return MaterialPageRoute(
           builder: (_) => const ResponsiveWrapper(child: LoginScreen()),
+        );
+
+      case driverOnboarding:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final currentPassword = args?['currentPassword'] as String? ?? '';
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => ResponsiveWrapper(
+            child: DriverOnboardingScreen(currentPassword: currentPassword),
+          ),
         );
 
       case editDriverInfo:

@@ -72,12 +72,11 @@ class AuthDataSourceImpl implements AuthDataSource {
       final authResponseModel = AuthResponseModel.fromJson(response.data['data']);
       final authResponse = authResponseModel.toEntity();
 
-      
-      
-
       // Lưu tokens
       await tokenStorageService.saveAccessToken(authResponse.authToken);
       await tokenStorageService.saveRefreshToken(authResponse.refreshToken);
+      
+      // Create user with firstTimeLogin flag from response
       final user = User(
         id: authResponse.user.id,
         username: authResponse.user.username,
@@ -90,6 +89,8 @@ class AuthDataSourceImpl implements AuthDataSource {
         status: authResponse.user.status,
         role: authResponse.user.role,
         authToken: authResponse.authToken,
+        firstTimeLogin: authResponse.firstTimeLogin,
+        requiredActions: authResponse.requiredActions,
       );
 
       await saveUserInfo(user);

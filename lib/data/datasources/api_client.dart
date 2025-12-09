@@ -6,6 +6,7 @@ import '../../core/services/http_client_interface.dart';
 import '../../app/di/service_locator.dart';
 
 typedef OnUnauthorizedCallback = Future<void> Function();
+typedef OnForbiddenCallback = Future<void> Function();
 
 /// Wrapper class to track queued requests with timestamp
 class _QueuedRequest {
@@ -20,6 +21,7 @@ class ApiClient implements IHttpClient {
   late final Dio dio;
   late final TokenStorageService _tokenStorageService;
   OnUnauthorizedCallback? _onUnauthorizedCallback;
+  OnForbiddenCallback? _onForbiddenCallback;
   bool _isRefreshing = false; // Lock to prevent concurrent refresh calls
   
   // CRITICAL: Add max queue size and timeout to prevent memory leak
@@ -76,6 +78,18 @@ class ApiClient implements IHttpClient {
           return handler.next(options);
         },
         onError: (DioException e, handler) async {
+          // Handle 403 Forbidden errors from DriverOnboardingFilter
+          if (e.response?.statusCode == 403) {
+            final message = e.response?.data?['message'] as String?;
+            if (message != null && message.contains('Vui lòng hoàn tất đăng ký tài khoản trước khi sử dụng ứng dụng')) {
+              // INACTIVE driver attempting to access restricted endpoint - trigger callback
+              if (_onForbiddenCallback != null) {
+                await _onForbiddenCallback!();
+              }
+              return handler.next(e);
+            }
+          }
+
           // Handle 401 Unauthorized errors
           if (e.response?.statusCode == 401) {
             // CRITICAL: Use lock to prevent concurrent refresh calls
@@ -173,6 +187,11 @@ class ApiClient implements IHttpClient {
   /// Set callback to be called when 401 Unauthorized error occurs
   void setOnUnauthorizedCallback(OnUnauthorizedCallback callback) {
     _onUnauthorizedCallback = callback;
+  }
+
+  /// Set callback to be called when 403 Forbidden error occurs (INACTIVE driver access)
+  void setOnForbiddenCallback(OnForbiddenCallback callback) {
+    _onForbiddenCallback = callback;
   }
 
   /// Clean up old queued requests that have exceeded timeout

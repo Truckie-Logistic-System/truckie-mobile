@@ -257,6 +257,7 @@ class EnhancedLocationTrackingService {
     double? bearing,
     double? speed,
     double? accuracy,
+    String? vehicleAssignmentId,
   }) async {
     final position = Position(
       latitude: latitude,
@@ -271,11 +272,11 @@ class EnhancedLocationTrackingService {
       speedAccuracy: 0.0,
     );
 
-    await sendPosition(position, isManualUpdate: true); // Manual update - always allow
+    await sendPosition(position, isManualUpdate: true, vehicleAssignmentId: vehicleAssignmentId); // Manual update - always allow
   }
 
   /// Send Position object with full validation
-  Future<void> sendPosition(Position position, {bool isManualUpdate = false}) async {
+  Future<void> sendPosition(Position position, {bool isManualUpdate = false, String? vehicleAssignmentId}) async {
     // Check for California GPS
     final lat = position.latitude;
     final lng = position.longitude;
@@ -351,7 +352,7 @@ class EnhancedLocationTrackingService {
     if (_isConnected && await _isOnline()) {
       // Convert speed from m/s to km/h
       final speedKmh = position.speed * 3.6;
-      final success = await _sendLocationNow(location, position.heading, speed: speedKmh);
+      final success = await _sendLocationNow(location, position.heading, speed: speedKmh, vehicleAssignmentId: vehicleAssignmentId);
       if (success) {
         _updateLastSendState(location);
         _stats.successfulSends++;
@@ -428,7 +429,7 @@ class EnhancedLocationTrackingService {
   }
 
   /// Send location immediately via WebSocket
-  Future<bool> _sendLocationNow(LatLng location, double bearing, {double? speed}) async {
+  Future<bool> _sendLocationNow(LatLng location, double bearing, {double? speed, String? vehicleAssignmentId}) async {
     if (!_isConnected || _vehicleId == null || _licensePlateNumber == null) {
       return false;
     }
@@ -441,6 +442,7 @@ class EnhancedLocationTrackingService {
         licensePlateNumber: _licensePlateNumber!,
         bearing: bearing,
         speed: speed,
+        vehicleAssignmentId: vehicleAssignmentId,
       );
 
       

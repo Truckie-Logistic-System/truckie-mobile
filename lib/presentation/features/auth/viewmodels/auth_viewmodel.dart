@@ -124,6 +124,10 @@ class AuthViewModel extends BaseViewModel {
     navigatorKey = key;
   }
 
+  // Store password temporarily for onboarding flow
+  String? _tempPasswordForOnboarding;
+  String? get tempPasswordForOnboarding => _tempPasswordForOnboarding;
+
   Future<bool> login(String username, String password) async {
     status = AuthStatus.loading;
     _errorMessage = '';
@@ -140,6 +144,19 @@ class AuthViewModel extends BaseViewModel {
       (user) async {
         _user = user;
         notifyListeners();
+
+        // Check if driver needs onboarding (first-time login)
+        if (user.needsOnboarding) {
+          // Store password for onboarding screen
+          _tempPasswordForOnboarding = password;
+          
+          // Navigate to onboarding screen instead of main
+          _navigateToOnboarding(password);
+          return true;
+        }
+
+        // Clear temp password if not needed
+        _tempPasswordForOnboarding = null;
 
         // CRITICAL: Don't fetch driver info immediately after login!
         // This can cause API failures which trigger token refresh,
@@ -161,6 +178,27 @@ class AuthViewModel extends BaseViewModel {
     );
   }
 
+  /// Navigate to driver onboarding screen
+  void _navigateToOnboarding(String currentPassword) async {
+    int attempts = 0;
+    const maxAttempts = 10;
+    const delayMs = 100;
+
+    while (attempts < maxAttempts) {
+      if (navigatorKey?.currentState != null) {
+        navigatorKey!.currentState!.pushNamedAndRemoveUntil(
+          AppRoutes.driverOnboarding,
+          (route) => false,
+          arguments: {'currentPassword': currentPassword},
+        );
+        return;
+      }
+
+      attempts++;
+      await Future.delayed(Duration(milliseconds: delayMs));
+    }
+  }
+
   Future<void> _fetchDriverInfo() async {
     if (_getDriverInfoUseCase == null) return;
 
@@ -168,13 +206,16 @@ class AuthViewModel extends BaseViewModel {
 
     result.fold(
       (failure) async {
-        //
+        // Nếu BE trả về lỗi yêu cầu hoàn tất onboarding (INACTIVE driver bị chặn)
+        // thì tự động logout thay vì cố refresh token.
+        if (failure.message.contains('Vui lòng hoàn tất đăng ký tài khoản trước khi sử dụng ứng dụng')) {
+          await logout();
+          return;
+        }
 
-        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        // Ngược lại, xử lý lỗi 401/token hết hạn như cũ
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
-          // Nếu refresh token thành công, thử lại
-          //
           await _fetchDriverInfo();
         }
       },
@@ -193,13 +234,16 @@ class AuthViewModel extends BaseViewModel {
 
     return result.fold(
       (failure) async {
-        //
+        // Nếu BE trả về lỗi yêu cầu hoàn tất onboarding (INACTIVE driver bị chặn)
+        // thì tự động logout thay vì cố refresh token.
+        if (failure.message.contains('Vui lòng hoàn tất đăng ký tài khoản trước khi sử dụng ứng dụng')) {
+          await logout();
+          return false;
+        }
 
-        // Sử dụng handleUnauthorizedError từ BaseViewModel
+        // Ngược lại, xử lý lỗi 401/token hết hạn như cũ
         final shouldRetry = await handleUnauthorizedError(failure.message);
         if (shouldRetry) {
-          // Nếu refresh token thành công, thử lại
-          //
           return await refreshDriverInfo();
         }
 
@@ -361,11 +405,40 @@ class AuthViewModel extends BaseViewModel {
       },
     );
 
+    // CRITICAL: After successful token refresh, reconnect WebSocket services
+    // This ensures they use the new token for authentication
+    if (success) {
+      await _reconnectWebSocketServices();
+    }
+
     // Reset lock and complete the completer
     _isRefreshing = false;
     _refreshCompleter?.complete(success);
     _refreshCompleter = null;
     return success;
+  }
+  
+  /// Reconnect WebSocket services after token refresh
+  Future<void> _reconnectWebSocketServices() async {
+    debugPrint('🔄 Reconnecting WebSocket services after token refresh...');
+    
+    try {
+      // Reconnect NotificationService
+      final notificationService = getIt<NotificationService>();
+      await notificationService.forceReconnect();
+      debugPrint('✅ NotificationService reconnected');
+    } catch (e) {
+      debugPrint('⚠️ Failed to reconnect NotificationService: $e');
+    }
+    
+    try {
+      // Reconnect ChatNotificationService
+      final chatNotificationService = getIt<ChatNotificationService>();
+      await chatNotificationService.forceReconnect();
+      debugPrint('✅ ChatNotificationService reconnected');
+    } catch (e) {
+      debugPrint('⚠️ Failed to reconnect ChatNotificationService: $e');
+    }
   }
 
   Future<void> checkAuthStatus() async {
@@ -589,6 +662,12 @@ class AuthViewModel extends BaseViewModel {
         } catch (e) {
           await logout();
         }
+      });
+
+      // Setup callback for 403 Forbidden errors (INACTIVE driver access)
+      apiClient.setOnForbiddenCallback(() async {
+        // INACTIVE driver attempting to access restricted endpoint - logout immediately
+        await logout();
       });
     } catch (e) { // Ignore: Error handling not implemented
     }

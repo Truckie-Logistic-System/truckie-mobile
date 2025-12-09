@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../theme/app_colors.dart';
 import '../../../../data/models/driver_dashboard_model.dart';
 import '../../../../app/app_routes.dart';
+import '../../../../domain/entities/order_status.dart';
 
 /// Card hiển thị đơn hàng gần đây từ dashboard data
 class SimplifiedRecentOrdersCard extends StatelessWidget {
@@ -18,41 +19,62 @@ class SimplifiedRecentOrdersCard extends StatelessWidget {
     this.onViewAll,
   });
 
-  Color _getOrderStatusColor(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'COMPLETED':
-      case 'SUCCESSFUL':
-        return AppColors.success;
-      case 'DELIVERING':
-      case 'ONGOING_DELIVERED':
-        return AppColors.inProgress;
-      case 'PICKING_UP':
-        return AppColors.warning;
-      case 'CANCELLED':
-        return AppColors.error;
-      case 'ASSIGNED_TO_DRIVER':
-        return AppColors.primary;
-      default:
-        return AppColors.textSecondary;
-    }
+  Widget _buildStatusBadge(String status) {
+    final orderStatus = OrderStatus.fromString(status);
+    final displayStatus = orderStatus.toVietnamese();
+    final color = _getStatusColor(orderStatus);
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        displayStatus,
+        style: TextStyle(
+          color: color,
+          fontSize: 10.sp,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 
-  String _getOrderStatusText(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'COMPLETED':
-      case 'SUCCESSFUL':
-        return 'Đã hoàn thành';
-      case 'DELIVERING':
-      case 'ONGOING_DELIVERED':
-        return 'Đang giao';
-      case 'PICKING_UP':
-        return 'Đang lấy hàng';
-      case 'ASSIGNED_TO_DRIVER':
-        return 'Đã phân công';
-      case 'CANCELLED':
-        return 'Đã hủy';
-      default:
-        return status ?? 'Không xác định';
+  Color _getStatusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+      case OrderStatus.processing:
+        return Colors.grey;
+      case OrderStatus.cancelled:
+        return Colors.red;
+      case OrderStatus.contractDraft:
+      case OrderStatus.contractSigned:
+      case OrderStatus.onPlanning:
+        return Colors.blue;
+      case OrderStatus.assignedToDriver:
+      case OrderStatus.fullyPaid:
+        return Colors.blue;
+      case OrderStatus.pickingUp:
+        return Colors.orange;
+      case OrderStatus.onDelivered:
+      case OrderStatus.ongoingDelivered:
+        return Colors.purple;
+      case OrderStatus.delivered:
+      case OrderStatus.successful:
+        return Colors.green;
+      case OrderStatus.inTroubles:
+        return Colors.red;
+      case OrderStatus.resolved:
+      case OrderStatus.compensation:
+        return Colors.orange;
+      case OrderStatus.rejectOrder:
+        return Colors.red;
+      case OrderStatus.returning:
+        return Colors.orange;
+      case OrderStatus.returned:
+        return Colors.grey;
     }
   }
 
@@ -129,9 +151,6 @@ class SimplifiedRecentOrdersCard extends StatelessWidget {
   }
 
   Widget _buildOrderItem(BuildContext context, RecentOrder order) {
-    final statusColor = _getOrderStatusColor(order.status);
-    final statusText = _getOrderStatusText(order.status);
-
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(12.w),
@@ -163,21 +182,7 @@ class SimplifiedRecentOrdersCard extends StatelessWidget {
                     color: Colors.black87,
                   ),
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      fontSize: 10.sp,
-                      color: statusColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+                _buildStatusBadge(order.status),
               ],
             ),
             SizedBox(height: 8.h),

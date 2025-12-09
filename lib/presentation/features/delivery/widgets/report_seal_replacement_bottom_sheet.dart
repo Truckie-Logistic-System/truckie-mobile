@@ -8,6 +8,7 @@ import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../widgets/waiting_dialog.dart';
 
 /// Bottom sheet widget để driver báo cáo seal replacement issue
 /// Step 1: Driver reports seal removal
@@ -204,15 +205,15 @@ class _ReportSealReplacementBottomSheetState
 
       if (mounted) {
         Navigator.pop(context, issue);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Đã báo cáo seal bị gỡ! Vui lòng chờ staff chỉ định seal mới.',
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
-          ),
+        
+        // Show waiting dialog for staff to process seal assignment
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const WaitingSealAssignmentDialog(),
         );
+        
+        print('✅ Seal replacement reported, showing waiting dialog for staff assignment...');
       }
     } catch (e) {
 

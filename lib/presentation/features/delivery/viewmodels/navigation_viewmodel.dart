@@ -1031,21 +1031,4 @@ class NavigationViewModel extends ChangeNotifier {
     );
   }
 
-  /// Complete trip - update order status to SUCCESSFUL
-  /// Called when driver confirms delivery completion
-  Future<bool> completeTrip() async {
-    if (orderWithDetails == null) {
-      return false;
-    }
-    final result = await _updateToSuccessfulUseCase(orderWithDetails!.id);
-    
-    return result.fold(
-      (failure) {
-        return false;
-      },
-      (success) {
-        return true;
-      },
-    );
-  }
 }

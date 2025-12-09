@@ -15,6 +15,8 @@ import '../../data/repositories/vehicle_repository_impl.dart';
 import '../../data/repositories/photo_completion_repository_impl.dart';
 import '../../data/repositories/vehicle_fuel_consumption_repository_impl.dart';
 import '../../data/repositories/issue_repository_impl.dart';
+import '../../data/repositories/driver_onboarding_repository.dart';
+import '../../data/repositories/driver_onboarding_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 // NEW: Import notification system dependencies
 import '../../data/datasources/notification_remote_data_source.dart';
@@ -53,7 +55,6 @@ import '../../presentation/features/orders/viewmodels/order_list_viewmodel.dart'
 import '../../presentation/features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/services/vehicle_websocket_service.dart';
-import '../../core/services/mock_vehicle_websocket_service.dart';
 import '../../core/services/enhanced_location_tracking_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/driver_notification_service.dart';
@@ -64,9 +65,11 @@ import '../../core/services/global_location_manager.dart';
 import '../../core/services/navigation_state_service.dart';
 import '../../core/services/issue_resolution_handler.dart';
 import '../../core/services/chat_notification_service.dart';
+import '../../core/services/global_dialog_service.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
 import '../../data/datasources/dashboard_data_source.dart';
 import '../../presentation/features/home/viewmodels/dashboard_viewmodel.dart';
+import '../../presentation/features/onboarding/viewmodels/driver_onboarding_viewmodel.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -114,6 +117,11 @@ Future<void> setupServiceLocator() async {
     getIt.registerSingleton<NotificationService>(NotificationService());
     print('✅ [ServiceLocator] ${DateTime.now()}: NotificationService registered');
 
+    // Register GlobalDialogService as singleton
+    print('⏰ [ServiceLocator] ${DateTime.now()}: Creating GlobalDialogService...');
+    getIt.registerSingleton<GlobalDialogService>(GlobalDialogService());
+    print('✅ [ServiceLocator] ${DateTime.now()}: GlobalDialogService registered');
+
     // Register DriverNotificationService for REST API notifications
     getIt.registerLazySingleton<DriverNotificationService>(
       () => DriverNotificationService(getIt<NotificationRepository>()),
@@ -127,19 +135,10 @@ Future<void> setupServiceLocator() async {
       ),
     );
 
-    // WebSocket services
-    // Sử dụng mock service cho testing - đổi thành false để sử dụng dịch vụ thật
-    final bool useMockWebSocket = false;
-
-    if (useMockWebSocket) {
-      getIt.registerLazySingleton<VehicleWebSocketService>(
-        () => MockVehicleWebSocketService(),
-      );
-    } else {
-      getIt.registerLazySingleton<VehicleWebSocketService>(
-        () => VehicleWebSocketService(baseUrl: ApiConstants.wsBaseUrl),
-      );
-    }
+    // WebSocket services - luôn sử dụng dịch vụ thật trong môi trường driver
+    getIt.registerLazySingleton<VehicleWebSocketService>(
+      () => VehicleWebSocketService(baseUrl: ApiConstants.wsBaseUrl),
+    );
 
     // NotificationService handles all notifications (seal, return goods, damage, etc.)
     // No need for separate WebSocketService
@@ -245,6 +244,14 @@ Future<void> setupServiceLocator() async {
 
     getIt.registerLazySingleton<IssueRepository>(
       () => IssueRepositoryImpl(getIt<ApiClient>()),
+    );
+
+    // Driver onboarding repository
+    getIt.registerLazySingleton<DriverOnboardingRepository>(
+      () => DriverOnboardingRepositoryImpl(
+        apiClient: getIt<ApiClient>(),
+        tokenStorage: getIt<TokenStorageService>(),
+      ),
     );
 
     // Notification data sources and repositories
@@ -415,6 +422,13 @@ Future<void> setupServiceLocator() async {
     getIt.registerFactory<DashboardViewModel>(
       () => DashboardViewModel(
         dashboardDataSource: getIt<DashboardDataSource>(),
+      ),
+    );
+
+    // Driver Onboarding ViewModel
+    getIt.registerFactory<DriverOnboardingViewModel>(
+      () => DriverOnboardingViewModel(
+        repository: getIt<DriverOnboardingRepository>(),
       ),
     );
   } catch (e) {

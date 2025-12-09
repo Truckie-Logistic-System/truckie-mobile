@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../domain/entities/issue.dart';
@@ -82,8 +83,24 @@ class IssueRepositoryImpl implements IssueRepository {
   Future<List<IssueType>> getActiveIssueTypes() async {
     try {
       final types = await getAllIssueTypes();
-      return types.where((type) => type.isActive).toList();
+      
+      // Debug: Print all issue types and their categories
+      print('🔍 DEBUG: All issue types from API:');
+      for (final type in types) {
+        print('  - ${type.issueTypeName} (${type.issueCategory.value}) - Active: ${type.isActive}');
+      }
+      
+      // Filter only active issue types (UI layer will handle business filtering)
+      final filteredTypes = types.where((type) => type.isActive).toList();
+      
+      print('✅ DEBUG: Filtered issue types count: ${filteredTypes.length}');
+      for (final type in filteredTypes) {
+        print('  - ${type.issueTypeName} (${type.issueCategory.value})');
+      }
+      
+      return filteredTypes;
     } catch (e) {
+      print('❌ ERROR in getActiveIssueTypes: $e');
       rethrow;
     }
   }
@@ -134,11 +151,15 @@ class IssueRepositoryImpl implements IssueRepository {
     required String newSealAttachedImage,
   }) async {
     try {
+      // newSealAttachedImage is already base64 string from mobile app
+      // No need to read file and convert again
+      final base64Image = newSealAttachedImage;
+      
       final response = await _apiClient.put(
         '/issues/seal-replacement/confirm',
         data: {
           'issueId': issueId,
-          'newSealAttachedImage': newSealAttachedImage,
+          'newSealAttachedImage': base64Image,
         },
       );
 
@@ -301,6 +322,35 @@ class IssueRepositoryImpl implements IssueRepository {
       }
     } catch (e) {
       rethrow;
+    }
+  }
+
+  @override
+  Future<List<String>> getTrafficViolationReasons() async {
+    try {
+      final response = await _apiClient.get('/api/v1/penalties/traffic-violation-reasons');
+      
+      if (response.statusCode == 200 && response.data['data'] != null) {
+        final List<dynamic> data = response.data['data'] as List<dynamic>;
+        return data.map((item) => item.toString()).toList();
+      } else {
+        throw Exception('Failed to get traffic violation reasons');
+      }
+    } catch (e) {
+      // Return fallback list if API fails
+      return [
+        'Chạy quá tốc độ',
+        'Vượt đèn đỏ',
+        'Đi sai làn đường',
+        'Không giữ khoảng cách an toàn',
+        'Không chấp hành tín hiệu giao thông',
+        'Chở quá tải trọng cho phép',
+        'Không có hoặc không mang theo giấy tờ xe',
+        'Không thắt dây an toàn',
+        'Sử dụng điện thoại khi lái xe',
+        'Đỗ dừng xe sai quy định',
+        'Lý do khác'
+      ];
     }
   }
 

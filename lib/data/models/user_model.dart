@@ -15,9 +15,17 @@ class UserModel extends User {
     required super.role,
     required super.authToken,
     super.refreshToken,
+    super.firstTimeLogin = false,
+    super.requiredActions,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    // Parse requiredActions from JSON
+    List<String>? requiredActions;
+    if (json['requiredActions'] != null) {
+      requiredActions = List<String>.from(json['requiredActions']);
+    }
+    
     return UserModel(
       id: json['id'] ?? '',
       username: json['username'] ?? '',
@@ -33,6 +41,8 @@ class UserModel extends User {
           : const RoleModel(id: '', roleName: '', description: '', isActive: false),
       authToken: json['authToken'] ?? '',
       refreshToken: json['refreshToken'],
+      firstTimeLogin: json['firstTimeLogin'] ?? false,
+      requiredActions: requiredActions,
     );
   }
 
@@ -50,6 +60,8 @@ class UserModel extends User {
       'role': (role as RoleModel).toJson(),
       'authToken': authToken,
       'refreshToken': refreshToken,
+      'firstTimeLogin': firstTimeLogin,
+      'requiredActions': requiredActions,
     };
   }
 

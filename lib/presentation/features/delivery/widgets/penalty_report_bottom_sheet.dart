@@ -33,12 +33,40 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
 
   File? _violationRecordImage;
   bool _isSubmitting = false;
+  
+  // Traffic violation reasons
+  List<String> _violationReasons = [];
+  String? _selectedViolationReason;
+  bool _isLoadingReasons = false;
+  static const String _otherReason = 'Lý do khác';
 
   @override
   void initState() {
     super.initState();
     _issueRepository = getIt<IssueRepository>();
+    _loadViolationReasons();
+  }
 
+  Future<void> _loadViolationReasons() async {
+    setState(() => _isLoadingReasons = true);
+    
+    try {
+      final reasons = await _issueRepository.getTrafficViolationReasons();
+      setState(() {
+        _violationReasons = reasons;
+        _isLoadingReasons = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingReasons = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không tải được danh sách lý do vi phạm: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -136,6 +164,33 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
     
+    // Validate violation type selection
+    String violationType;
+    if (_selectedViolationReason == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chọn loại vi phạm giao thông'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (_selectedViolationReason == _otherReason) {
+      violationType = _violationTypeController.text.trim();
+      if (violationType.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vui lòng nhập mô tả lý do vi phạm'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    } else {
+      violationType = _selectedViolationReason!;
+    }
+    
     if (_violationRecordImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -149,11 +204,10 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-
       await _issueRepository.reportPenaltyIssue(
         vehicleAssignmentId: widget.vehicleAssignmentId,
         issueTypeId: widget.issueTypeId,
-        violationType: _violationTypeController.text.trim(),
+        violationType: violationType,
         violationImagePath: _violationRecordImage!.path,
         locationLatitude: widget.currentLatitude,
         locationLongitude: widget.currentLongitude,
@@ -170,7 +224,6 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
         );
       }
     } catch (e) {
-
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -275,25 +328,84 @@ class _PenaltyReportBottomSheetState extends State<PenaltyReportBottomSheet> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _violationTypeController,
-                        maxLines: 2,
-                        maxLength: 100,
-                        decoration: InputDecoration(
-                          hintText: 'VD: Vượt đèn đỏ, quá tốc độ, dừng đỗ sai quy định...',
-                          border: OutlineInputBorder(
+                      
+                      if (_isLoadingReasons)
+                        Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          filled: true,
-                          fillColor: Colors.grey[50],
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          value: _selectedViolationReason,
+                          decoration: InputDecoration(
+                            hintText: 'Chọn loại vi phạm',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                          items: _violationReasons.map((reason) {
+                            return DropdownMenuItem<String>(
+                              value: reason,
+                              child: Text(reason),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedViolationReason = value;
+                              // Clear textarea when selecting preset reason
+                              if (value != _otherReason) {
+                                _violationTypeController.clear();
+                              }
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Vui lòng chọn loại vi phạm';
+                            }
+                            return null;
+                          },
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Vui lòng nhập loại vi phạm';
-                          }
-                          return null;
-                        },
-                      ),
+                      
+                      // Show textarea only when "Lý do khác" is selected
+                      if (_selectedViolationReason == _otherReason) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Mô tả chi tiết *',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _violationTypeController,
+                          maxLines: 3,
+                          maxLength: 100,
+                          decoration: InputDecoration(
+                            hintText: 'Nhập mô tả chi tiết về vi phạm...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                          validator: (value) {
+                            if (_selectedViolationReason == _otherReason && 
+                                (value == null || value.trim().isEmpty)) {
+                              return 'Vui lòng nhập mô tả lý do vi phạm';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
 
                       const SizedBox(height: 20),
 

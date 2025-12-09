@@ -132,6 +132,8 @@ class WaitingForResolutionDialog extends StatelessWidget {
         return Icons.error_outline;
       case IssueCategory.general:
         return Icons.report_problem;
+      case IssueCategory.offRouteRunaway:
+        return Icons.gps_off;
     }
   }
 
@@ -144,7 +146,7 @@ class WaitingForResolutionDialog extends StatelessWidget {
       case IssueCategory.orderRejection:
         return 'Đang chờ khách hàng thanh toán phí trả hàng. Vui lòng đợi...';
       case IssueCategory.sealReplacement:
-        return 'Đang xác minh seal mới. Vui lòng đợi trong giây lát...';
+        return 'Nhân viên đang xử lý và gán seal mới. Vui lòng đợi trong giây lát...';
       case IssueCategory.penalty:
         return 'Nhân viên đang xác minh và xử lý vi phạm giao thông. Vui lòng đợi...';
       case IssueCategory.accident:
@@ -155,6 +157,8 @@ class WaitingForResolutionDialog extends StatelessWidget {
         return 'Nhân viên đang xác minh và xử lý sự cố sai hàng. Vui lòng đợi...';
       case IssueCategory.general:
         return 'Nhân viên đang xử lý sự cố của bạn. Vui lòng đợi trong giây lát...';
+      case IssueCategory.offRouteRunaway:
+        return 'Nhân viên đang xác minh tài xế đi lệch tuyến. Vui lòng đợi trong giây lát...';
     }
   }
 

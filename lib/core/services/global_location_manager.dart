@@ -476,6 +476,11 @@ class GlobalLocationManager {
       return;
     }
 
+    // Debug log for off-route investigation
+    debugPrint('[GlobalLocationManager] sendLocationUpdate: '
+        'orderId=$currentOrderId, vehicleId=$currentVehicleId, '
+        'lat=$latitude, lng=$longitude, speed=$speed, segmentIndex=$segmentIndex');
+
     // Store last known location
     _lastLatitude = latitude;
     _lastLongitude = longitude;

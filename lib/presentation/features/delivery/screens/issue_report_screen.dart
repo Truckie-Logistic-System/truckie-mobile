@@ -14,6 +14,7 @@ import '../../../theme/app_colors.dart';
 import '../widgets/issue_report/damage_section.dart';
 import '../widgets/issue_report/rejection_section.dart';
 import '../widgets/issue_report/delivery_confirmation_section.dart';
+import '../../../widgets/waiting_dialog.dart';
 
 /// Screen for reporting damage and/or order rejection issues
 /// Full screen implementation with improved UI and better user experience
@@ -363,6 +364,16 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         try {
           await _submitRejectionReport();
           rejectionSuccess = true;
+          
+          // Show waiting dialog for customer payment
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const WaitingReturnPaymentDialog(),
+            );
+            print('✅ Order rejection reported, showing waiting dialog for customer payment...');
+          }
         } catch (e) {
           errorMessage = 'Lỗi báo cáo trả hàng: ${e.toString()}';
           throw e;
@@ -404,11 +415,18 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
         );
 
         // Navigate back to order detail with result
+        // Only navigate back if no rejection report (rejection shows waiting dialog)
+        final bool hasRejection = rejectionSuccess;
         final bool onlyDamage = damageSuccess && !rejectionSuccess;
-        Navigator.pop(context, {
-          'success': true,
-          'shouldNavigateToCarrier': onlyDamage,
-        });
+        
+        if (!hasRejection && mounted) {
+          Navigator.pop(context, {
+            'success': true,
+            'shouldNavigateToCarrier': onlyDamage,
+          });
+        }
+        // For rejection reports, the waiting dialog handles the flow
+        // Navigation will happen after customer payment completes
       }
     } catch (e) {
       if (mounted) {
@@ -480,9 +498,15 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   }
 
   Future<void> _submitRejectionReport() async {
+    // Map từ id đã chọn sang trackingCode tương ứng vì backend yêu cầu trackingCode
+    final rejectionTrackingCodes = _currentTripPackages
+        .where((pkg) => _selectedRejectionIds.contains(pkg.id))
+        .map((pkg) => pkg.trackingCode)
+        .toList();
+
     await widget.issueRepository.reportOrderRejection(
       vehicleAssignmentId: widget.vehicleAssignment.id,
-      orderDetailIds: _selectedRejectionIds.toList(),
+      orderDetailIds: rejectionTrackingCodes,
       locationLatitude: widget.currentLatitude,
       locationLongitude: widget.currentLongitude,
     );

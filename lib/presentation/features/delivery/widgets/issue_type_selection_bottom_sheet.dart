@@ -47,6 +47,30 @@ class _IssueTypeSelectionBottomSheetState
     _loadIssueTypes();
   }
 
+  /// Business rule cho phép báo seal dựa trên segment hiện tại thay vì chỉ status
+  /// - Nếu đoạn hiện tại là "Đơn vị vận chuyển → Điểm lấy hàng" thì KHÔNG cho báo seal
+  /// - Các đoạn còn lại (Pickup → Delivery, Delivery → Return, ...) thì cho phép
+  bool _canReportSealOnCurrentSegment() {
+    // Nếu không có NavigationViewModel thì fallback theo order status cũ
+    if (widget.navigationViewModel == null) {
+      return _isOrderStatusPickingUpOrLater();
+    }
+
+    final segmentName = widget.navigationViewModel!.getCurrentSegmentName();
+
+    // SegmentName đã được translate trong NavigationViewModel, ví dụ:
+    // "Đơn vị vận chuyển → Điểm lấy hàng"
+    final isCarrierToPickup =
+        segmentName.contains('Đơn vị vận chuyển') &&
+        segmentName.contains('Điểm lấy hàng');
+
+    if (isCarrierToPickup) {
+      return false;
+    }
+
+    return true;
+  }
+
   Future<void> _loadIssueTypes() async {
     setState(() {
       _isLoading = true;
@@ -54,8 +78,9 @@ class _IssueTypeSelectionBottomSheetState
 
     try {
       final types = await _issueRepository.getActiveIssueTypes();
+      final filteredTypes = _filterIssueTypes(types);
       setState(() {
-        _issueTypes = types;
+        _issueTypes = filteredTypes;
         _isLoading = false;
       });
     } catch (e) {
@@ -71,6 +96,63 @@ class _IssueTypeSelectionBottomSheetState
         );
       }
     }
+  }
+
+  /// Filter issue types based on business rules
+  List<IssueType> _filterIssueTypes(List<IssueType> types) {
+    return types.where((type) {
+      // Hide damage and order rejection issues
+      if (type.issueCategory == IssueCategory.damage ||
+          type.issueCategory == IssueCategory.orderRejection ||
+          type.issueCategory == IssueCategory.offRouteRunaway) {
+        return false;
+      }
+      
+      // Only show seal replacement khi driver đã rời khỏi chặng "Đơn vị vận chuyển → Điểm lấy hàng"
+      // Tránh cho phép báo seal khi còn đang chạy từ kho ra điểm lấy hàng
+      if (type.issueCategory == IssueCategory.sealReplacement) {
+        return _canReportSealOnCurrentSegment();
+      }
+      
+      // Show all other types
+      return true;
+    }).toList();
+  }
+
+  /// Check if order status is picking_up or later
+  bool _isOrderStatusPickingUpOrLater() {
+    if (widget.orderWithDetails?.orderDetails.isEmpty ?? true) {
+      return false;
+    }
+    
+    // Get the status of the first order detail (for current trip)
+    final orderDetail = widget.orderWithDetails!.orderDetails.first;
+    final status = orderDetail.status?.toLowerCase();
+    
+    if (status == null) return false;
+    
+    // Define the order of statuses
+    final statusOrder = [
+      'pending',
+      'processing', 
+      'contract_draft',
+      'contract_signed',
+      'on_planning',
+      'assigned_to_driver',
+      'picking_up', // From this status onward, seal replacement is allowed
+      'on_delivered',
+      'ongoing_delivered',
+      'delivered',
+      'returning',
+      'returned',
+      'cancelled',
+      'compensation'
+    ];
+    
+    final currentIndex = statusOrder.indexOf(status);
+    final pickingUpIndex = statusOrder.indexOf('picking_up');
+    
+    return currentIndex >= pickingUpIndex;
   }
 
   /// Get icon and color for issue category

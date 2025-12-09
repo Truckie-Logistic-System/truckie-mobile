@@ -131,6 +131,10 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
   }
 
   JourneySegment? _getCurrentActiveSegment() {
+    print('🔍 [RerouteModal] Getting current active segment...');
+    print('📍 [RerouteModal] currentSegmentIndex: ${widget.navigationViewModel.currentSegmentIndex}');
+    print('🛣️ [RerouteModal] routeSegments.length: ${widget.navigationViewModel.routeSegments.length}');
+    
     // Get current vehicle assignment
     final vehicleAssignment = widget.orderWithDetails.vehicleAssignments
         .firstWhere((va) => va.id == widget.vehicleAssignmentId);
@@ -141,22 +145,50 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
         .toList();
 
     if (activeJourney.isEmpty) {
+      print('❌ [RerouteModal] No active journey found');
       return null;
     }
 
-    // Use NavigationViewModel's current segment index if available
+    final journeySegments = activeJourney.first.journeySegments;
+    print('📊 [RerouteModal] journeySegments.length: ${journeySegments.length}');
+
+    // Use NavigationViewModel's current segment index with routeSegments
     if (widget.navigationViewModel.routeSegments.isNotEmpty &&
         widget.navigationViewModel.currentSegmentIndex <
-            activeJourney.first.journeySegments.length) {
-      return activeJourney.first.journeySegments[widget
-          .navigationViewModel
-          .currentSegmentIndex];
+            widget.navigationViewModel.routeSegments.length) {
+      
+      // Find the corresponding journey segment by matching segment order
+      final currentRouteSegment = widget.navigationViewModel.routeSegments[widget.navigationViewModel.currentSegmentIndex];
+      final targetSegmentOrder = widget.navigationViewModel.currentSegmentIndex + 1; // routeSegments are 0-indexed, segmentOrder is 1-indexed
+      
+      final matchingJourneySegment = journeySegments
+          .where((seg) => seg.segmentOrder == targetSegmentOrder)
+          .firstOrNull;
+      
+      if (matchingJourneySegment != null) {
+        print('✅ [RerouteModal] Using matched segment: ${matchingJourneySegment.segmentOrder}. ${matchingJourneySegment.startPointName} → ${matchingJourneySegment.endPointName}');
+        return matchingJourneySegment;
+      } else {
+        print('⚠️ [RerouteModal] No matching journey segment found for order $targetSegmentOrder');
+      }
     }
 
+    print('⚠️ [RerouteModal] NavigationViewModel logic failed, using fallback...');
+    print('⚠️ [RerouteModal] routeSegments.isEmpty: ${widget.navigationViewModel.routeSegments.isEmpty}');
+    print('⚠️ [RerouteModal] index check: ${widget.navigationViewModel.currentSegmentIndex} >= ${widget.navigationViewModel.routeSegments.length}');
+    
     // Fallback: Get the first segment with status ACTIVE
-    return activeJourney.first.journeySegments
+    final fallbackSegment = activeJourney.first.journeySegments
         .where((seg) => seg.status == 'ACTIVE')
         .firstOrNull;
+    
+    if (fallbackSegment != null) {
+      print('🔄 [RerouteModal] Using fallback segment: ${fallbackSegment.segmentOrder}. ${fallbackSegment.startPointName} → ${fallbackSegment.endPointName}');
+    } else {
+      print('❌ [RerouteModal] No fallback segment found');
+    }
+    
+    return fallbackSegment;
   }
 
   Future<void> _submitRerouteIssue() async {
@@ -265,8 +297,10 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
   }
 
   String _getCurrentSegmentDisplay() {
+    print('🎨 [RerouteModal] Getting segment display...');
     final currentSegment = _getCurrentActiveSegment();
     if (currentSegment == null) {
+      print('❌ [RerouteModal] No current segment for display');
       return 'Không có đoạn đường nào đang hoạt động';
     }
 
@@ -274,12 +308,16 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
     if (widget.navigationViewModel.routeSegments.isNotEmpty &&
         widget.navigationViewModel.currentSegmentIndex <
             widget.navigationViewModel.routeSegments.length) {
-      final routeSegmentName = widget.navigationViewModel
+      final routeSegmentName = widget
+          .navigationViewModel
           .getCurrentSegmentName();
+      print('✅ [RerouteModal] Using NavigationViewModel display: ${currentSegment.segmentOrder}. $routeSegmentName');
       return '${currentSegment.segmentOrder}. $routeSegmentName';
     }
 
-    return '${currentSegment.segmentOrder}. ${currentSegment.startPointName} → ${currentSegment.endPointName}';
+    final fallbackDisplay = '${currentSegment.segmentOrder}. ${currentSegment.startPointName} → ${currentSegment.endPointName}';
+    print('🔄 [RerouteModal] Using fallback display: $fallbackDisplay');
+    return fallbackDisplay;
   }
 
   @override

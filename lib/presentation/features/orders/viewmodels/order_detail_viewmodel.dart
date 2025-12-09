@@ -9,6 +9,7 @@ import 'package:flutter/material.dart' show debugPrint;
 import '../../../../core/errors/failures.dart';
 import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/entities/order_detail.dart';
+import '../../../../domain/entities/order_detail_status.dart';
 import '../../../../domain/repositories/photo_completion_repository.dart';
 import '../../../../domain/repositories/vehicle_fuel_consumption_repository.dart';
 import '../../../../domain/usecases/orders/get_order_details_usecase.dart';
@@ -297,13 +298,28 @@ class OrderDetailViewModel extends BaseViewModel {
       return null;
     }
 
-    // Find order detail that belongs to this vehicle assignment
+    // Find first order detail that belongs to this vehicle assignment
     try {
       final orderDetail = _orderWithDetails!.orderDetails.firstWhere(
         (od) => od.vehicleAssignmentId == userVehicleAssignment?.id,
       );
       return orderDetail.status;
     } catch (e) {
+      return null;
+    }
+  }
+
+  /// Helper: Lấy OrderDetailStatus enum của trip hiện tại
+  /// Trả về null nếu không tìm được hoặc status không hợp lệ
+  OrderDetailStatus? getCurrentTripStatusEnum() {
+    final statusString = getCurrentTripOrderDetailStatus();
+    if (statusString == null) {
+      return null;
+    }
+
+    try {
+      return OrderDetailStatus.fromString(statusString);
+    } catch (_) {
       return null;
     }
   }
@@ -325,14 +341,14 @@ class OrderDetailViewModel extends BaseViewModel {
   bool canConfirmPreDelivery() {
     if (_orderWithDetails == null) return false;
     
-    final detailStatus = getCurrentTripOrderDetailStatus();
-    if (detailStatus == null) {
-      // Fallback to Order Status if detail status not found
-      return _orderWithDetails!.status == 'PICKING_UP';
+    final detailStatusEnum = getCurrentTripStatusEnum();
+    if (detailStatusEnum == null) {
+      // Nếu không xác định được status trip hiện tại, không cho phép action
+      return false;
     }
-    
-    // Can confirm pre-delivery if detail status is PICKING_UP
-    return detailStatus == 'PICKING_UP';
+
+    // Có thể xác nhận đóng gói & seal khi trip đang ở trạng thái PICKING_UP
+    return detailStatusEnum == OrderDetailStatus.pickingUp;
   }
 
   /// Kiểm tra xem đơn hàng có thể xác nhận giao hàng không (chụp ảnh khách nhận hàng)
@@ -340,14 +356,13 @@ class OrderDetailViewModel extends BaseViewModel {
   bool canConfirmDelivery() {
     if (_orderWithDetails == null) return false;
     
-    final detailStatus = getCurrentTripOrderDetailStatus();
-    if (detailStatus == null) {
-      // Fallback to Order Status if detail status not found
-      return _orderWithDetails!.status == 'ONGOING_DELIVERED';
+    final detailStatusEnum = getCurrentTripStatusEnum();
+    if (detailStatusEnum == null) {
+      return false;
     }
-    
-    // Can confirm delivery if detail status is ONGOING_DELIVERED
-    return detailStatus == 'ONGOING_DELIVERED';
+
+    // Có thể xác nhận giao hàng khi trip đang ở ONGOING_DELIVERED
+    return detailStatusEnum == OrderDetailStatus.ongoingDelivered;
   }
 
   /// Kiểm tra xem có thể upload odometer cuối không (khi đã về carrier)
@@ -416,15 +431,49 @@ class OrderDetailViewModel extends BaseViewModel {
   bool canReportOrderRejection() {
     if (_orderWithDetails == null) return false;
     
-    final detailStatus = getCurrentTripOrderDetailStatus();
-    if (detailStatus == null) {
+    final detailStatusEnum = getCurrentTripStatusEnum();
+    if (detailStatusEnum == null) {
       return false;
     }
-    
+
     // Có thể báo cáo từ chối khi:
     // - ON_DELIVERED: đang trên đường giao hàng (đã xác nhận seal + đóng gói)
     // - ONGOING_DELIVERED: đã tới điểm giao, đang giao hàng
-    return detailStatus == 'ON_DELIVERED' || detailStatus == 'ONGOING_DELIVERED';
+    return detailStatusEnum == OrderDetailStatus.onDelivered ||
+        detailStatusEnum == OrderDetailStatus.ongoingDelivered;
+  }
+
+  /// Quyết định xem có nên hiển thị nút điều hướng (Navigation) cho driver không
+  /// Multi-trip safe: chỉ xét các OrderDetail thuộc vehicle assignment của tài xế hiện tại
+  /// và đảm bảo trip này có journeyHistories (tức là đã có lộ trình)
+  bool shouldShowNavigationButton() {
+    if (_orderWithDetails == null) {
+      return false;
+    }
+
+    // Lấy vehicle assignment của tài xế hiện tại
+    final vehicleAssignment = getCurrentUserVehicleAssignment();
+    if (vehicleAssignment == null) {
+      return false;
+    }
+
+    // Nếu trip chưa có journey history thì chưa có lộ trình để điều hướng
+    if (vehicleAssignment.journeyHistories.isEmpty) {
+      return false;
+    }
+
+    // Kiểm tra xem trong trip hiện tại có ít nhất một OrderDetail không bị REJECTED
+    // Điều này tương đương với việc trip này vẫn còn/đã từng active
+    final hasNonRejectedDetail = _orderWithDetails!.orderDetails.any((od) {
+      if (od.vehicleAssignmentId != vehicleAssignment.id) {
+        return false;
+      }
+
+      final statusEnum = OrderDetailStatus.fromString(od.status);
+      return statusEnum != OrderDetailStatus.rejected;
+    });
+
+    return hasNonRejectedDetail;
   }
 
   /// Kiểm tra xem có thể xác nhận trả hàng về pickup không

@@ -37,13 +37,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _orderListViewModel = getIt<OrderListViewModel>();
 
     // Đảm bảo token được refresh khi vào màn hình
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_authViewModel.status == AuthStatus.authenticated) {
-        _authViewModel.forceRefreshToken();
-        // Load dashboard data
-        _dashboardViewModel.loadDashboard();
-        // Load recent orders
-        _orderListViewModel.getDriverOrders();
+        // Chờ refresh token xong rồi mới gọi API dashboard/orders
+        final success = await _authViewModel.forceRefreshToken();
+        if (success) {
+          // Load dashboard data
+          await _dashboardViewModel.loadDashboard();
+          // Load recent orders
+          await _orderListViewModel.getDriverOrders();
+        }
       }
     });
   }

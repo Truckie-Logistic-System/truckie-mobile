@@ -17,11 +17,13 @@ import '../../../../domain/entities/order_with_details.dart';
 import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
 import '../../delivery/widgets/confirm_seal_replacement_sheet.dart';
+import '../../../widgets/driver/seal_assignment_info_dialog.dart';
 import '../../../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../../../presentation/theme/app_colors.dart';
 import '../../../../presentation/common_widgets/skeleton_loader.dart';
 import '../viewmodels/order_detail_viewmodel.dart';
 import '../viewmodels/order_list_viewmodel.dart';
+import '../viewmodels/pre_delivery_documentation_viewmodel.dart';
 import '../widgets/order_detail/index.dart';
 import '../widgets/order_detail/delivery_confirmation_section.dart';
 import '../widgets/order_detail/final_odometer_section.dart';
@@ -51,12 +53,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   StreamSubscription<Map<String, dynamic>>? _damageResolvedSubscription;
   StreamSubscription<Map<String, dynamic>>? _orderRejectionResolvedSubscription;
   StreamSubscription<Map<String, dynamic>>? _paymentTimeoutSubscription;
+  StreamSubscription<Map<String, dynamic>>? _rerouteResolvedSubscription;
 
   // Duplicate dialog prevention flags
   bool _isSealAssignmentDialogShowing = false;
   bool _isDamageResolvedDialogShowing = false;
   bool _isOrderRejectionResolvedDialogShowing = false;
   bool _isPaymentTimeoutDialogShowing = false;
+  bool _isRerouteResolvedDialogShowing = false;
 
   @override
   void initState() {
@@ -104,6 +108,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final oldSeal = data['oldSeal'] as Map<String, dynamic>?;
       final newSeal = data['newSeal'] as Map<String, dynamic>?;
       final staff = data['staff'] as Map<String, dynamic>?;
+      final isOnNavigationScreen =
+          data['isOnNavigationScreen'] as bool? ?? false;
 
       if (issueId == null) {
         print('❌ [OrderDetail] No issue ID in notification');
@@ -111,390 +117,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return;
       }
 
-      // Step 1: Show info dialog with beautiful UI (optimized for small screens)
+      // Nếu hiện tại đang ở NavigationScreen thì để màn đó xử lý dialog,
+      // tránh hiển thị trùng 2 dialog cùng lúc.
+      if (isOnNavigationScreen) {
+        print(
+          'ℹ️ [OrderDetail] Current route is NavigationScreen, skip seal dialog here',
+        );
+        _isSealAssignmentDialogShowing = false;
+        return;
+      }
+
+      // Step 1: Show unified info dialog (dùng chung cho mọi màn hình)
       final shouldConfirm = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          elevation: 16,
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 360),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header with gradient (compact, full width)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.blue.shade700, Colors.blue.shade500],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        // Icon shield compact
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.blue.shade400,
-                                  Colors.blue.shade600,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.security,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Title
-                        const Text(
-                          'Seal Mới Đã Được Gán',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Yêu cầu thay seal',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Content (compact padding)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Staff info
-                        if (staff != null)
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.blue.shade100,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade100,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.person,
-                                    color: Colors.blue.shade700,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Nhân viên',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Staff ${staff['fullName']}',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey.shade800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-
-                        // Instruction text (compact)
-                        Center(
-                          child: Text(
-                            'Vui lòng xác nhận gắn seal mới lên kiện hàng',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                              height: 1.4,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Seal comparison với arrow (compact)
-                        if (oldSeal != null && newSeal != null)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: Colors.red.shade300,
-                                      width: 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.red.shade100,
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.shade50,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          Icons.lock_open_rounded,
-                                          color: Colors.red.shade600,
-                                          size: 24,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Seal cũ',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        oldSeal['sealCode'],
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_forward_rounded,
-                                      color: Colors.grey.shade400,
-                                      size: 24,
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      'Thay',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey.shade500,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: Colors.green.shade300,
-                                      width: 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.green.shade100,
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.shade50,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          Icons.lock_rounded,
-                                          color: Colors.green.shade600,
-                                          size: 24,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Seal mới',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        newSeal['sealCode'],
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.green.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // Actions (compact)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Container(
-                      width: double.infinity,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade600, Colors.blue.shade700],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.shade300.withOpacity(0.5),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_rounded, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Xác Nhận Gán Seal',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        builder: (dialogContext) => SealAssignmentInfoDialog(
+          staffName: staff != null ? 'Staff ${staff['fullName']}' : null,
+          oldSealCode: oldSeal != null ? oldSeal['sealCode'] as String? : null,
+          newSealCode: newSeal != null ? newSeal['sealCode'] as String? : null,
         ),
       );
 
@@ -553,6 +193,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           print(
             '✅ [OrderDetail] Seal confirmed, navigating to NavigationScreen...',
           );
+
+          // ✅ Reset PreDeliveryDocumentationViewModel state to fix loading button issue
+          try {
+            final preDeliveryViewModel = getIt<PreDeliveryDocumentationViewModel>();
+            preDeliveryViewModel.resetState();
+            print('✅ [OrderDetail] PreDeliveryDocumentationViewModel state reset');
+          } catch (e) {
+            print('⚠️ [OrderDetail] Failed to reset PreDeliveryDocumentationViewModel: $e');
+          }
 
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
@@ -885,6 +534,114 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       });
     });
 
+    // ✅ Subscribe to reroute resolved stream
+    _rerouteResolvedSubscription = notificationService.rerouteResolvedStream.listen((
+      data,
+    ) async {
+      print('🔔 [OrderDetail] Reroute resolved notification received');
+
+      if (!mounted || _isRerouteResolvedDialogShowing) {
+        print(
+          '⚠️ [OrderDetail] Skipping: mounted=$mounted, showing=$_isRerouteResolvedDialogShowing',
+        );
+        return;
+      }
+
+      // ✅ CRITICAL: Wait for any closing bottom sheets to complete
+      print('⏳ [OrderDetail] Waiting 500ms for bottom sheet to close...');
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Check mounted again after delay
+      if (!mounted) {
+        print('⚠️ [OrderDetail] Widget unmounted after delay');
+        return;
+      }
+
+      _isRerouteResolvedDialogShowing = true;
+
+      print('✅ [OrderDetail] Showing reroute resolved info dialog');
+
+      final isOnNavigationScreen = data['isOnNavigationScreen'] as bool? ?? false;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: const EdgeInsets.all(24),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.route,
+                  color: Colors.green.shade600,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tuyến đường đã được cập nhật',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Sự cố về tuyến đường đã được xử lý. Bạn có thể tiếp tục hành trình với lộ trình mới.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  if (!isOnNavigationScreen) {
+                    Navigator.pushReplacementNamed(
+                      context,
+                      AppRoutes.navigation,
+                      arguments: widget.orderId,
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Tiếp tục hành trình',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+        ),
+      ).whenComplete(() {
+        _isRerouteResolvedDialogShowing = false;
+        print('✅ [OrderDetail] Reroute resolved dialog dismissed');
+      });
+    });
+
     // Load order details and try to restore navigation state
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Load order details first
@@ -967,6 +724,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _orderRejectionResolvedSubscription = null;
     _paymentTimeoutSubscription?.cancel();
     _paymentTimeoutSubscription = null;
+    _rerouteResolvedSubscription?.cancel();
+    _rerouteResolvedSubscription = null;
 
     // Unregister this screen from GlobalLocationManager
     _globalLocationManager.unregisterScreen('OrderDetailScreen');
@@ -1130,20 +889,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       totalIssues += va.issues.length;
     }
 
-    // Check if navigation button should be shown (from FULLY_PAID to final status)
-    final orderStatus = OrderStatus.fromString(orderWithDetails.status);
-    final bool shouldShowNavigationButton =
-        orderStatus == OrderStatus.fullyPaid ||
-        orderStatus == OrderStatus.pickingUp ||
-        orderStatus == OrderStatus.onDelivered ||
-        orderStatus == OrderStatus.ongoingDelivered ||
-        orderStatus == OrderStatus.delivered ||
-        orderStatus == OrderStatus.inTroubles ||
-        orderStatus == OrderStatus.resolved ||
-        orderStatus == OrderStatus.compensation ||
-        orderStatus == OrderStatus.successful ||
-        orderStatus == OrderStatus.returning ||
-        orderStatus == OrderStatus.returned;
+    // Multi-trip safe: quyết định hiển thị nút điều hướng dựa trên trip của tài xế hiện tại
+    // thay vì OrderStatus tổng của toàn bộ đơn hàng
+    final bool shouldShowNavigationButton = viewModel.shouldShowNavigationButton();
 
     // Calculate bottom section height
     final bool hasActionButtons =

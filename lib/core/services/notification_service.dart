@@ -16,6 +16,7 @@ import '../../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../../domain/repositories/order_repository.dart';
 import '../../domain/repositories/issue_repository.dart';
 import '../../domain/entities/order_detail.dart';
+import 'global_dialog_service.dart';
 
 /// Singleton service for managing WebSocket notifications
 /// Automatically connects when driver is authenticated 
@@ -156,32 +157,26 @@ class NotificationService {
   /// Initialize with navigator key for showing dialogs
   void initialize(GlobalKey<NavigatorState> navigatorKey) {
     if (_isInitialized) {
-      
+      print('⚠️ [NotificationService] initialize called but already initialized');
       return;
     }
-    
-    
+
+    print('🚀 [NotificationService] initialize called');
     _navigatorKey = navigatorKey;
     _authViewModel = getIt<AuthViewModel>();
     _listenToNotifications();
     _isInitialized = true;
-    
+    print('✅ [NotificationService] Initialization completed');
   }
 
   /// Connect to WebSocket with driver ID
   Future<void> connect(String driverId) async {
-    
-    
-    
-    
-    
-    
-    
+    print('🚀 [NotificationService] connect called with driverId=$driverId');
 
     // CRITICAL: Always disconnect to ensure fresh connection
     // Even if isConnected is false, the client might still exist and try to reconnect
     if (_stompClient != null) {
-      
+      print('🔌 [NotificationService] Existing StompClient found, disconnecting before reconnect...');
       disconnect();
       // Give old client time to fully disconnect
       await Future.delayed(const Duration(milliseconds: 500));
@@ -190,9 +185,7 @@ class NotificationService {
     // Reset manual disconnect flag when starting new connection
     _isManualDisconnect = false;
     _currentDriverId = driverId;
-    
-    
-    
+    print('🔑 [NotificationService] _currentDriverId set to $driverId');
 
     // Get JWT token for authentication
     final tokenStorageService = getIt<TokenStorageService>();
@@ -204,7 +197,7 @@ class NotificationService {
     }
 
     final wsUrl = '${ApiConstants.wsBaseUrl}${ApiConstants.wsVehicleTrackingEndpoint}';
-    
+    print('🌐 [NotificationService] WebSocket URL: $wsUrl');
 
     // Create a new completer for this connection attempt
     _connectionCompleter = Completer<void>();
@@ -214,17 +207,8 @@ class NotificationService {
         url: wsUrl,
         webSocketConnectHeaders: {'Authorization': 'Bearer $jwtToken'},
         onConnect: (StompFrame frame) {
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
+          print('✅ [NotificationService] WebSocket connected');
+          print('   STOMP headers: ${frame.headers}');
           _subscribeToDriverNotifications(driverId);
           // Reset retry count on successful connection
           _retryCount = 0;
@@ -237,12 +221,11 @@ class NotificationService {
           // Complete the connection completer
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
             _connectionCompleter!.complete();
-            
+            print('✅ [NotificationService] Connection completer completed');
           }
         },
         onWebSocketError: (dynamic error) {
-          
-          
+          print('❌ [NotificationService] WebSocket error: $error');
           // Complete the completer with error
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
             _connectionCompleter!.completeError(error);
@@ -251,8 +234,7 @@ class NotificationService {
           _handleWebSocketError(error);
         },
         onStompError: (StompFrame frame) {
-          
-          
+          print('❌ [NotificationService] STOMP error: ${frame.body}');
           // Complete the completer with error
           if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
             _connectionCompleter!.completeError(frame.body ?? 'STOMP error');
@@ -261,20 +243,14 @@ class NotificationService {
           _handleStompError(frame);
         },
         onDisconnect: (StompFrame frame) {
-          
-          
-          
-          
-          
-          
-          
+          print('⚠️ [NotificationService] WebSocket disconnected. isManualDisconnect=$_isManualDisconnect');
           // CRITICAL: Auto-reconnect when connection is lost
           // This ensures driver always receives notifications even after network issues
           if (_currentDriverId != null && !_isManualDisconnect) {
-            
+            print('🔄 [NotificationService] Scheduling reconnect for driverId=$_currentDriverId');
             _retryConnection();
           } else {
-            
+            print('ℹ️ [NotificationService] Manual disconnect or no currentDriverId, will not auto-reconnect');
           }
         },
         // CRITICAL: Disable auto-reconnect to prevent reconnection with stale tokens
@@ -285,22 +261,21 @@ class NotificationService {
       ),
     );
 
-    
+    print('⚡ [NotificationService] Activating StompClient...');
     _stompClient!.activate();
-    
-    
+    print('✅ [NotificationService] StompClient.activate() called');
     // Wait for connection to complete (with timeout)
     try {
       await _connectionCompleter!.future.timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          // 
+          print('⏰ [NotificationService] WebSocket connection timeout');
           throw TimeoutException('WebSocket connection timeout');
         },
       );
-      // 
+      print('✅ [NotificationService] WebSocket connection future completed');
     } catch (e) {
-      // 
+      print('❌ [NotificationService] Error while waiting for connection: $e');
       // Don't rethrow - let the app continue even if connection fails
     }
   }
@@ -386,29 +361,33 @@ class NotificationService {
 
     switch (type) {
       case 'SEAL_ASSIGNMENT':
-        print('🔄 [NotificationService] Dispatching SEAL_ASSIGNMENT to handler');
-        print('   🎯 Starting seal assignment flow...');
-        _showSealAssignmentNotification(notification);
+      case 'SEAL_ASSIGNED':
+        // Hỗ trợ cả hai kiểu type để tương thích với backend cũ/mới
+        print('🔄 Dispatching to GlobalDialogService.handleSealAssignment');
+        _delegateToGlobalDialogService(GlobalDialogType.sealAssignment, notification);
         break;
       case 'RETURN_PAYMENT_SUCCESS':
-        print('🔄 Dispatching to _handleReturnPaymentSuccess');
-        _handleReturnPaymentSuccess(notification);
+        print('🔄 Dispatching to GlobalDialogService.handleReturnPaymentSuccess');
+        _delegateToGlobalDialogService(GlobalDialogType.returnPaymentSuccess, notification);
         break;
       case 'RETURN_PAYMENT_TIMEOUT':
-        _handleReturnPaymentTimeout(notification);
+        print('🔄 Dispatching to GlobalDialogService.handleReturnPaymentTimeout');
+        _delegateToGlobalDialogService(GlobalDialogType.returnPaymentTimeout, notification);
         break;
       case 'RETURN_PAYMENT_REJECTED':
         _handleReturnPaymentRejected(notification);
         break;
       case 'DAMAGE_RESOLVED':
-        _handleDamageResolved(notification);
+        print('🔄 Dispatching to GlobalDialogService.handleDamageResolved');
+        _delegateToGlobalDialogService(GlobalDialogType.damageResolved, notification);
         break;
       case 'ORDER_REJECTION_RESOLVED':
-        _handleOrderRejectionResolved(notification);
+        print('🔄 Dispatching to GlobalDialogService.handleOrderRejectionResolved');
+        _delegateToGlobalDialogService(GlobalDialogType.orderRejectionResolved, notification);
         break;
       case 'REROUTE_RESOLVED':
-        print('🔄 Dispatching to _handleRerouteResolved');
-        _handleRerouteResolved(notification);
+        print('🔄 Dispatching to GlobalDialogService.handleRerouteResolved');
+        _delegateToGlobalDialogService(GlobalDialogType.rerouteResolved, notification);
         break;
       default:
         
@@ -421,6 +400,81 @@ class NotificationService {
         body: body,
         isHighPriority: priority == 'HIGH' || priority == 'URGENT',
       );
+    }
+  }
+
+  /// Delegate notification handling to GlobalDialogService
+  /// This ensures dialogs are shown regardless of current screen
+  void _delegateToGlobalDialogService(GlobalDialogType type, Map<String, dynamic> notification) {
+    try {
+      final globalDialogService = getIt<GlobalDialogService>();
+      
+      // Extract relevant data based on notification type
+      Map<String, dynamic> data;
+      
+      switch (type) {
+        case GlobalDialogType.returnPaymentSuccess:
+          data = {
+            'issueId': notification['issueId'],
+            'vehicleAssignmentId': notification['vehicleAssignmentId'],
+            'orderId': notification['orderId'],
+            'returnJourneyId': notification['returnJourneyId'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleReturnPaymentSuccess(data);
+          break;
+          
+        case GlobalDialogType.returnPaymentTimeout:
+          data = {
+            'issue': notification['issue'],
+            'issueId': notification['issueId'],
+            'vehicleAssignmentId': notification['vehicleAssignmentId'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleReturnPaymentTimeout(data);
+          break;
+          
+        case GlobalDialogType.sealAssignment:
+          final issue = notification['issue'] as Map<String, dynamic>?;
+          data = {
+            'issueId': issue?['id'],
+            'oldSeal': issue?['oldSeal'],
+            'newSeal': issue?['newSeal'],
+            'staff': issue?['staff'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleSealAssignment(data);
+          break;
+          
+        case GlobalDialogType.damageResolved:
+          data = {
+            'issue': notification['issue'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleDamageResolved(data);
+          break;
+          
+        case GlobalDialogType.orderRejectionResolved:
+          data = {
+            'issue': notification['issue'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleOrderRejectionResolved(data);
+          break;
+          
+        case GlobalDialogType.rerouteResolved:
+          data = {
+            'issueId': notification['issueId'],
+            'orderId': notification['orderId'],
+            'timestamp': notification['timestamp'] ?? DateTime.now().toIso8601String(),
+          };
+          globalDialogService.handleRerouteResolved(data);
+          break;
+      }
+      
+      print('✅ [NotificationService] Delegated $type to GlobalDialogService');
+    } catch (e) {
+      print('❌ [NotificationService] Failed to delegate to GlobalDialogService: $e');
     }
   }
 

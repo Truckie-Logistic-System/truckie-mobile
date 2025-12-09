@@ -31,7 +31,10 @@ import '../widgets/fuel_invoice_upload_sheet.dart';
 import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/global_dialog_service.dart';
 import '../../../../core/services/chat_notification_service.dart';
+import '../../../widgets/waiting_dialog.dart';
+import '../../../widgets/driver/seal_assignment_info_dialog.dart';
 import '../../../../data/datasources/vehicle_fuel_consumption_data_source.dart';
 import '../../chat/chat_screen.dart';
 import 'dart:io';
@@ -84,7 +87,7 @@ class _NavigationScreenState extends State<NavigationScreen>
   
   // Off-route simulation (for testing off-route detection)
   // Offset perpendicular to route direction (in meters) - guaranteed to be off-route
-  static const double _offRouteDistanceMeters = 200.0; // 200m perpendicular offset (> 100m threshold)
+  static const double _offRouteDistanceMeters = 250.0; // 250m perpendicular offset (> 100m threshold)
 
   int _cameraUpdateCounter = 0;
   final int _cameraUpdateFrequency = 1; // Update camera every frame
@@ -120,13 +123,16 @@ class _NavigationScreenState extends State<NavigationScreen>
   // Track if return payment dialog is showing to prevent duplicates
   bool _isReturnPaymentDialogShowing = false;
 
-  // ✅ NEW: Stream subscriptions for notification dialogs (4 only - seal assignment handled by OrderDetailScreen)
+  // ✅ NEW: Stream subscriptions for notification dialogs (5 types)
+  StreamSubscription<Map<String, dynamic>>? _sealAssignmentSubscription;
+  StreamSubscription<Map<String, dynamic>>? _sealConfirmActionSubscription;
   StreamSubscription<Map<String, dynamic>>? _damageResolvedSubscription;
   StreamSubscription<Map<String, dynamic>>? _orderRejectionResolvedSubscription;
   StreamSubscription<Map<String, dynamic>>? _paymentTimeoutSubscription;
   StreamSubscription<Map<String, dynamic>>? _rerouteResolvedSubscription;
 
-  // Track dialog showing states to prevent duplicates (4 only)
+  // Track dialog showing states to prevent duplicates (5 types)
+  bool _isSealAssignmentDialogShowing = false;
   bool _isDamageResolvedDialogShowing = false;
   bool _isOrderRejectionResolvedDialogShowing = false;
   bool _isPaymentTimeoutDialogShowing = false;
@@ -184,9 +190,10 @@ class _NavigationScreenState extends State<NavigationScreen>
     // NOTE: Timeout mechanism disabled - map renders asynchronously without blocking UI
     // _startMapLoadingTimeout();
 
-    // 🆕 Subscribe to refresh stream from NotificationService
+    // 🆕 Subscribe to refresh stream from GlobalDialogService
+    final globalDialogService = getIt<GlobalDialogService>();
     final notificationService = getIt<NotificationService>();
-    _refreshSubscription = notificationService.refreshStream.listen((_) async {
+    _refreshSubscription = globalDialogService.refreshStream.listen((_) async {
       // 🔄 CRITICAL: Preserve current segment index before reload (for reroute)
       final previousSegmentIndex = _viewModel.currentSegmentIndex;
       final wasSimulating = _isSimulating;
@@ -204,7 +211,7 @@ class _NavigationScreenState extends State<NavigationScreen>
         print('✅ Restored segment index: $previousSegmentIndex');
       } else {
         print(
-          '⚠️ Previous segment index $previousSegmentIndex out of bounds, keeping current: ${_viewModel.currentSegmentIndex}',
+          'Previous segment index $previousSegmentIndex out of bounds, keeping current: ${_viewModel.currentSegmentIndex}',
         );
       }
 
@@ -215,18 +222,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
       // Fetch pending seal replacements
       await _fetchPendingSealReplacements();
-      // Auto-resume simulation if no pending seals
-      if (_pendingSealReplacements.isEmpty &&
-          widget.isSimulationMode &&
-          wasSimulating) {
-        print(
-          '🔄 Auto-resuming simulation at segment ${_viewModel.currentSegmentIndex}',
-        );
-        _autoResumeSimulation();
-      } else {}
     });
 
-    // 🆕 Subscribe to seal bottom sheet stream from NotificationService
+    // Subscribe to seal bottom sheet stream from NotificationService
     // Pattern 2: Action-required notification
     _sealBottomSheetSubscription = notificationService.showSealBottomSheetStream
         .listen((issueId) async {
@@ -248,561 +246,137 @@ class _NavigationScreenState extends State<NavigationScreen>
           } else {}
         });
 
-    // 🆕 Subscribe to return payment success stream from NotificationService
-    // Pattern: Info notification with action required
-    _returnPaymentSubscription = notificationService.returnPaymentSuccessStream.listen((
+    // 🆕 Subscribe to return payment success stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for data refresh only
+    _returnPaymentSubscription = globalDialogService.returnPaymentSuccessStream.listen((
       data,
     ) async {
       if (!mounted) return;
-
-      // CRITICAL: Prevent duplicate dialogs
-      if (_isReturnPaymentDialogShowing) {
-        print('⚠️ Return payment dialog already showing, skipping duplicate');
-        return;
-      }
-
-      final vehicleAssignmentId = data['vehicleAssignmentId'] as String?;
-
-      // Set flag before showing dialog
-      _isReturnPaymentDialogShowing = true;
-
-      // ✅ OPTIMIZATION: Pre-fetch seal data BEFORE showing dialog
-      // This eliminates waiting time when user clicks button
-      print('🚀 Pre-fetching seal data for instant display...');
-      List<VehicleSeal>? preFetchedSeals;
-      try {
-        final issueRepository = getIt<IssueRepository>();
-        final inUseSealData = await issueRepository.getInUseSeal(
-          vehicleAssignmentId!,
-        );
-        if (inUseSealData != null && inUseSealData is Map<String, dynamic>) {
-          preFetchedSeals = [
-            VehicleSeal(
-              id: inUseSealData['id'] ?? '',
-              description: inUseSealData['description'] ?? '',
-              sealDate: inUseSealData['sealDate'] != null
-                  ? DateTime.parse(inUseSealData['sealDate'])
-                  : DateTime.now(),
-              status: inUseSealData['status'] ?? 'IN_USE',
-              sealCode: inUseSealData['sealCode'] ?? '',
-              sealAttachedImage: inUseSealData['sealAttachedImage'],
-            ),
-          ];
-          print('✅ Seal data pre-fetched successfully');
-        } else {
-          print('⚠️ No seal data available');
-        }
-      } catch (e) {
-        print('⚠️ Failed to pre-fetch seal data: $e');
-        preFetchedSeals = null;
-      }
-
-      if (!mounted) return;
-
-      // Show return payment success dialog with proper context
-      await showDialog(
-        context: context, // ✅ Use screen context with Provider access
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          contentPadding: const EdgeInsets.all(24),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Warning icon for seal removal
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.lock_open_rounded,
-                  color: Colors.orange.shade600,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Title
-              const Text(
-                'Yêu cầu báo cáo seal',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              // Message
-              const Text(
-                'Khách hàng đã thanh toán. Vui lòng báo cáo seal đã bị gỡ lên hệ thống để chuẩn bị trả hàng.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  height: 1.5,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  print('🔘 Return payment dialog button clicked');
-
-                  // ✅ CRITICAL: Capture context BEFORE any async operations
-                  final navigatorContext = Navigator.of(context);
-                  final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-                  // Close dialog immediately
-                  navigatorContext.pop();
-                  print('✅ Dialog closed, preparing to show seal report...');
-
-                  // ✅ Use unawaited future to avoid blocking and use captured state
-                  _handleReturnPaymentSealReport(
-                    vehicleAssignmentId: vehicleAssignmentId,
-                    scaffoldMessenger: scaffoldMessenger,
-                    preFetchedSeals:
-                        preFetchedSeals, // Pass pre-fetched data for instant display
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Báo cáo seal',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        ),
-      ).whenComplete(() {
-        // Reset flag when dialog is dismissed (by user action or completion)
-        _isReturnPaymentDialogShowing = false;
-        print('✅ Return payment dialog dismissed, flag reset');
-      });
+      
+      print('🔔 [NavigationScreen] Return payment success event received (for refresh)');
+      
+      // Refresh order data to get updated journey status
+      await _loadOrderDetails();
+      
+      // Fetch pending seal replacements
+      await _fetchPendingSealReplacements();
     });
 
-    // ❌ REMOVED: Seal assignment listener moved to OrderDetailScreen exclusively
-    // OrderDetailScreen now handles full flow: notification → confirm seal sheet → upload photo → navigate here with auto-resume
-    // This prevents duplicate dialogs and provides better UX with single unified flow
-
-    // ✅ NEW: Subscribe to damage resolved stream
-    _damageResolvedSubscription = notificationService.damageResolvedStream
+    // ✅ NEW: Subscribe to seal assignment stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for post-dialog actions
+    _sealAssignmentSubscription = globalDialogService.sealAssignmentStream
         .listen((data) async {
-          if (!mounted || _isDamageResolvedDialogShowing) return;
-
-          _isDamageResolvedDialogShowing = true;
-          final isOnNavigationScreen =
-              data['isOnNavigationScreen'] as bool? ?? false;
-
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              contentPadding: const EdgeInsets.all(24),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check_circle_outline,
-                      color: Colors.green.shade600,
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Sự cố đã được xử lý. Bạn có thể tiếp tục hành trình.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      if (!isOnNavigationScreen) {
-                        final navigationStateService =
-                            getIt<NavigationStateService>();
-                        final savedOrderId = navigationStateService
-                            .getActiveOrderId();
-                        if (savedOrderId != null) {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.navigation,
-                            arguments: {
-                              'orderId': savedOrderId,
-                              'isSimulationMode': widget.isSimulationMode,
-                            },
-                          );
-                        } else {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.navigation,
-                          );
-                        }
-                      } else {
-                        notificationService.triggerNavigationScreenRefresh();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Xác nhận',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ).whenComplete(() => _isDamageResolvedDialogShowing = false);
-        });
-
-    // ✅ NEW: Subscribe to order rejection resolved stream
-    _orderRejectionResolvedSubscription = notificationService
-        .orderRejectionResolvedStream
-        .listen((data) async {
-          if (!mounted || _isOrderRejectionResolvedDialogShowing) return;
-
-          _isOrderRejectionResolvedDialogShowing = true;
-          final isOnNavigationScreen =
-              data['isOnNavigationScreen'] as bool? ?? false;
-
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              contentPadding: const EdgeInsets.all(24),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check_circle_outline,
-                      color: Colors.green.shade600,
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Yêu cầu trả hàng đã xử lý. Bạn có thể tiếp tục hành trình.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      if (!isOnNavigationScreen) {
-                        final navigationStateService =
-                            getIt<NavigationStateService>();
-                        final savedOrderId = navigationStateService
-                            .getActiveOrderId();
-                        if (savedOrderId != null) {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.navigation,
-                            arguments: {
-                              'orderId': savedOrderId,
-                              'isSimulationMode': widget.isSimulationMode,
-                            },
-                          );
-                        } else {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.navigation,
-                          );
-                        }
-                      } else {
-                        notificationService.triggerNavigationScreenRefresh();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Xác nhận',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ).whenComplete(() => _isOrderRejectionResolvedDialogShowing = false);
-        });
-
-    // ✅ NEW: Subscribe to payment timeout stream
-    _paymentTimeoutSubscription = notificationService.paymentTimeoutStream.listen((
-      data,
-    ) async {
-      if (!mounted || _isPaymentTimeoutDialogShowing) return;
-
-      _isPaymentTimeoutDialogShowing = true;
-      final isOnNavigationScreen =
-          data['isOnNavigationScreen'] as bool? ?? false;
-
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          contentPadding: const EdgeInsets.all(24),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.orange.shade600,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Khách hàng không thanh toán cước trả hàng. Bạn có thể quay về đơn vị vận chuyển.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (isOnNavigationScreen) {
-                      notificationService.triggerNavigationScreenRefresh();
-                    } else {
-                      final navigationStateService =
-                          getIt<NavigationStateService>();
-                      final savedOrderId = navigationStateService
-                          .getActiveOrderId();
-                      if (savedOrderId != null) {
-                        Navigator.pushReplacementNamed(
-                          context,
-                          AppRoutes.navigation,
-                          arguments: {
-                            'orderId': savedOrderId,
-                            'isSimulationMode': widget.isSimulationMode,
-                          },
-                        );
-                      } else {
-                        Navigator.pushReplacementNamed(
-                          context,
-                          AppRoutes.navigation,
-                        );
-                      }
-                    }
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade600,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Xác nhận',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ).whenComplete(() => _isPaymentTimeoutDialogShowing = false);
-    });
-
-    // ✅ NEW: Subscribe to reroute resolved stream
-    _rerouteResolvedSubscription = notificationService.rerouteResolvedStream.listen(
-      (data) async {
-        if (!mounted || _isRerouteResolvedDialogShowing) return;
-
-        _isRerouteResolvedDialogShowing = true;
-        final issueId = data['issueId'] as String?;
-        final orderId = data['orderId'] as String?;
-        final isOnNavigationScreen =
-            data['isOnNavigationScreen'] as bool? ?? false;
-
-        print('🛣️ Reroute resolved notification received');
-        print('   Issue ID: $issueId');
-        print('   Order ID: $orderId');
-        print('   Is on navigation screen: $isOnNavigationScreen');
-
-        // 🚨 CRITICAL FIX: Fetch new route FIRST, then show success dialog
-        // Pattern 1: Info-only notification (like damage resolved)
-        // Flow: Fetch order → Re-render map → Auto resume → Show success dialog
-        print('🔄 Fetching new route and resuming BEFORE showing dialog...');
-
-        try {
-          // Fetch new route and auto resume
-          await _fetchNewRouteAndAutoResume();
-
-          // Only show dialog AFTER successfully fetched and resumed
           if (!mounted) return;
 
-          // 🚨 Try to pop waiting dialog if exists
-          try {
-            Navigator.of(context, rootNavigator: false).pop();
-            await Future.delayed(const Duration(milliseconds: 100));
-            print('   ✅ Dismissed waiting dialog');
-          } catch (e) {
-            print('   ℹ️ No waiting dialog to dismiss');
-          }
+          print('🔔 [NavigationScreen] Seal assignment event received (for refresh)');
+          
+          // Refresh pending seal replacements
+          await _fetchPendingSealReplacements();
+          
+          // Refresh order data
+          await _loadOrderDetails();
+        });
 
-          // Show success dialog - already resumed!
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              contentPadding: const EdgeInsets.all(24),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check_circle,
-                      color: Colors.green.shade600,
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Đã cập nhật lộ trình mới',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Lộ trình mới đã được tải và hệ thống đã tự động tiếp tục.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, height: 1.5),
-                  ),
-                ],
-              ),
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(); // Just dismiss
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Đóng',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        } catch (e) {
-          print('❌ Error in reroute resolved flow: $e');
-          // Show error dialog
-          if (mounted) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Lỗi'),
-                content: Text('Không thể tải lộ trình mới: $e'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Đóng'),
-                  ),
-                ],
-              ),
+    // ✅ NEW: Subscribe to seal confirm action stream from GlobalDialogService
+    // When user clicks "Xác nhận seal" in dialog, open confirm seal bottom sheet
+    _sealConfirmActionSubscription = globalDialogService.sealConfirmActionStream
+        .listen((data) async {
+          if (!mounted) return;
+
+          print('🔔 [NavigationScreen] Seal confirm action received - opening bottom sheet');
+          
+          final issueId = data['issueId'] as String?;
+          final oldSeal = data['oldSeal'] as Map<String, dynamic>?;
+          final newSeal = data['newSeal'] as Map<String, dynamic>?;
+          final staff = data['staff'] as Map<String, dynamic>?;
+          
+          // Build Issue object and show confirm seal sheet
+          if (issueId != null && oldSeal != null && newSeal != null) {
+            final issue = Issue(
+              id: issueId,
+              description: 'Seal replacement',
+              status: IssueStatus.inProgress,
+              issueCategory: IssueCategory.sealReplacement,
+              oldSeal: Seal.fromJson(oldSeal),
+              newSeal: Seal.fromJson(newSeal),
+              staffId: staff?['id'] as String?,
             );
+            _showConfirmSealSheet(issue);
+          } else {
+            // Fallback: fetch pending seal replacements and show first one
+            await _fetchPendingSealReplacements();
+            if (_pendingSealReplacements.isNotEmpty) {
+              final issue = _pendingSealReplacements.firstWhere(
+                (i) => i.id == issueId,
+                orElse: () => _pendingSealReplacements.first,
+              );
+              _showConfirmSealSheet(issue);
+            } else {
+              print('⚠️ No pending seal replacements found');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Không tìm thấy thông tin seal. Vui lòng thử lại.'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            }
           }
-        } finally {
-          _isRerouteResolvedDialogShowing = false;
+        });
+
+    // ✅ NEW: Subscribe to damage resolved stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for data refresh only
+    _damageResolvedSubscription = globalDialogService.damageResolvedStream
+        .listen((data) async {
+          if (!mounted) return;
+
+          print('🔔 [NavigationScreen] Damage resolved event received (for refresh)');
+          
+          // Refresh order data
+          await _loadOrderDetails();
+        });
+
+    // ✅ NEW: Subscribe to order rejection resolved stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for data refresh only
+    _orderRejectionResolvedSubscription = globalDialogService
+        .orderRejectionResolvedStream
+        .listen((data) async {
+          if (!mounted) return;
+
+          print('🔔 [NavigationScreen] Order rejection resolved event received (for refresh)');
+          
+          // Refresh order data
+          await _loadOrderDetails();
+        });
+
+    // ✅ NEW: Subscribe to payment timeout stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for data refresh only
+    _paymentTimeoutSubscription = globalDialogService.paymentTimeoutStream.listen((
+      data,
+    ) async {
+      if (!mounted) return;
+
+      print('🔔 [NavigationScreen] Payment timeout event received (for refresh)');
+      
+      // Refresh order data
+      await _loadOrderDetails();
+    });
+
+    // ✅ NEW: Subscribe to reroute resolved stream from GlobalDialogService
+    // NOTE: Dialog is now shown by GlobalDialogService, this subscription is for fetching new route
+    _rerouteResolvedSubscription = globalDialogService.rerouteResolvedStream.listen(
+      (data) async {
+        if (!mounted) return;
+
+        print('🔔 [NavigationScreen] Reroute resolved event received (for refresh)');
+        
+        // Fetch new route and auto resume
+        try {
+          await _fetchNewRouteAndAutoResume();
+          print('✅ [NavigationScreen] New route fetched and auto-resumed');
+        } catch (e) {
+          print('❌ [NavigationScreen] Error fetching new route: $e');
         }
       },
     );
@@ -1821,7 +1395,9 @@ class _NavigationScreenState extends State<NavigationScreen>
     // 🆕 Dispose return payment subscription
     _returnPaymentSubscription?.cancel();
 
-    // ✅ NEW: Dispose notification dialog subscriptions (4 only)
+    // ✅ NEW: Dispose notification dialog subscriptions (5 types)
+    _sealAssignmentSubscription?.cancel();
+    _sealConfirmActionSubscription?.cancel();
     _damageResolvedSubscription?.cancel();
     _orderRejectionResolvedSubscription?.cancel();
     _paymentTimeoutSubscription?.cancel();

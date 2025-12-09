@@ -6,6 +6,7 @@ import 'app/app.dart';
 import 'app/di/service_locator.dart';
 import 'core/services/hot_reload_helper.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/global_dialog_service.dart';
 import 'presentation/features/auth/index.dart';
 
 void main() async {
@@ -74,12 +75,16 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         // Get instances from service locator (already initialized in main())
         final notificationService = getIt<NotificationService>();
+        final globalDialogService = getIt<GlobalDialogService>();
 
         // Đặt navigatorKey cho AuthViewModel (sử dụng cùng key với TruckieApp)
         AuthViewModel.setNavigatorKey(navigatorKey);
 
         // Initialize NotificationService with navigator key
         notificationService.initialize(navigatorKey);
+        
+        // Initialize GlobalDialogService with navigator key
+        globalDialogService.initialize(navigatorKey);
 
         return TruckieApp(navigatorKey: navigatorKey);
       },

@@ -12,6 +12,7 @@ import 'damage_report_bottom_sheet.dart';
 import 'penalty_report_bottom_sheet.dart';
 import 'report_reroute_bottom_sheet.dart';
 import '../viewmodels/navigation_viewmodel.dart';
+import '../../../widgets/waiting_dialog.dart';
 
 /// Bottom sheet widget để driver báo cáo issue
 class ReportIssueBottomSheet extends StatefulWidget {
@@ -308,6 +309,12 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
     });
 
     try {
+      // Find selected issue type to check if it's order rejection
+      final selectedType = _issueTypes.firstWhere(
+        (type) => type.id == _selectedIssueTypeId,
+        orElse: () => _issueTypes.first,
+      );
+      
       await _issueRepository.createIssue(
         description: _descriptionController.text.trim(),
         issueTypeId: _selectedIssueTypeId!,
@@ -315,15 +322,29 @@ class _ReportIssueBottomSheetState extends State<ReportIssueBottomSheet> {
         locationLatitude: widget.currentLocation?.latitude,
         locationLongitude: widget.currentLocation?.longitude,
       );
+      
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã báo cáo sự cố thành công!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        // Check if this is an order rejection issue
+        if (selectedType.issueCategory == IssueCategory.orderRejection) {
+          // Show waiting dialog for customer payment
+          Navigator.pop(context);
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const WaitingReturnPaymentDialog(),
+          );
+          print('✅ Order rejection reported, showing waiting dialog for customer payment...');
+        } else {
+          // Normal success for other issue types
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đã báo cáo sự cố thành công!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() {

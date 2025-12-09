@@ -6,15 +6,76 @@ import 'package:provider/provider.dart';
 import '../app/di/service_locator.dart';
 import '../core/utils/responsive_size_utils.dart';
 import '../core/services/chat_notification_service.dart';
+import '../core/services/notification_service.dart';
 import '../presentation/features/auth/viewmodels/auth_viewmodel.dart';
 import '../presentation/features/notification/viewmodels/notification_viewmodel.dart';
+import '../presentation/features/onboarding/viewmodels/driver_onboarding_viewmodel.dart';
 import '../presentation/theme/app_theme.dart';
 import 'app_routes.dart';
 
-class TruckieApp extends StatelessWidget {
+class _AppLifecycleObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    print('🔄 [AppLifecycleObserver] App lifecycle state changed to: $state');
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        print('🚀 [AppLifecycleObserver] App resumed - forcing WebSocket reconnect');
+        // Force WebSocket reconnect when app resumes to ensure stability
+        _forceWebSocketReconnect();
+        break;
+      case AppLifecycleState.paused:
+        print('⏸️ [AppLifecycleObserver] App paused');
+        break;
+      case AppLifecycleState.detached:
+        print('🔌 [AppLifecycleObserver] App detached');
+        break;
+      case AppLifecycleState.inactive:
+        print('😴 [AppLifecycleObserver] App inactive');
+        break;
+      case AppLifecycleState.hidden:
+        print('👁️ [AppLifecycleObserver] App hidden');
+        break;
+    }
+  }
+  
+  void _forceWebSocketReconnect() {
+    try {
+      final notificationService = getIt<NotificationService>();
+      // Force reconnect to ensure stable connection after resume
+      notificationService.forceReconnect();
+    } catch (e) {
+      print('❌ [AppLifecycleObserver] Failed to force WebSocket reconnect: $e');
+    }
+  }
+}
+
+class TruckieApp extends StatefulWidget {
   final GlobalKey<NavigatorState> navigatorKey;
 
   const TruckieApp({super.key, required this.navigatorKey});
+
+  @override
+  State<TruckieApp> createState() => _TruckieAppState();
+}
+
+class _TruckieAppState extends State<TruckieApp> with WidgetsBindingObserver {
+  final _AppLifecycleObserver _lifecycleObserver = _AppLifecycleObserver();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+    print('✅ [TruckieApp] Lifecycle observer added');
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    print('🔌 [TruckieApp] Lifecycle observer removed');
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +108,9 @@ class TruckieApp extends StatelessWidget {
         ChangeNotifierProvider<ChatNotificationService>(
           create: (_) => getIt<ChatNotificationService>(),
         ),
+        ChangeNotifierProvider<DriverOnboardingViewModel>(
+          create: (_) => getIt<DriverOnboardingViewModel>(),
+        ),
       ],
       child: Consumer<AuthViewModel>(
         builder: (context, authViewModel, child) {
@@ -55,7 +119,7 @@ class TruckieApp extends StatelessWidget {
 
           return MaterialApp(
             title: 'Truckie Driver',
-            navigatorKey: navigatorKey,
+            navigatorKey: widget.navigatorKey,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme.copyWith(
               scaffoldBackgroundColor: Colors.white,

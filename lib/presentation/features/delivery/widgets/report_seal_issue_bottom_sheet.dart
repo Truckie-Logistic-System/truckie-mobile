@@ -6,6 +6,7 @@ import '../../../theme/app_colors.dart';
 import '../../../../domain/entities/issue.dart';
 import '../../../../domain/repositories/issue_repository.dart';
 import '../../../../domain/entities/order_detail.dart';
+import '../../../widgets/waiting_dialog.dart';
 
 /// Bottom sheet for driver to report seal removal issue
 class ReportSealIssueBottomSheet extends StatefulWidget {
@@ -200,13 +201,15 @@ class _ReportSealIssueBottomSheetState
 
       if (mounted) {
         Navigator.pop(context, issue);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã báo cáo sự cố seal thành công! Staff sẽ xử lý sớm.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
+        
+        // Show waiting dialog for staff to process seal assignment
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const WaitingSealAssignmentDialog(),
         );
+        
+        print('✅ Seal reported, showing waiting dialog for staff assignment...');
       }
     } catch (e) {
       setState(() => _isSubmitting = false);

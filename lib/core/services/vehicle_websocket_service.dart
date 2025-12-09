@@ -500,7 +500,7 @@ class VehicleWebSocketService {
     }
   }
 
-  // Send location update with rate limiting (5 seconds server-side)
+  // Send location update with rate limiting (server-side)
   void sendLocationUpdateRateLimited({
     required String vehicleId,
     required double latitude,
@@ -508,6 +508,7 @@ class VehicleWebSocketService {
     required String licensePlateNumber,
     double? bearing,
     double? speed,
+    String? vehicleAssignmentId,
   }) {
     if (_client?.connected != true) {
       
@@ -525,6 +526,7 @@ class VehicleWebSocketService {
       'licensePlateNumber': licensePlateNumber,
       if (bearing != null) 'bearing': bearing,
       if (speed != null) 'speed': speed,
+      if (vehicleAssignmentId != null) 'vehicleAssignmentId': vehicleAssignmentId,
     };
 
     final destination = '/app/vehicle/$vehicleId/location-rate-limited';

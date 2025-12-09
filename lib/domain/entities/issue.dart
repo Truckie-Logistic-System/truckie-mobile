@@ -129,7 +129,8 @@ enum IssueCategory {
   sealReplacement('SEAL_REPLACEMENT', 'Thay thế seal'),
   orderRejection('ORDER_REJECTION', 'Từ chối đơn hàng'),
   penalty('PENALTY', 'Vi phạm giao thông'),
-  reroute('REROUTE', 'Tái định tuyến');
+  reroute('REROUTE', 'Tái định tuyến'),
+  offRouteRunaway('OFF_ROUTE_RUNAWAY', 'Tài xế đi lệch tuyến');
 
   final String value;
   final String label;

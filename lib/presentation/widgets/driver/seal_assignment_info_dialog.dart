@@ -1,70 +1,29 @@
 import 'package:flutter/material.dart';
-import '../../../app/di/service_locator.dart';
-import '../../../domain/repositories/issue_repository.dart';
-import '../../features/delivery/widgets/confirm_seal_replacement_sheet.dart';
-import '../../features/orders/viewmodels/pre_delivery_documentation_viewmodel.dart';
-import '../../../domain/entities/issue.dart';
-import '../../../core/services/notification_service.dart';
-import '../../../app/app_routes.dart';
 
-/// Dialog hiển thị thông báo gán seal mới từ staff
-/// Hiển thị khi driver nhận được notification realtime
-class SealAssignmentNotificationDialog extends StatefulWidget {
-  final String title;
-  final String message;
-  final String issueId;
-  final String newSealCode;
-  final String oldSealCode;
-  final String staffName;
-  final String? vehicleAssignmentId;
+/// Dialog thống nhất hiển thị khi staff gán seal mới cho chuyến
+/// Dùng chung cho cả OrderDetailScreen và NavigationScreen.
+class SealAssignmentInfoDialog extends StatelessWidget {
+  final String? staffName;
+  final String? oldSealCode;
+  final String? newSealCode;
 
-  const SealAssignmentNotificationDialog({
+  const SealAssignmentInfoDialog({
     Key? key,
-    required this.title,
-    required this.message,
-    required this.issueId,
-    required this.newSealCode,
-    required this.oldSealCode,
-    required this.staffName,
-    this.vehicleAssignmentId,
+    this.staffName,
+    this.oldSealCode,
+    this.newSealCode,
   }) : super(key: key);
 
   @override
-  State<SealAssignmentNotificationDialog> createState() =>
-      _SealAssignmentNotificationDialogState();
-}
-
-class _SealAssignmentNotificationDialogState
-    extends State<SealAssignmentNotificationDialog> {
-  @override
-  void initState() {
-    super.initState();
-
-    // 🆕 Fetch pending seals ngay khi show dialog
-    if (widget.vehicleAssignmentId != null) {
-      _fetchPendingSeals();
-    }
-  }
-
-  Future<void> _fetchPendingSeals() async {
-    try {
-      final issueRepository = getIt<IssueRepository>();
-      final pendingIssues = await issueRepository.getPendingSealReplacements(
-        widget.vehicleAssignmentId!,
-      );
-
-      // 🆕 Trigger navigation screen refresh to show banner
-      if (pendingIssues.isNotEmpty) {
-        getIt<NotificationService>().triggerNavigationScreenRefresh();
-      }
-    } catch (e) { // Ignore: Error handling not implemented
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final displayStaffName = staffName?.isNotEmpty == true ? staffName! : 'Nhân viên';
+    final displayOldSeal = oldSealCode ?? '';
+    final displayNewSeal = newSealCode ?? '';
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
       elevation: 16,
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -75,7 +34,7 @@ class _SealAssignmentNotificationDialogState
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -86,7 +45,7 @@ class _SealAssignmentNotificationDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header with gradient (compact, full width)
+              // Header gradient giống OrderDetail
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
@@ -102,7 +61,6 @@ class _SealAssignmentNotificationDialogState
                 ),
                 child: Column(
                   children: [
-                    // Icon shield compact
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -110,7 +68,7 @@ class _SealAssignmentNotificationDialogState
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
+                            color: Colors.black.withOpacity(0.1),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -137,7 +95,6 @@ class _SealAssignmentNotificationDialogState
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Title
                     const Text(
                       'Seal Mới Đã Được Gán',
                       textAlign: TextAlign.center,
@@ -153,7 +110,7 @@ class _SealAssignmentNotificationDialogState
                       'Yêu cầu thay seal',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.white.withOpacity(0.9),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -161,14 +118,13 @@ class _SealAssignmentNotificationDialogState
                 ),
               ),
 
-              // Content (compact padding)
+              // Nội dung
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Staff info
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -208,7 +164,7 @@ class _SealAssignmentNotificationDialogState
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Staff ${widget.staffName}',
+                                  displayStaffName,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -223,7 +179,6 @@ class _SealAssignmentNotificationDialogState
                     ),
                     const SizedBox(height: 16),
 
-                    // Instruction text (compact)
                     Center(
                       child: Text(
                         'Vui lòng xác nhận gắn seal mới lên kiện hàng',
@@ -238,13 +193,12 @@ class _SealAssignmentNotificationDialogState
                     ),
                     const SizedBox(height: 16),
 
-                    // Seal comparison với arrow (compact)
                     Row(
                       children: [
                         Expanded(
                           child: _buildSealCard(
                             label: 'Seal cũ',
-                            code: widget.oldSealCode,
+                            code: displayOldSeal,
                             icon: Icons.lock_open_rounded,
                             color: Colors.red.shade600,
                           ),
@@ -273,7 +227,7 @@ class _SealAssignmentNotificationDialogState
                         Expanded(
                           child: _buildSealCard(
                             label: 'Seal mới',
-                            code: widget.newSealCode,
+                            code: displayNewSeal,
                             icon: Icons.lock_rounded,
                             color: Colors.green.shade600,
                           ),
@@ -284,151 +238,21 @@ class _SealAssignmentNotificationDialogState
                 ),
               ),
 
-              // Actions (compact)
+              // Actions
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Column(
                   children: [
-                    // Primary button với gradient
-                    Container(
+                    SizedBox(
                       width: double.infinity,
                       height: 48,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade600, Colors.blue.shade700],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.shade300.withValues(alpha: 0.5),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
                       child: ElevatedButton(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-
-                          // 🆕 Open ConfirmSealReplacementSheet directly
-
-                          // Create Issue object from the data
-                          final issue = Issue(
-                            id: widget.issueId,
-                            description: widget.message,
-                            locationLatitude: 0.0, // Will be filled by backend
-                            locationLongitude: 0.0, // Will be filled by backend
-                            status: IssueStatus.inProgress,
-                            issueCategory: IssueCategory.sealReplacement,
-                            reportedAt: DateTime.now(),
-                            resolvedAt: null,
-                            // 🆕 Create Seal objects with seal codes from notification
-                            oldSeal: Seal(
-                              id: '', // Not needed for display
-                              sealCode: widget.oldSealCode,
-                              status: SealStatus.removed,
-                            ),
-                            newSeal: Seal(
-                              id: '', // Not needed for display
-                              sealCode: widget.newSealCode,
-                              status: SealStatus.inUse,
-                            ),
-                          );
-
-                          // Show confirmation bottom sheet
-                          final result = await showModalBottomSheet<bool>(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => ConfirmSealReplacementSheet(
-                              issue: issue,
-                              onConfirm: (imageBase64) async {
-                                try {
-                                  final issueRepository =
-                                      getIt<IssueRepository>();
-                                  await issueRepository.confirmSealReplacement(
-                                    issueId: widget.issueId,
-                                    newSealAttachedImage: imageBase64,
-                                  );
-
-                                  // Return success to close bottom sheet and handle navigation outside
-                                  return;
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Lỗi: $e')),
-                                    );
-                                  }
-                                  rethrow;
-                                }
-                              },
-                            ),
-                          );
-
-                          // After bottom sheet is closed, check result before showing success
-
-                          if (result == true) {
-                            // Wait a bit for backend to update issue status
-                            await Future.delayed(
-                              const Duration(milliseconds: 500),
-                            );
-
-                            // ✅ Reset PreDeliveryDocumentationViewModel state to fix loading button issue
-                            try {
-                              final preDeliveryViewModel = getIt<PreDeliveryDocumentationViewModel>();
-                              preDeliveryViewModel.resetState();
-                              print('✅ [SealAssignmentDialog] PreDeliveryDocumentationViewModel state reset');
-                            } catch (e) {
-                              print('⚠️ [SealAssignmentDialog] Failed to reset PreDeliveryDocumentationViewModel: $e');
-                            }
-
-                            // ✅ CRITICAL: Trigger navigation screen refresh for return journey
-                            // Navigation screen will:
-                            // 1. Refetch pending seal replacements (now empty)
-                            // 2. Refetch route data (now includes return journey)
-                            // 3. Auto-resume simulation for return journey
-                            getIt<NotificationService>()
-                                .triggerNavigationScreenRefresh();
-
-                            // Check if currently on navigation screen
-                            final currentRoute = ModalRoute.of(
-                              context,
-                            )?.settings.name;
-                            final isOnNavigationScreen =
-                                currentRoute == AppRoutes.navigation;
-
-                            if (!isOnNavigationScreen && context.mounted) {
-                              // Not on navigation screen → Pop back to show navigation screen with return journey
-                              // This allows driver to see the updated route and auto-resumed simulation
-                              Navigator.of(context).popUntil(
-                                (route) =>
-                                    route.settings.name ==
-                                        AppRoutes.navigation ||
-                                    route.settings.name == AppRoutes.home,
-                              );
-                            }
-
-                            // Show snackbar only if context is still mounted
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    '✅ Đã xác nhận gắn seal mới thành công. Bắt đầu hành trình trả hàng...',
-                                  ),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 3),
-                                ),
-                              );
-                            }
-                          }
+                        onPressed: () {
+                          Navigator.of(context).pop(true);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
+                          backgroundColor: Colors.blue.shade600,
                           foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -439,7 +263,7 @@ class _SealAssignmentNotificationDialogState
                             Icon(Icons.check_circle_rounded, size: 20),
                             SizedBox(width: 8),
                             Text(
-                              'Xác Nhận Gán Seal',
+                              'Xác nhận gắn seal mới',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -451,14 +275,12 @@ class _SealAssignmentNotificationDialogState
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Secondary button
                     SizedBox(
                       width: double.infinity,
                       height: 44,
                       child: TextButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
+                          Navigator.of(context).pop(false);
                         },
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.grey.shade700,
@@ -500,10 +322,10 @@ class _SealAssignmentNotificationDialogState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.15),
+            color: color.withOpacity(0.15),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -514,7 +336,7 @@ class _SealAssignmentNotificationDialogState
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 24),
