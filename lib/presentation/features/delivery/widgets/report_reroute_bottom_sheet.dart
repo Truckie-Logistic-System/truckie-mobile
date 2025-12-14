@@ -139,17 +139,28 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
     final vehicleAssignment = widget.orderWithDetails.vehicleAssignments
         .firstWhere((va) => va.id == widget.vehicleAssignmentId);
 
-    // Get active journey
-    final activeJourney = vehicleAssignment.journeyHistories
-        .where((j) => j.status == 'ACTIVE')
-        .toList();
+    // 🚨 CRITICAL FIX: Sort journeys by createdAt DESC to get LATEST active journey
+    // Same logic as NavigationViewModel.parseRouteFromOrder()
+    // This prevents sending old segment IDs from previous journeys (e.g., after return flow)
+    final sortedJourneys = List<JourneyHistory>.from(vehicleAssignment.journeyHistories)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    // Find the latest ACTIVE journey (same logic as NavigationViewModel)
+    JourneyHistory? latestActiveJourney;
+    for (final journey in sortedJourneys) {
+      if (journey.status == 'ACTIVE') {
+        latestActiveJourney = journey;
+        print('✅ [RerouteModal] Found latest active journey: ${journey.journeyType} (created: ${journey.createdAt})');
+        break;
+      }
+    }
 
-    if (activeJourney.isEmpty) {
+    if (latestActiveJourney == null) {
       print('❌ [RerouteModal] No active journey found');
       return null;
     }
 
-    final journeySegments = activeJourney.first.journeySegments;
+    final journeySegments = latestActiveJourney.journeySegments;
     print('📊 [RerouteModal] journeySegments.length: ${journeySegments.length}');
 
     // Use NavigationViewModel's current segment index with routeSegments
@@ -177,8 +188,8 @@ class _ReportRerouteBottomSheetState extends State<ReportRerouteBottomSheet> {
     print('⚠️ [RerouteModal] routeSegments.isEmpty: ${widget.navigationViewModel.routeSegments.isEmpty}');
     print('⚠️ [RerouteModal] index check: ${widget.navigationViewModel.currentSegmentIndex} >= ${widget.navigationViewModel.routeSegments.length}');
     
-    // Fallback: Get the first segment with status ACTIVE
-    final fallbackSegment = activeJourney.first.journeySegments
+    // Fallback: Get the first segment with status ACTIVE from the latest active journey
+    final fallbackSegment = latestActiveJourney.journeySegments
         .where((seg) => seg.status == 'ACTIVE')
         .firstOrNull;
     

@@ -1003,6 +1003,13 @@ class _NavigationScreenState extends State<NavigationScreen>
           backgroundColor: Colors.green,
         ),
       );
+      
+      // 🚨 CRITICAL FIX: Redraw routes to update map line and markers for new segment
+      // This ensures the map displays the current segment after seal confirmation
+      if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
+        _drawRoutes();
+      }
+      
       _autoResumeSimulation();
     } else {}
   }
@@ -1092,6 +1099,10 @@ class _NavigationScreenState extends State<NavigationScreen>
 
         if (isAtEndOfSegment) {
           _viewModel.moveToNextSegmentManually();
+          // 🚨 CRITICAL FIX: Redraw routes immediately after segment change
+          if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
+            _drawRoutes();
+          }
         }
       }
 
@@ -1264,6 +1275,11 @@ class _NavigationScreenState extends State<NavigationScreen>
         setState(() {
           _isDataReady = true;
         });
+        
+        // 🚨 CRITICAL FIX: Always redraw routes after segment change
+        if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
+          _drawRoutes();
+        }
 
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3319,6 +3335,12 @@ class _NavigationScreenState extends State<NavigationScreen>
       _isPaused = false;
       _isFollowingUser = true;
     });
+    
+    // 🚨 CRITICAL FIX: Redraw routes before resuming to ensure map shows current segment
+    if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
+      _drawRoutes();
+    }
+    
     _viewModel.resumeSimulation();
 
     // Wait a bit for map to be ready, then refocus camera
