@@ -4144,7 +4144,9 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
           )
-          .catchError((e) {});
+          .catchError((e) {
+            return false;
+          });
     } else {
       // 2D Overview Mode - use actualPosition for off-route support
       _mapController!
@@ -4158,7 +4160,9 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
           )
-          .catchError((e) {});
+          .catchError((e) {
+            return false;
+          });
     }
   }
 

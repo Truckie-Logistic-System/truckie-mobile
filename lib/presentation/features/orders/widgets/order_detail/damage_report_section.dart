@@ -41,6 +41,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
   bool _showForm = false;
   bool _showImagePreview = false;
   int? _previewImageIndex;
+  // ignore: unused_field
   List<IssueType> _damageIssueTypes = [];
   IssueType? _selectedIssueType;
   String? _selectedOrderDetailId;  // Selected order detail (package)
@@ -62,7 +63,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
       final types = await _issueRepository.getActiveIssueTypes();
       // Filter only DAMAGE category issue types
       final damageTypes = types.where((type) => 
-        type.issueCategory?.value == 'DAMAGE'
+        type.issueCategory.value == 'DAMAGE'
       ).toList();
       
       setState(() {
@@ -159,9 +160,11 @@ class _DamageReportSectionState extends State<DamageReportSection> {
   /// Get vehicle assignment of current driver
   VehicleAssignment? _getCurrentUserVehicleAssignment(BuildContext context) {
     final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-    final currentUserPhone = authViewModel.driver?.userResponse?.phoneNumber;
+    final driver = authViewModel.driver;
+    final userResponse = driver?.userResponse;
+    final currentUserPhone = userResponse?.phoneNumber ?? '';
     
-    if (currentUserPhone == null || currentUserPhone.isEmpty) {
+    if (currentUserPhone.isEmpty) {
       return null;
     }
     
@@ -195,7 +198,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
     // Get damage issue type
     _issueRepository.getActiveIssueTypes().then((types) {
       final damageType = types.firstWhere(
-        (type) => type.issueCategory?.value == 'DAMAGE',
+        (type) => type.issueCategory.value == 'DAMAGE',
         orElse: () => types.first,
       );
 
@@ -552,7 +555,7 @@ class _DamageReportSectionState extends State<DamageReportSection> {
                               color: Colors.grey.shade600,
                             ),
                           ),
-                        if (orderDetail.trackingCode != null)
+                        if (orderDetail.trackingCode.isNotEmpty)
                           Text(
                             'Mã: ${orderDetail.trackingCode}',
                             style: TextStyle(

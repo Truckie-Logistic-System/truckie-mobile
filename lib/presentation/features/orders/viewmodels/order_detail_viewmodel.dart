@@ -94,7 +94,7 @@ class OrderDetailViewModel extends BaseViewModel {
       final driver = _authViewModel.driver;
       if (driver != null) {
         final phoneNumber = driver.userResponse?.phoneNumber;
-        if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        if (phoneNumber != null && phoneNumber.isNotEmpty) { // ignore: unnecessary_null_comparison
           // 
           return phoneNumber;
         }
@@ -299,9 +299,10 @@ class OrderDetailViewModel extends BaseViewModel {
     }
 
     // Find first order detail that belongs to this vehicle assignment
+    final assignmentId = userVehicleAssignment.id;
     try {
       final orderDetail = _orderWithDetails!.orderDetails.firstWhere(
-        (od) => od.vehicleAssignmentId == userVehicleAssignment?.id,
+        (od) => od.vehicleAssignmentId == assignmentId,
       );
       return orderDetail.status;
     } catch (e) {

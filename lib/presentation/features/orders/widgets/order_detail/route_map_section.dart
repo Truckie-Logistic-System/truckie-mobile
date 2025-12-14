@@ -26,7 +26,9 @@ class _RouteMapSectionState extends State<RouteMapSection>
   final bool _isMapReady = false;
   bool _isDisposed = false;
   final bool _isMapInitialized = false;
+  // ignore: unused_field
   bool _hasError = false;
+  // ignore: unused_field
   String _errorMessage = '';
   
   // Waypoint markers list
