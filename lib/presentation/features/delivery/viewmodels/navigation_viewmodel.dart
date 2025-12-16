@@ -883,7 +883,7 @@ class NavigationViewModel extends ChangeNotifier {
     // Skip to a point NEAR the end (not exactly at the end)
     // This gives simulation time to update location and send to FE
     if (currentSegment.points.isNotEmpty) {
-      final targetDistanceBeforeEnd = 20.0; // meters - distance before destination (reduced for faster skip)
+      final targetDistanceBeforeEnd = 5.0; // meters - distance before destination (reduced for faster skip)
       final lastPoint = currentSegment.points.last;
       
       // Find the point that is approximately targetDistanceBeforeEnd meters before the end
