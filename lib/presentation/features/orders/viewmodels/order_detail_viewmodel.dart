@@ -212,60 +212,42 @@ class OrderDetailViewModel extends BaseViewModel {
   }
 
   /// Kiểm tra xem đơn hàng có thể bắt đầu giao hàng không
-  /// Dựa trên OrderDetail Status của trip hiện tại, không chỉ dựa vào Order Status
+  /// Dựa trên OrderDetail Status của trip hiện tại, KHÔNG dựa vào Order Status
   /// Điều này cho phép nhiều trip độc lập - Driver B có thể start trip 2 
-  /// ngay cả khi Order đang PICKING_UP (do Trip 1 đã start)
+  /// ngay cả khi Order đang ở bất kỳ status nào (do Trip 1 có thể đang ở status khác)
   bool canStartDelivery() {
     if (_orderWithDetails == null) {
-      // 
       return false;
     }
     
     // Must have vehicle assignments
     if (_orderWithDetails!.vehicleAssignments.isEmpty) {
-      // 
       return false;
     }
     
     // Must have order details with vehicle assignment ID
     if (_orderWithDetails!.orderDetails.isEmpty) {
-      // 
       return false;
     }
     
-    // CRITICAL: Check OrderDetail Status of current driver's trip, not Order Status
-    // This allows multi-trip orders where Trip 2 can start even if Order is PICKING_UP
-    // because Trip 1 already started
-    final detailStatus = getCurrentTripOrderDetailStatus();
-    if (detailStatus == null) {
-      // 
-      return false;
-    }
-    
-    // Can start delivery if current trip's OrderDetail status is ASSIGNED_TO_DRIVER
-    // Order Status might be FULLY_PAID or PICKING_UP (if another trip started)
-    if (detailStatus != 'ASSIGNED_TO_DRIVER') {
-      // 
-      return false;
-    }
-    
-    // Order must be FULLY_PAID or PICKING_UP (another trip might have started)
-    final orderStatus = _orderWithDetails!.status;
-    if (orderStatus != 'FULLY_PAID' && orderStatus != 'PICKING_UP') {
-      // 
-      return false;
-    }
-    
-    // CRITICAL FIX: Use getCurrentUserVehicleAssignment() instead of orderDetails.first
-    // Bug: orderDetails.first might belong to another driver's trip in multi-trip orders
+    // CRITICAL FIX: Use getCurrentUserVehicleAssignment() first
+    // to ensure we check the correct trip for current driver
     final vehicleAssignment = getCurrentUserVehicleAssignment();
     if (vehicleAssignment == null) {
-      // 
       return false;
     }
     
-    // Vehicle assignment must exist and belong to current driver
-    return true;
+    // CRITICAL: ONLY check OrderDetail Status of current driver's trip
+    // This allows multi-trip orders where each trip can start independently
+    // regardless of Order Status (which reflects all trips combined)
+    final detailStatus = getCurrentTripOrderDetailStatus();
+    if (detailStatus == null) {
+      return false;
+    }
+    
+    // Can start delivery ONLY if current trip's OrderDetail status is ASSIGNED_TO_DRIVER
+    // No need to check Order Status - it may be PICKING_UP, ON_DELIVERED, etc. due to other trips
+    return detailStatus == 'ASSIGNED_TO_DRIVER';
   }
 
   /// Lấy OrderDetail Status của trip hiện tại (trip của driver hiện tại)
@@ -367,7 +349,7 @@ class OrderDetailViewModel extends BaseViewModel {
   }
 
   /// Kiểm tra xem có thể upload odometer cuối không (khi đã về carrier)
-  /// Dựa trên OrderDetail Status của trip hiện tại
+  /// Dựa trên OrderDetail Status của trip hiện tại, KHÔNG dựa vào Order Status
   /// 
   /// CRITICAL: Driver PHẢI upload odometer cuối với TẤT CẢ các trường hợp END-OF-TRIP:
   /// - DELIVERED: Giao hàng thành công → SUCCESSFUL
@@ -389,7 +371,6 @@ class OrderDetailViewModel extends BaseViewModel {
     // CRITICAL FIX: If final odometer already uploaded, don't show button
     // This prevents showing button after RETURNED status completed with odometer
     if (_odometerReadingAtEnd != null && _odometerReadingAtEnd! > 0) {
-      // 
       return false;
     }
     
@@ -406,14 +387,11 @@ class OrderDetailViewModel extends BaseViewModel {
       }
     }
     
+    // CRITICAL: ONLY check OrderDetail Status of current driver's trip
+    // NO fallback to Order Status - Order status reflects ALL trips, not current trip
     final detailStatus = getCurrentTripOrderDetailStatus();
     if (detailStatus == null) {
-      // Fallback to Order Status if detail status not found
-      return _orderWithDetails!.status == 'DELIVERED' || 
-             _orderWithDetails!.status == 'IN_TROUBLES' ||
-             _orderWithDetails!.status == 'COMPENSATION' ||
-             _orderWithDetails!.status == 'RETURNED' ||
-             _orderWithDetails!.status == 'CANCELLED';
+      return false;
     }
     
     // Can upload final odometer for ALL end-of-trip states
