@@ -137,6 +137,9 @@ class _NavigationScreenState extends State<NavigationScreen>
   bool _isOrderRejectionResolvedDialogShowing = false;
   bool _isPaymentTimeoutDialogShowing = false;
   bool _isRerouteResolvedDialogShowing = false;
+  
+  // 🚨 NEW: Track if ANY action dialog is showing to prevent route redrawing during dialog
+  bool _isActionDialogShowing = false;
 
   // Fuel consumption state
   String? _fuelConsumptionId;
@@ -194,31 +197,14 @@ class _NavigationScreenState extends State<NavigationScreen>
     final globalDialogService = getIt<GlobalDialogService>();
     final notificationService = getIt<NotificationService>();
     _refreshSubscription = globalDialogService.refreshStream.listen((_) async {
-      // 🔄 CRITICAL: Preserve current segment index before reload (for reroute)
-      final previousSegmentIndex = _viewModel.currentSegmentIndex;
-      final wasSimulating = _isSimulating;
-
-      print(
-        '🔄 Refreshing route - Previous segment: $previousSegmentIndex, Was simulating: $wasSimulating',
+      print('🔄 [NavigationScreen] Refresh stream event received');
+      
+      // 🔄 Use unified refresh pattern to ensure routes are drawn correctly
+      await _refreshAndDrawRoutes(
+        preservePosition: true,
+        autoResume: true,
+        reason: 'Refresh stream',
       );
-
-      // 🆕 Fetch latest order to get newest journey history (for return routes, reroutes)
-      await _loadOrderDetails();
-
-      // 🎯 CRITICAL: Restore current segment index after reload
-      if (previousSegmentIndex < _viewModel.routeSegments.length) {
-        _viewModel.setCurrentSegmentIndex(previousSegmentIndex);
-        print('✅ Restored segment index: $previousSegmentIndex');
-      } else {
-        print(
-          'Previous segment index $previousSegmentIndex out of bounds, keeping current: ${_viewModel.currentSegmentIndex}',
-        );
-      }
-
-      // Re-draw routes with new journey data
-      if (_viewModel.routeSegments.isNotEmpty && _isMapReady) {
-        _drawRoutes();
-      }
 
       // Fetch pending seal replacements
       await _fetchPendingSealReplacements();
@@ -255,8 +241,12 @@ class _NavigationScreenState extends State<NavigationScreen>
       
       print('🔔 [NavigationScreen] Return payment success event received (for refresh)');
       
-      // Refresh order data to get updated journey status
-      await _loadOrderDetails();
+      // 🔄 Use unified refresh pattern to ensure routes are drawn correctly
+      await _refreshAndDrawRoutes(
+        preservePosition: true,
+        autoResume: true,
+        reason: 'Return payment success',
+      );
       
       // Fetch pending seal replacements
       await _fetchPendingSealReplacements();
@@ -499,86 +489,30 @@ class _NavigationScreenState extends State<NavigationScreen>
           _checkAndResumeAfterAction();
         }
 
-        // ✅ Auto-resume simulation if flag is set (from OrderDetailScreen seal confirmation)
+        // ✅ SIMPLIFIED: Auto-resume simulation if flag is set (from OrderDetailScreen seal confirmation)
+        // DO NOT draw routes here - let _onStyleLoaded() handle ALL route drawing!
+        // This prevents race conditions between _initializeScreen() and _onStyleLoaded()
         if (widget.autoResume && widget.isSimulationMode && !_isSimulating) {
           print(
-            '🚀 [NavScreen] Auto-resuming simulation after seal confirmation...',
+            '🚀 [NavScreen] Auto-resume mode detected (segment already set above)',
           );
-
-          // Segment already set above, now just verify and prepare UI
-          if (_viewModel.routeSegments.isNotEmpty) {
+          print('   📍 Route segments: ${_viewModel.routeSegments.length}');
+          print('   📍 Current segment: ${_viewModel.currentSegmentIndex}');
+          print('   📍 Journey type: ${_viewModel.currentJourneyType}');
+          
+          // Debug: Print segment info
+          for (int i = 0; i < _viewModel.routeSegments.length; i++) {
+            final marker = i == _viewModel.currentSegmentIndex ? '👉' : '  ';
             print(
-              '📍 Route segments loaded: ${_viewModel.routeSegments.length}',
+              '   $marker Segment $i: ${_viewModel.routeSegments[i].name} (${_viewModel.routeSegments[i].points.length} points)',
             );
-            print(
-              '📍 Current segment index: ${_viewModel.currentSegmentIndex}',
-            );
-            print('📍 Journey type: ${_viewModel.currentJourneyType}');
-
-            // Debug: Print segment names
-            for (int i = 0; i < _viewModel.routeSegments.length; i++) {
-              final marker = i == _viewModel.currentSegmentIndex ? '👉' : '  ';
-              print(
-                '   $marker Segment $i: ${_viewModel.routeSegments[i].name} (${_viewModel.routeSegments[i].points.length} points)',
-              );
-            }
-
-            // ✅ CRITICAL: Ensure everything is ready before auto-resume
-            if (mounted) {
-              // Step 1: Update UI state
-              setState(() {
-                print(
-                  '🎨 Step 1: UI state updated with segment index: ${_viewModel.currentSegmentIndex}',
-                );
-              });
-
-              // Step 2: Wait for UI to render
-              await Future.delayed(const Duration(milliseconds: 300));
-
-              // Step 3: Redraw routes with new active segment
-              if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
-                print(
-                  '🎨 Step 2: Redrawing routes for segment: ${_viewModel.getCurrentSegmentName()}',
-                );
-                _drawRoutes();
-              }
-
-              // Step 4: Wait for routes to render on map
-              await Future.delayed(const Duration(milliseconds: 500));
-
-              // Step 5: Verify everything is ready (segment already set above, just check location)
-              if (mounted && _viewModel.currentLocation != null) {
-                print('✅ Step 3: Everything ready!');
-                print('   - Segment index: ${_viewModel.currentSegmentIndex}');
-                print(
-                  '   - Segment name: ${_viewModel.getCurrentSegmentName()}',
-                );
-                print('   - Current location: ${_viewModel.currentLocation}');
-                print('   - Map ready: $_isMapReady');
-
-                // Step 6: Focus camera to new location (return segment start)
-                if (_mapController != null &&
-                    _viewModel.currentLocation != null) {
-                  print(
-                    '📸 Step 3.5: Focusing camera to return segment start...',
-                  );
-                  await _setCameraToNavigationMode(_viewModel.currentLocation!);
-                  await Future.delayed(const Duration(milliseconds: 300));
-                }
-
-                // Step 7: NOW safe to auto-resume
-                await Future.delayed(const Duration(milliseconds: 300));
-                if (mounted) {
-                  print('🎬 Step 4: Starting auto-resume simulation...');
-                  _autoResumeSimulation();
-                }
-              } else {
-                print('❌ Verification failed - aborting auto-resume');
-              }
-            }
-          } else {
-            print('❌ ERROR: No route segments loaded!');
           }
+          
+          // ✅ SIMPLIFIED: Just mark that we need to auto-resume after map is ready
+          // Route drawing will be handled by _onStyleLoaded() which runs after map is ready
+          // This is the SAME flow as "Bắt đầu chuyến xe" button!
+          print('   ⏳ Waiting for map to be ready before auto-resume...');
+          print('   📍 Route drawing will be handled by _onStyleLoaded()');
         }
       }
     } catch (e, stackTrace) {
@@ -1070,20 +1004,37 @@ class _NavigationScreenState extends State<NavigationScreen>
           }
         },
         onSegmentComplete: (segmentIndex, isLastSegment) {
+          print('\n📥📥📥 [onSegmentComplete #1] CALLBACK TRIGGERED 📥📥📥');
+          print('   ⏰ Time: ${DateTime.now().toIso8601String()}');
+          print('   🎯 Completed segment: $segmentIndex (isLast: $isLastSegment)');
+          print('   📊 Current viewModel segment index: ${_viewModel.currentSegmentIndex}');
+          
           // Pause simulation when reaching any waypoint
+          print('   ⏸️  Pausing simulation...');
           _pauseSimulation();
-          _drawRoutes();
+          print('   ✅ Simulation paused');
+          
+          // 🔄 NOTE: At this point, currentSegmentIndex has ALREADY been incremented
+          // by _moveToNextSegment in viewmodel, so we draw the NEW segment
+          print('   🎯 Drawing new segment ${_viewModel.currentSegmentIndex} (completed segment was $segmentIndex)...');
+          
+          // Force redraw to bypass throttle - critical for segment change
+          _drawRoutes(forceRedraw: true);
 
           if (isLastSegment) {
             // Reached final destination (Carrier)
+            print('   🏁 Last segment - showing completion message');
             _showCompletionMessage();
           } else if (segmentIndex == 0) {
             // Completed segment 0: Reached Pickup location
+            print('   📦 Segment 0 complete - showing pickup message');
             _showPickupMessage();
           } else if (segmentIndex == 1) {
             // Completed segment 1: Reached Delivery location
+            print('   📤 Segment 1 complete - showing delivery message');
             _showDeliveryMessage();
           }
+          print('   ✅✅✅ [onSegmentComplete #1] COMPLETED ✅✅✅\n');
         },
         simulationSpeed: _viewModel.currentSimulationSpeed,
       );
@@ -1108,8 +1059,9 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (isAtEndOfSegment) {
           _viewModel.moveToNextSegmentManually();
           // 🚨 CRITICAL FIX: Redraw routes immediately after segment change
+          // Force redraw to bypass throttle
           if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
-            _drawRoutes();
+            _drawRoutes(forceRedraw: true);
           }
         }
       }
@@ -1180,9 +1132,7 @@ class _NavigationScreenState extends State<NavigationScreen>
       print('   📍 Current state before fetch:');
       print('      Was simulating: $wasSimulating');
       print('      Segment index: $previousSegmentIndex');
-      print(
-        '      Location: ${previousLocation?.latitude}, ${previousLocation?.longitude}',
-      );
+      print('      Location: ${previousLocation?.latitude}, ${previousLocation?.longitude}');
       print('      Speed: $previousSpeed km/h');
 
       // Show loading indicator
@@ -1223,68 +1173,47 @@ class _NavigationScreenState extends State<NavigationScreen>
       // Parse route from updated order
       if (_viewModel.orderWithDetails != null) {
         _viewModel.parseRouteFromOrder(_viewModel.orderWithDetails!);
-
-        // Redraw routes on map
-        if (_viewModel.routeSegments.isNotEmpty) {
-          _drawRoutes();
-        }
       }
 
-      print('✅ New route rendered successfully');
-      print('   📍 New route segments: ${_viewModel.routeSegments.length}');
+      print('✅ New route loaded: ${_viewModel.routeSegments.length} segments');
 
       // 🎯 CRITICAL: Restore previous position and segment
-      // Don't reset to start/end - maintain current location like seal replacement flow
       if (previousLocation != null && previousSegmentIndex >= 0) {
         // Keep current segment index if still valid
-        if (previousSegmentIndex < _viewModel.routeSegments.length) {
-          _viewModel.currentSegmentIndex = previousSegmentIndex;
-          print('   ✅ Maintained segment index: $previousSegmentIndex');
-        } else {
-          // If previous segment no longer exists (route changed significantly),
-          // stay at first segment instead of jumping to end
-          _viewModel.currentSegmentIndex = 0;
-          print(
-            '   ⚠️ Previous segment no longer exists, staying at segment 0',
-          );
-        }
+        final targetSegmentIndex = previousSegmentIndex < _viewModel.routeSegments.length
+            ? previousSegmentIndex
+            : 0;
+        
+        _viewModel.currentSegmentIndex = targetSegmentIndex;
+        print('   ✅ Set segment index: $targetSegmentIndex');
 
-        // 🚨 CRITICAL FIX: Use restoreSimulationPosition() instead of direct assignment
-        // This ensures _currentPointIndices is properly set for the new route
-        // Direct assignment causes bug where old _currentPointIndices makes simulation jump to wrong segment
+        // Restore position using restoreSimulationPosition()
         _viewModel.restoreSimulationPosition(
-          segmentIndex: _viewModel.currentSegmentIndex,
+          segmentIndex: targetSegmentIndex,
           latitude: previousLocation.latitude,
           longitude: previousLocation.longitude,
           bearing: _viewModel.currentBearing,
         );
         _viewModel.currentSpeed = previousSpeed;
 
-        print('   ✅ Restored position using restoreSimulationPosition()');
-        print('   ✅ Segment: ${_viewModel.currentSegmentIndex}');
-        print(
-          '   ✅ Location: ${previousLocation.latitude}, ${previousLocation.longitude}',
-        );
-
-        // 🚨 CRITICAL: Save restored state immediately so _startSimulation() won't overwrite
-        // Otherwise NavigationStateService has old position from previous session
+        // Save restored state to GlobalLocationManager
         _globalLocationManager.sendLocationUpdate(
           previousLocation.latitude,
           previousLocation.longitude,
           bearing: _viewModel.currentBearing,
           speed: previousSpeed,
-          segmentIndex: _viewModel.currentSegmentIndex,
+          segmentIndex: targetSegmentIndex,
         );
-        print('   ✅ Saved restored state to prevent overwrite');
+        print('   ✅ Restored and saved position');
       }
 
-      // Update UI
+      // Update UI and draw routes (ONLY ONCE!)
       if (mounted) {
         setState(() {
           _isDataReady = true;
         });
         
-        // 🚨 CRITICAL FIX: Always redraw routes after segment change
+        // 🎨 Draw routes ONCE after all state is restored
         if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
           _drawRoutes();
         }
@@ -1300,29 +1229,13 @@ class _NavigationScreenState extends State<NavigationScreen>
 
         // 🚀 AUTO-RESUME simulation if was running
         if (wasSimulating) {
-          print(
-            '🔄 Auto-resuming simulation with new route from current position...',
-          );
-          print('   Previous segment: $previousSegmentIndex');
-          print('   Current segment: ${_viewModel.currentSegmentIndex}');
-
-          // Wait for UI to update
+          print('🔄 Auto-resuming simulation...');
           await Future.delayed(const Duration(milliseconds: 300));
 
-          // Simple pattern like seal replacement: just start simulation!
-          // Position and segment already restored above
           if (_isPaused) {
-            print('   Simulation was paused, resuming...');
             _resumeSimulation();
           } else if (!_viewModel.isSimulating) {
-            print(
-              '   Simulation not running, starting with restored position...',
-            );
-            // 🚨 CRITICAL: Pass shouldRestore: true to use saved state (position we just saved above)
-            // Without this, _startSimulation() uses first point of new route!
             _startSimulation(shouldRestore: true);
-          } else {
-            print('   Simulation already running, no action needed');
           }
         }
       }
@@ -1671,6 +1584,83 @@ class _NavigationScreenState extends State<NavigationScreen>
     ''';
   }
 
+  /// ============================================
+  /// UNIFIED REFRESH & DRAW ROUTES METHOD
+  /// ============================================
+  /// Ensures: 1) Data is fetched 2) Data is parsed 3) Routes are drawn 4) Simulation resumes
+  /// 
+  /// [preservePosition] - if true, maintains current segment and location
+  /// [autoResume] - if true, resumes simulation after refresh
+  /// [reason] - reason for refresh (for logging)
+  Future<void> _refreshAndDrawRoutes({
+    bool preservePosition = true,
+    bool autoResume = false,
+    String reason = 'Unknown',
+  }) async {
+    print('🔄 [_refreshAndDrawRoutes] Starting refresh - Reason: $reason');
+    
+    // 1. Save current state if needed
+    final previousSegmentIndex = preservePosition ? _viewModel.currentSegmentIndex : 0;
+    final previousLocation = preservePosition ? _viewModel.currentLocation : null;
+    final previousBearing = preservePosition ? _viewModel.currentBearing : null;
+    final previousSpeed = preservePosition ? _viewModel.currentSpeed : 0.0;
+    final wasSimulating = _isSimulating;
+    
+    print('   📍 Saved state: segment=$previousSegmentIndex, simulating=$wasSimulating');
+    
+    // 2. Fetch and parse data (this calls parseRouteFromOrder internally)
+    await _loadOrderDetails();
+    
+    // 3. Validate data is ready
+    if (_viewModel.routeSegments.isEmpty) {
+      print('⚠️ [_refreshAndDrawRoutes] No route segments after refresh');
+      return;
+    }
+    
+    print('   ✅ Loaded ${_viewModel.routeSegments.length} segments');
+    
+    // 4. Restore position if requested
+    if (preservePosition && previousSegmentIndex < _viewModel.routeSegments.length) {
+      _viewModel.setCurrentSegmentIndex(previousSegmentIndex);
+      print('   ✅ Restored segment index: $previousSegmentIndex');
+      
+      if (previousLocation != null) {
+        _viewModel.restoreSimulationPosition(
+          segmentIndex: previousSegmentIndex,
+          latitude: previousLocation.latitude,
+          longitude: previousLocation.longitude,
+          bearing: previousBearing,
+        );
+        _viewModel.currentSpeed = previousSpeed;
+        print('   ✅ Restored position: ${previousLocation.latitude}, ${previousLocation.longitude}');
+      }
+    } else if (preservePosition) {
+      print('   ⚠️ Previous segment $previousSegmentIndex out of bounds (max: ${_viewModel.routeSegments.length - 1})');
+    }
+    
+    // 5. Draw routes (only once!)
+    if (_isMapReady) {
+      print('   🎨 Drawing routes...');
+      _drawRoutes();
+    } else {
+      print('   ⚠️ Map not ready, skipping draw');
+    }
+    
+    // 6. Auto-resume if needed
+    if (autoResume && wasSimulating) {
+      print('   🚀 Auto-resuming simulation...');
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      if (_isPaused) {
+        _resumeSimulation();
+      } else if (!_viewModel.isSimulating) {
+        _startSimulation(shouldRestore: true);
+      }
+    }
+    
+    print('✅ [_refreshAndDrawRoutes] Completed - Reason: $reason');
+  }
+
   /// Load order details với retry logic
   /// Retry max 3 lần với exponential backoff (1s, 2s, 4s)
   /// Chỉ show error message khi tất cả retry attempts fail
@@ -1936,9 +1926,11 @@ class _NavigationScreenState extends State<NavigationScreen>
         }
       });
     } else {
-      // CRITICAL: Draw immediately WITHOUT clearFirst
-      // Reason: NavigationScreen is NEW, map is EMPTY, no need to clear
-      // Delay can cause routes not to show when navigating back
+      // ✅ CRITICAL: routeSegments NOT empty - means _initializeScreen() already loaded data
+      // Draw immediately WITHOUT clearFirst (map is NEW, no need to clear)
+      print('📍 [_onStyleLoaded] routeSegments NOT empty (${_viewModel.routeSegments.length} segments)');
+      print('   📍 Current segment index: ${_viewModel.currentSegmentIndex}');
+      print('   📍 autoResume flag: ${widget.autoResume}');
       _drawRoutes(); // Draw immediately, no delay!
 
       // Đặt camera vào vị trí thích hợp
@@ -1958,11 +1950,20 @@ class _NavigationScreenState extends State<NavigationScreen>
           savedState.isSimulationMode &&
           widget.isSimulationMode;
 
+      // ✅ CRITICAL: Check widget.autoResume flag (from OrderDetailScreen actions like seal confirmation)
+      // This is SAME priority as shouldAutoRestore but from different source
+      final shouldAutoResumeFromFlag = widget.autoResume && widget.isSimulationMode;
+      
+      if (shouldAutoResumeFromFlag) {
+        print('🚀 [_onStyleLoaded] autoResume flag detected - will auto-resume simulation');
+      }
+
       // Start real tracking or simulation based on mode
       // Priority: Check simulation mode first, then check existing connections
       if (widget.isSimulationMode && !_isSimulating) {
-        if (shouldAutoRestore) {
-          // Auto-start simulation WITH restore
+        if (shouldAutoRestore || shouldAutoResumeFromFlag) {
+          // ✅ Auto-start simulation WITH restore (from saved state OR autoResume flag)
+          print('🎬 [_onStyleLoaded] Auto-starting simulation (shouldAutoRestore=$shouldAutoRestore, autoResumeFlag=$shouldAutoResumeFromFlag)');
           _startSimulation(shouldRestore: true);
         } else {
           // Show dialog for new simulation
@@ -2344,17 +2345,47 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
-  void _drawRoutes({bool clearFirst = false}) {
+  void _drawRoutes({bool clearFirst = false, bool forceRedraw = false}) {
+    // 🔍 DETAILED LOGGING to detect double draw issue
+    final callStack = StackTrace.current.toString().split('\n').take(5).join('\n');
+    print('\n🎨🎨🎨 [_drawRoutes] CALLED 🎨🎨🎨');
+    print('   ⏰ Time: ${DateTime.now().toIso8601String()}');
+    print('   📊 Current segment index: ${_viewModel.currentSegmentIndex}');
+    print('   📍 Total segments: ${_viewModel.routeSegments.length}');
+    if (_viewModel.currentSegmentIndex >= 0 && _viewModel.currentSegmentIndex < _viewModel.routeSegments.length) {
+      final seg = _viewModel.routeSegments[_viewModel.currentSegmentIndex];
+      print('   🛣️  Current segment name: ${seg.name}');
+      print('   📏 Current segment points: ${seg.points.length}');
+    }
+    print('   🔧 clearFirst: $clearFirst, forceRedraw: $forceRedraw');
+    print('   🚫 _isDisposing: $_isDisposing');
+    print('   🗺️  _mapController != null: ${_mapController != null}');
+    print('   📍 routeSegments.isEmpty: ${_viewModel.routeSegments.isEmpty}');
+    print('   � _isActionDialogShowing: $_isActionDialogShowing');
+    print('   📞 Called from:\n$callStack');
+    
+    // 🚨 CRITICAL: Skip drawing if action dialog is showing
+    // This prevents incorrect redrawing triggered by async operations during dialog display
+    if (_isActionDialogShowing && !forceRedraw) {
+      print('   ⏸️  SKIPPED - Action dialog is showing (use forceRedraw=true to override)\n');
+      return;
+    }
+    
     if (_isDisposing ||
         _mapController == null ||
         _viewModel.routeSegments.isEmpty) {
+      print('   ❌ Early return - preconditions not met\n');
       return;
     }
 
     // Throttle to prevent excessive redrawing and buffer overflow
+    // SKIP throttle if forceRedraw is true (e.g., segment change)
     final now = DateTime.now();
-    if (_lastDrawRoutesTime != null &&
+    if (!forceRedraw &&
+        _lastDrawRoutesTime != null &&
         now.difference(_lastDrawRoutesTime!) < _drawRoutesThrottleDuration) {
+      final timeSinceLastDraw = now.difference(_lastDrawRoutesTime!);
+      print('   ⏸️  Throttled - skipping draw (${timeSinceLastDraw.inMilliseconds}ms since last draw)\n');
       return;
     }
     _lastDrawRoutesTime = now;
@@ -2374,40 +2405,78 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _drawRoutesInternal() async {
+    print('\n🖌️🖌️🖌️ [_drawRoutesInternal] EXECUTING 🖌️🖌️🖌️');
+    print('   ⏰ Time: ${DateTime.now().toIso8601String()}');
+    
     // CRITICAL: Check map ready state before drawing polylines
     // Polylines require map tiles to be loaded, unlike widget-based markers
     if (_isDisposing ||
         _mapController == null ||
         _viewModel.routeSegments.isEmpty ||
         !_isMapReady) {
+      print('   ❌ Early return - preconditions not met');
+      print('      _isDisposing: $_isDisposing');
+      print('      _mapController: ${_mapController != null}');
+      print('      routeSegments.length: ${_viewModel.routeSegments.length}');
+      print('      _isMapReady: $_isMapReady\n');
       return;
     }
+    
+    // 🎯 Capture current segment index at START of draw operation
+    // This prevents race condition if segment changes during async operations
+    final currentIndex = _viewModel.currentSegmentIndex;
+    print('   📊 Captured segment index: $currentIndex');
+    
+    // Validate segment index FIRST
+    if (currentIndex < 0 || currentIndex >= _viewModel.routeSegments.length) {
+      print('   ⚠️ Invalid segment index: $currentIndex (max: ${_viewModel.routeSegments.length - 1})\n');
+      return;
+    }
+    
     // Clear previous waypoint markers
     _waypointMarkers.clear();
 
     // 🔥 XÓA TẤT CẢ POLYLINES CŨ trước khi vẽ line mới
-    // Điều này đảm bảo chỉ line của segment hiện tại được hiển thị
+    // CRITICAL: await để đảm bảo clear hoàn thành trước khi vẽ mới
+    print('   🧹 Clearing old polylines...');
     try {
       await _mapController!.clearPolylines();
-    } catch (e) {}
-
-    // 🎯 CHỈ VẼ SEGMENT HIỆN TẠI - để driver tập trung vào đoạn đường đang đi
-    final currentIndex = _viewModel.currentSegmentIndex;
-
-    // Validate segment index
-    if (currentIndex < 0 || currentIndex >= _viewModel.routeSegments.length) {
+      print('   ✅ Polylines cleared');
+      // Small delay to ensure map processes the clear
+      await Future.delayed(const Duration(milliseconds: 50));
+      print('   ✅ Delay after clear complete');
+    } catch (e) {
+      print('   ⚠️ Error clearing polylines: $e');
+    }
+    
+    // Re-check if still mounted and valid after async operations
+    if (_isDisposing || _mapController == null || !mounted) {
+      print('   ❌ State changed during clear - aborting');
+      print('      _isDisposing: $_isDisposing, _mapController: ${_mapController != null}, mounted: $mounted\n');
       return;
     }
 
+    // 🎯 CHỈ VẼ SEGMENT HIỆN TẠI - để driver tập trung vào đoạn đường đang đi
     final currentSegment = _viewModel.routeSegments[currentIndex];
 
-    // Tối ưu hóa: giảm số điểm cần vẽ nếu quá nhiều
-    List<LatLng> optimizedPoints = currentSegment.points;
-    if (currentSegment.points.length > 100) {
-      optimizedPoints = _simplifyRoute(currentSegment.points);
+    // 🔍 DETAILED SEGMENT INFO
+    print('   🛣️  Drawing segment $currentIndex: ${currentSegment.name}');
+    print('   📏 Total points in segment: ${currentSegment.points.length}');
+    if (currentSegment.points.length <= 2) {
+      print('   ⚠️⚠️⚠️ WARNING: Only ${currentSegment.points.length} points - THIS IS A STRAIGHT LINE!');
+      print('   ⚠️⚠️⚠️ This usually means pathCoordinatesJson was null/empty when parsing!');
+    }
+    if (currentSegment.points.isNotEmpty) {
+      print('   📍 First point: (${currentSegment.points.first.latitude}, ${currentSegment.points.first.longitude})');
+      print('   📍 Last point: (${currentSegment.points.last.latitude}, ${currentSegment.points.last.longitude})');
     }
 
+    // Use route points exactly as provided by backend for maximum accuracy.
+    // (Simplification can distort the polyline shape and look like "đường chim bay".)
+    final List<LatLng> optimizedPoints = currentSegment.points;
+
     // Draw line ONLY for current segment
+    print('   🖊️  Adding polyline with ${optimizedPoints.length} points...');
     _mapController!.addPolyline(
       PolylineOptions(
         geometry: optimizedPoints,
@@ -2416,6 +2485,8 @@ class _NavigationScreenState extends State<NavigationScreen>
         polylineOpacity: 1.0, // Đầy đủ opacity
       ),
     );
+    print('   ✅ Polyline added successfully');
+    print('   ✅✅✅ [_drawRoutesInternal] COMPLETED for segment $currentIndex ✅✅✅\n');
 
     // Draw waypoint markers ONLY for current segment
     if (optimizedPoints.isNotEmpty) {
@@ -2617,11 +2688,12 @@ class _NavigationScreenState extends State<NavigationScreen>
   List<LatLng> _simplifyRoute(List<LatLng> points) {
     if (points.length <= 2) return points;
 
-    // Thuật toán Douglas-Peucker đơn giản hóa
-    // Chỉ giữ lại khoảng 1/3 số điểm
+    // Downsample by stride while preserving order.
+    // Target ~300 points max (enough to preserve shape), and keep ALL points for smaller routes.
+    const int targetPoints = 300;
     List<LatLng> result = [];
-    int step = (points.length / 30).ceil(); // Giữ khoảng 30 điểm
-    step = max(1, step); // Đảm bảo step ít nhất là 1
+    int step = (points.length / targetPoints).ceil();
+    step = max(1, step);
 
     // Luôn giữ điểm đầu và điểm cuối
     result.add(points.first);
@@ -3234,18 +3306,31 @@ class _NavigationScreenState extends State<NavigationScreen>
         }
       },
       onSegmentComplete: (segmentIndex, isLastSegment) {
+        print('\n📥📥📥 [onSegmentComplete #2] CALLBACK TRIGGERED 📥📥📥');
+        print('   ⏰ Time: ${DateTime.now().toIso8601String()}');
+        print('   🎯 Completed segment: $segmentIndex (isLast: $isLastSegment)');
+        print('   📊 Current viewModel segment index: ${_viewModel.currentSegmentIndex}');
+        
         // Pause simulation when reaching any waypoint
+        print('   ⏸️  Pausing simulation...');
         _pauseSimulation();
-        _drawRoutes();
+        print('   ✅ Simulation paused');
+        
+        // 🔄 NOTE: At this point, currentSegmentIndex has ALREADY been incremented
+        // by _moveToNextSegment in viewmodel, so we draw the NEW segment
+        // segmentIndex param is the COMPLETED segment, not the current one
+        print('   🎯 Drawing new segment ${_viewModel.currentSegmentIndex} (completed segment was $segmentIndex)...');
+        _drawRoutes(forceRedraw: true);
 
         if (isLastSegment) {
           // Reached final destination (Carrier)
+          print('   🏁 Last segment - showing completion message');
           _showCompletionMessage();
         } else {
-          // Determine action based on segment index and journey type
+          // Determine action based on COMPLETED segment index (segmentIndex) and journey type
+          // Note: segmentIndex is the segment that was COMPLETED, not the current one
           final isReturnJourney = _viewModel.currentJourneyType == 'RETURN';
-          final segment = _viewModel.routeSegments[segmentIndex];
-          final segmentName = segment.name.toUpperCase();
+          print('   🗺️  Journey type: ${isReturnJourney ? "RETURN" : "STANDARD"}');
           // Standard journey: Carrier -> Pickup -> Delivery -> Carrier (3 segments)
           // Return journey: Carrier -> Pickup -> Delivery -> Pickup -> Carrier (4 segments)
 
@@ -3257,9 +3342,11 @@ class _NavigationScreenState extends State<NavigationScreen>
             // Index 3: Pickup -> Carrier (final return to carrier)
             if (segmentIndex == 2) {
               // Reached pickup point to return packages
+              print('   📦 Return journey segment 2 - showing return delivery message');
               _showReturnDeliveryMessage();
             } else {
               // Other segments in return journey - shouldn't happen but show pickup message as fallback
+              print('   📦 Return journey fallback - showing pickup message');
               _showPickupMessage();
             }
           } else {
@@ -3269,16 +3356,20 @@ class _NavigationScreenState extends State<NavigationScreen>
             // Index 2: Delivery -> Carrier (return to carrier)
             if (segmentIndex == 0) {
               // Reached pickup point to get packages
+              print('   📦 Standard journey segment 0 - showing pickup message');
               _showPickupMessage();
             } else if (segmentIndex == 1) {
               // Reached delivery point
+              print('   📤 Standard journey segment 1 - showing delivery message');
               _showDeliveryMessage();
             } else {
               // Other segments - shouldn't happen but show pickup message as fallback
+              print('   📦 Standard journey fallback - showing pickup message');
               _showPickupMessage();
             }
           }
         }
+        print('   ✅✅✅ [onSegmentComplete #2] COMPLETED ✅✅✅\n');
       },
       simulationSpeed:
           _simulationSpeed * 0.5, // Giảm xuống 0.5 để đạt 30-60 km/h
@@ -3345,8 +3436,9 @@ class _NavigationScreenState extends State<NavigationScreen>
     });
     
     // 🚨 CRITICAL FIX: Redraw routes before resuming to ensure map shows current segment
+    // Use forceRedraw to bypass throttle after dialog/action completion
     if (_isMapReady && _viewModel.routeSegments.isNotEmpty) {
-      _drawRoutes();
+      _drawRoutes(forceRedraw: true);
     }
     
     _viewModel.resumeSimulation();
@@ -3584,6 +3676,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showPickupMessage() {
+    print('\n📦📦📦 [_showPickupMessage] Showing pickup dialog 📦📦📦');
+    _isActionDialogShowing = true;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -3626,6 +3720,8 @@ class _NavigationScreenState extends State<NavigationScreen>
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () async {
+                _isActionDialogShowing = false;
+                print('📦 [_showPickupMessage] Dialog closed, flag cleared');
                 Navigator.of(context).pop(); // Close dialog
 
                 // Navigate to order detail and wait for result
@@ -3815,6 +3911,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showDeliveryMessage() {
+    print('\n📤📤📤 [_showDeliveryMessage] Showing delivery dialog 📤📤📤');
+    _isActionDialogShowing = true;
     // CRITICAL: Update order status to ONGOING_DELIVERED when showing delivery dialog
     // Fire and forget - don't wait for it to complete
 
@@ -3861,6 +3959,8 @@ class _NavigationScreenState extends State<NavigationScreen>
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () async {
+                _isActionDialogShowing = false;
+                print('📤 [_showDeliveryMessage] Dialog closed, flag cleared');
                 Navigator.of(context).pop(); // Close dialog
 
                 // Navigate to order detail and wait for result

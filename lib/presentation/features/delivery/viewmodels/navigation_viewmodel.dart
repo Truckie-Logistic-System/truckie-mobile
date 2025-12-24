@@ -528,16 +528,21 @@ class NavigationViewModel extends ChangeNotifier {
   }
 
   Future<void> _moveToNextSegment(Function(int, bool) onSegmentComplete) async {
+    print('\n🔄🔄🔄 [_moveToNextSegment] CALLED 🔄🔄🔄');
+    print('   ⏰ Time: ${DateTime.now().toIso8601String()}');
+    print('   📊 Current segment BEFORE move: $currentSegmentIndex');
     
     // Notify that current segment is complete
     final isLastSegment = currentSegmentIndex >= routeSegments.length - 1;
     // Note: Order status update is now handled by backend when photo is uploaded
     // No need to update status here anymore
     
-    
-    onSegmentComplete(currentSegmentIndex, isLastSegment);
+    // 🎯 Store completed segment index BEFORE incrementing
+    final completedSegmentIndex = currentSegmentIndex;
+    print('   ✅ Completed segment: $completedSegmentIndex (isLast: $isLastSegment)');
 
-    // Move to next segment if available
+    // 🚨 CRITICAL FIX: Move to next segment BEFORE calling callback
+    // This ensures _drawRoutes() in callback draws the NEW segment, not the old one
     if (!isLastSegment) {
       currentSegmentIndex++;
       if (_currentPointIndices.length <= currentSegmentIndex) {
@@ -551,12 +556,22 @@ class NavigationViewModel extends ChangeNotifier {
       if (newSegment.points.isNotEmpty) {
         currentLocation = newSegment.points.first;
       }
+      
+      print('   📍 NEW segment index: $currentSegmentIndex');
+      print('   🛣️  NEW segment name: ${newSegment.name}');
+      print('   📍 NEW segment points: ${newSegment.points.length}');
     } else {
       // End of simulation
       _simulationTimer?.cancel();
       _isSimulating = false;
       currentSpeed = 0.0; // Reset tốc độ khi kết thúc
+      print('   🏁 Last segment reached - simulation ending');
     }
+    
+    // Notify AFTER segment index is updated so callback draws correct segment
+    print('   📢 Calling onSegmentComplete callback with completed segment: $completedSegmentIndex');
+    onSegmentComplete(completedSegmentIndex, isLastSegment);
+    print('   ✅✅✅ [_moveToNextSegment] COMPLETED ✅✅✅\n');
 
     notifyListeners();
   }
