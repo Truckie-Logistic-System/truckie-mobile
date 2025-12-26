@@ -4371,10 +4371,6 @@ class _NavigationScreenState extends State<NavigationScreen>
                           'Đoạn đường: ${_viewModel.getCurrentSegmentName()}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Tốc độ: ${_viewModel.currentSpeed.toStringAsFixed(1)} km/h',
-                        ),
                       ],
                     ),
                   ),
@@ -4785,24 +4781,14 @@ class _NavigationScreenState extends State<NavigationScreen>
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Text(
-                          'Tốc độ:',
-                          style: TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildSpeedButton('x1', 1.0),
-                              _buildSpeedButton('x2', 2.0),
-                              _buildSpeedButton('x3', 3.0),
-                            ],
-                          ),
-                        ),
+                        _buildSpeedButton('x1', 1.0),
+                        const SizedBox(width: 8),
+                        _buildSpeedButton('x2', 2.0),
+                        const SizedBox(width: 8),
+                        _buildSpeedButton('x3', 3.0),
                       ],
                     ),
-                                        const SizedBox(height: 4),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
