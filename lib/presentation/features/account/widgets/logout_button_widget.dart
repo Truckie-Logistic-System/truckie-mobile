@@ -71,7 +71,7 @@ class _LogoutButtonWidgetState extends State<LogoutButtonWidget> {
                   if (token != null) {
                     try {
                       await http.post(
-                        Uri.parse('http://10.0.2.2:8080/api/v1/auths/logout'),
+                        Uri.parse('https://truckie-be-e3bre6hmfqhcabba.southeastasia-01.azurewebsites.net/api/v1/auths/logout'),
                         headers: {
                           'Content-Type': 'application/json',
                           'Authorization': 'Bearer $token',

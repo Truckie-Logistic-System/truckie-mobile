@@ -7,8 +7,8 @@ class ApiConstants {
   /// NOTE: Already includes /api/v1 prefix - do NOT add /api/v1 to endpoint paths!
   
   // Production (HTTPS requires WSS for WebSocket)
-  static const String baseUrl = 'https://api.truckie.io.vn/api/v1';
-  static const String wsBaseUrl = 'wss://api.truckie.io.vn';
+  static const String baseUrl = 'https://truckie-be-e3bre6hmfqhcabba.southeastasia-01.azurewebsites.net/api/v1';
+  static const String wsBaseUrl = 'wss://truckie-be-e3bre6hmfqhcabba.southeastasia-01.azurewebsites.net';
 
   // IP Server (HTTP uses WS for WebSocket)
 //   static const String baseUrl = 'http://14.225.253.8/api/v1';
