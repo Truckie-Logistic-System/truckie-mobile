@@ -11,7 +11,7 @@
 
 *A professional mobile application for truck drivers with real-time GPS tracking, order management, and seamless communication with the logistics platform.*
 
-[Download APK](#-building-apk) • [Backend API](https://web-production-7b905.up.railway.app/swagger-ui/index.html) • [Web Portal](https://truckie.vercel.app/) • [Report Bug](#-contributing)
+[Download APK](#-building-apk) • [Backend API](https://truckie-be-e3bre6hmfqhcabba.southeastasia-01.azurewebsites.net/swagger-ui/index.html) • [Web Portal](https://truckie.vercel.app/) • [Report Bug](#-contributing)
 
 </div>
 
@@ -257,7 +257,7 @@ The app follows **Clean Architecture** principles with clear separation of conce
    
    Update API base URL in `lib/core/constants/api_constants.dart`:
    ```dart
-   static const String baseUrl = 'https://web-production-7b905.up.railway.app';
+   static const String baseUrl = 'https://truckie-be-e3bre6hmfqhcabba.southeastasia-01.azurewebsites.net';
    ```
 
 5. **Run the app**
